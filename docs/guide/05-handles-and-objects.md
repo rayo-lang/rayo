@@ -46,17 +46,17 @@ var players = alloc Pool<Player>(capacity: 8)
 let p1 = players.insert(Player(pos: .zero))            // p1: Handle<Player>
 var grunt = Enemy(pos: [5, 0, 5], target: p1)         // the enemy keeps a copy of the handle
 
-players[p1]?.hp -= 10                          // changes the player in place, or does nothing if it's gone
-if ref var p = &players[p1] { p.pos.y += 1 }   // changes it through 'p'
-let hp = players[p1]?.hp ?? 0                  // a copy of its hp, or 0
-ref let sure = players[p1]!                    // panics if it's gone
+players[p1]?.hp -= 10                                  // changes the player in place, or does nothing if it's gone
+if ref var p = mutable &players[p1] { p.pos.y += 1 }   // changes it through 'p'
+let hp = players[p1]?.hp ?? 0                          // a copy of its hp, or 0
+ref let sure = &players[p1]!                           // panics if it's gone
 
-players.remove(p1)                             // the player leaves the game
-let gone = players[grunt.target!] == nil       // true: every copy of the handle is stale
+players.remove(p1)                                     // the player leaves the game
+let gone = players[grunt.target!] == nil               // true: every copy of the handle is stale
 
-func chase(_ enemies: mutable Pool<Enemy>, _ players: Pool<Player>, dt: Float) {
-    for e in &enemies {
-        guard e.target != nil, ref let p = players[e.target] else { continue }   // no target, or it left
+func chase(_ enemies: mutable &Pool<Enemy>, _ players: &Pool<Player>, dt: Float) {
+    for e in mutable &enemies {
+        guard e.target != nil, ref let p = &players[e.target] else { continue }   // no target, or it left
         e.pos += (p.pos - e.pos).normalized * dt
     }
 }
@@ -64,7 +64,9 @@ func chase(_ enemies: mutable Pool<Enemy>, _ players: Pool<Player>, dt: Float) {
 
 `Pool<T>` owns its elements, while `Handle<T>` names one ([03](../spec/03-handles-and-objects.md#pools-and-handles)). `insert` moves the player into `players` and gives back `p1`, a handle the enemy can keep. The handle is eight bytes and implicitly copyable, so `grunt` gets a copy with no `copy` written, and other enemies can keep the same target without owning the player. An optional handle takes eight bytes too: all-zero bits mean `nil`.
 
-Looking up `players[p1]` reaches the player where it sits in the pool; it does not copy the player ([02](../spec/02-views-and-dependencies/place-and-value-properties.md#place-properties-borrow-and-mutate)). The lookup gives `nil` after the player leaves, so an `if` or a `guard` binds the player only when it is there. The binding writes `ref let` or `ref var`, just as the declaration of `sure` above does, so `p` refers to the player in the pool instead of owning a copy ([01](../spec/01-values-and-ownership/bindings.md#conditions)). In `chase`, `guard` skips an enemy with no target or with a target that has left. `guard` keeps `p` bound after the condition, and its `else` must leave the current scope ([04](../spec/04-types/enums.md#matching-with-when-and-choosing-with-if)).
+Looking up `players[p1]` reaches the player where it sits in the pool; it does not copy the player ([02](../spec/02-views-and-dependencies/place-and-value-properties.md#place-properties-borrow-and-mutate)). The lookup gives `nil` after the player leaves, so an `if` or a `guard` binds the player only when it is there. The binding writes `ref let` or `ref var`, just as the declaration of `sure` above does, and marks the lookup with `&` or `mutable &`, the same marks a call writes before an argument it lends. So `p` refers to the player in the pool instead of owning a copy ([01](../spec/01-values-and-ownership/bindings.md#conditions)).
+
+In `chase`, `guard` skips an enemy with no target or with a target that has left. `guard` keeps `p` bound after the condition, and its `else` must leave the current scope ([04](../spec/04-types/enums.md#matching-with-when-and-choosing-with-if)).
 
 Removing a player makes every copy of its handle **stale**. A handle stores a slot index and a **generation**, which distinguishes players that occupy the same slot at different times. Once removed, the old handle continues to read `nil`, even if another player takes that slot. Code that removes a player need not find every enemy that targeted it. If you need to take the player out rather than destroy it, `take(h)` removes it and returns it as an optional.
 
@@ -75,7 +77,7 @@ The pool keeps its elements densely packed, so a loop visits them without gaps. 
 ```swift
 let p2 = players.insert(Player(pos: [4, 0, 0]))
 let p3 = players.insert(Player(pos: [8, 0, 0]))
-ref let p = players[p2]!                       // borrows the player where it lies, inside the pool
+ref let p = &players[p2]!                      // borrows the player where it lies, inside the pool
 players.remove(p3)                             // error: 'players' is borrowed by 'p' (used below)
 log("hp \(p.hp)")
 ```
@@ -88,11 +90,11 @@ log("hp \(p.hp)")
 
 ```swift
 players.remove(p3)
-if ref let p = players[p2] { log("hp \(p.hp)") }   // p2 still finds its player, wherever it moved
+if ref let p = &players[p2] { log("hp \(p.hp)") }   // p2 still finds its player, wherever it moved
 
 var dead = alloc List<Handle<Enemy>>()
-for (h, e) in enemies.entries where e.hp <= 0 { dead.append(h) }   // 'h' is the loop's own handle, so it moves in
-for h in dead { enemies.remove(h) }
+for (h, e) in &enemies.entries where e.hp <= 0 { dead.append(h) }   // 'h' is the loop's own handle, copied in
+for h in &dead { enemies.remove(h) }
 ```
 
 **A loop borrows the pool the same way, so it can't remove from it.** Collect the handles, and remove them after the loop.
@@ -116,7 +118,7 @@ menu.value.children.append(alloc UniquePointer(Widget(parent: menu.weak())))
 
 menu.value.visible = false                             // through the owner: the widget itself
 m.value?.visible = true                                // nil, and skipped, if the menu is gone
-if ref var w = &m.value { w.visible = true; w.parent = nil }
+if ref var w = mutable &m.value { w.visible = true; w.parent = nil }
 m.value!.visible = false                               // panics if the menu is gone
 if m.value == nil { log("menu closed") }               // checks only that the menu lives
 ```
@@ -142,7 +144,7 @@ var toolbar = alloc UniquePointer(Widget())
 let save = menu.value.children[0].weak()               // a link to the menu's first child
 var moved = menu.value.children.remove(at: 0)          // its owner leaves the menu's list
 moved.value.parent = toolbar.weak()
-toolbar.value.children.append(moved)                   // and joins the toolbar's
+toolbar.value.children.append(consume moved)           // and joins the toolbar's
 save.value?.visible = true                             // still the same widget
 ```
 
@@ -161,7 +163,7 @@ save.value?.visible = true                             // still the same widget
 **Each access to an object takes a mark, and an access that conflicts with a live one panics** ([03](../spec/03-handles-and-objects.md#dynamic-exclusivity)). It's the law of exclusivity from chapter 3, checked at run time, since the compiler can't see which weak pointers name one object:
 
 - **A read access**, such as a `ref let` binding or a call to a plain method, holds a shared mark. Any number may be live at once.
-- **A modify access**, such as an assignment, a `ref var` binding of `&` or a `mutating` call, holds an exclusive mark. No other access may be live with it.
+- **A modify access**, such as an assignment, a `ref var` binding of `mutable &` or a `mutating` call, holds an exclusive mark. No other access may be live with it.
 - **Each mark lasts until the last use of whatever depends on the access**, as a borrow does ([02](../spec/02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-6-dynamic-accesses)).
 
 **Comparing a weak pointer's `value` with `nil` takes no mark**, so it never conflicts.
@@ -170,7 +172,7 @@ save.value?.visible = true                             // still the same widget
 
 ```swift
 func switchPanels(_ shown: WeakPointer<Widget>, _ hidden: WeakPointer<Widget>) {
-    guard ref var panel = &shown.value else { return }   // a modify access, held while 'panel' is used
+    guard ref var panel = mutable &shown.value else { return }   // a modify access, held while 'panel' is used
     hidden.value?.visible = false                   // panics if both links name one widget
     panel.visible = true
 }
@@ -191,7 +193,7 @@ func switchPanels(_ shown: WeakPointer<Widget>, _ hidden: WeakPointer<Widget>) {
 
 **A `ref let` that refers to an object's value holds a read access the same way**, so changing the object while the `ref let` is still in use panics ([01](../spec/01-values-and-ownership/bindings.md#what-a-ref-let-sees)).
 
-**Elements of a pool need no marks.** `&players[h1, h2]` lends two of them at once, and is `nil` when both handles name one player or either is stale ([01](../spec/01-values-and-ownership/exclusivity.md#two-elements-of-one-collection)).
+**Elements of a pool need no marks.** `mutable &players[h1, h2]` lends two of them for change at once, and is `nil` when both handles name one player or either is stale ([01](../spec/01-values-and-ownership/exclusivity.md#two-elements-of-one-collection)).
 
 ## Destroying an object
 

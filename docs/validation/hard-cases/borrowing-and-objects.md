@@ -89,7 +89,7 @@ for (int i : path) cur = cur->children[i].get();    // re-target the cursor to a
 cur->children.push_back(std::make_unique<Node>());
 ```
 
-A cursor that binds a place can't be re-targeted with `=`, which writes the place the binding names ([02](../../spec/02-views-and-dependencies/dependency-lifetimes.md#pointing-a-name-at-another-place-rebind)).
+A cursor that binds a place can't be re-targeted with `=`, which writes the place the binding names ([02](../../spec/02-views-and-dependencies/dependency-lifetimes.md#assigning-a-reference-to-a-var)).
 
 - **Must accept** a loop that re-targets the mutable cursor to a child each iteration.
 - **Must accept** the same walk when the children are `List<UniquePointer<Node>>` and the tree is 10,000 levels deep, without a run-time mark held per level.

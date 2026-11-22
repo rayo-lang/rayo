@@ -99,7 +99,7 @@ _Avoid_: dynamically sized type, DST
 ### Views and dependencies
 
 **Absorption**:
-The rule that after a call, each scoped `mutable &` argument takes on what the call's other arguments borrow ([02](docs/spec/02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-4-absorption)).
+The rule that after a call, each scoped argument given to a `mutable &T` parameter, a `mutating` method's `self` included, takes on what the call's other arguments borrow ([02](docs/spec/02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-4-absorption)).
 
 **Dependency set**:
 The places and dynamic accesses a scoped value borrows from, each shared or exclusive; it is what the value **carries** ([02](docs/spec/02-views-and-dependencies.md#dependencies)).
@@ -130,18 +130,18 @@ _Avoid_: exclusive reference
 A place property whose declared type is written `T?`, which hands out either a place of type `T` or `nil` ([02](docs/spec/02-views-and-dependencies/place-and-value-properties.md#optional-places-and-tuples-of-places)).
 
 **Place property**:
-A computed property or subscript whose `borrow`, and optional `mutate`, hand out a place in storage, which code uses as it would a stored field, with no accessor code after ([02](docs/spec/02-views-and-dependencies/place-and-value-properties.md#place-and-value-properties)).
+A computed property or subscript whose `borrow`, and optional `mutate`, hand out a place in storage, which `&` and `mutable &` lend as a stored field, with no accessor code after ([02](docs/spec/02-views-and-dependencies/place-and-value-properties.md#place-and-value-properties)).
 _Avoid_: projection, `read`/`modify` accessor
 
 **PlainDeinit**:
 A type whose `deinit` only destroys what it owns alone and frees its own buffers, so destroying it uses no more than destroying its parts does ([02](docs/spec/02-views-and-dependencies/dependency-lifetimes.md#when-destroying-a-value-counts-as-using-it)).
 
 **Scoped value**:
-A value of a type that conforms to `Scoped` and must stay within its scope. A view into memory that can be freed is scoped; a scoped value need not be a view ([02](docs/spec/02-views-and-dependencies/scoped-values.md#scoped-values)).
+A value of a type that conforms to `Scoped` and must stay within its scope, such as a reference. A view into memory that can be freed is scoped; a scoped value need not be a view ([02](docs/spec/02-views-and-dependencies/scoped-values.md#scoped-values)).
 _Avoid_: non-escaping value, lifetime-bound value
 
 **Sealed type**:
-A concrete type that holds, at any depth, no function value, closure, `any P`, `some P`, interpolated literal, type parameter or associated type; every other type is **unsealed** ([02](docs/spec/02-views-and-dependencies/dependency-projection-and-results.md#closure-calls)).
+A concrete type that holds or refers to, at any depth, no function value, closure, existential, `some P`, interpolated literal, reference to a sized type, type parameter or associated type; every other type is **unsealed** ([02](docs/spec/02-views-and-dependencies/dependency-projection-and-results.md#closure-calls)).
 
 **Shallow type**:
 A copyable type that holds no inline array at any depth ([02](docs/spec/02-views-and-dependencies/dependency-projection-and-results.md#shallow-values)).

@@ -329,7 +329,7 @@ for d in targets { d.value.takeDamage(1) }                     // error: 'd' is 
 for d in &targets { d.value.takeDamage(1) }                    // fine: the loop lends 'targets', so 'd' is a mutable borrow
 ```
 
-**`&place` makes a `MutableRef<any P>` wherever one is expected**, including assigned into an existing slot, as `d = &crate` does in a loop over `&targets` ([02](../02-views-and-dependencies/dependency-lifetimes.md#pointing-a-name-at-another-place-rebind)). A shared borrow of a place makes an `any P` the same way ([Implicit conversions](implicit-conversions.md#implicit-conversions)). Stored views keep their places borrowed: after `targets.append(&boss)` above, `boss` stays borrowed exclusively, by rule 4 ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-4-absorption)).
+**`&place` makes a `MutableRef<any P>` wherever one is expected**, including assigned into an existing slot, as `d = &crate` does in a loop over `&targets` ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-4-absorption)). A shared borrow of a place makes an `any P` the same way ([Implicit conversions](implicit-conversions.md#implicit-conversions)). Stored views keep their places borrowed: after `targets.append(&boss)` above, `boss` stays borrowed exclusively, by rule 4 ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-4-absorption)).
 
 **A non-`mutating` closure captures a `MutableRef<any P>` shared**, so parallel work can't call `mutating` requirements through it ([07](../07-concurrency/thread-work.md#lending-work-to-other-threads)).
 
