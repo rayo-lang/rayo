@@ -25,18 +25,18 @@ struct Pad(
 
 func now() -> Double { unsafe plat.time_seconds() }       // no pointers, no preconditions
 
-func log(_ level: Int32, _ text: StringView) {
+func log(_ level: Int32, _ text: &Text) {
     unsafe { plat.log(level, text.cchars.baseAddress, CSize(text.cchars.count)) }
 }
 
 func pad(_ index: Int32) -> Pad? {
     precondition(index >= 0 && index < plat.PLATFORM_MAX_PADS)   // prefix stripping is case-sensitive
     var raw = plat.pad()                      // C struct, zero-initialized
-    let ok = unsafe { plat.poll_pad(index, ptr(to: &raw)) }
+    let ok = unsafe { plat.poll_pad(index, ptr(to: mutable &raw)) }
     guard ok && raw.connected else { return nil }
     return Pad(
         leftStick:  Vec2(unsafe pad_deadzone(raw.left_stick[0]), unsafe pad_deadzone(raw.left_stick[1])),
-        rightStick: Vec2(raw.right_stick[0], raw.right_stick[1]),   // Simd's initializer borrows its lanes and copies them
+        rightStick: Vec2(raw.right_stick[0], raw.right_stick[1]),   // each Float lane is copied in, with nothing written
         buttons:    plat.button(rawValue: raw.buttons)        // uint32_t field, uint32_t-backed C enum
     )
 }
@@ -58,7 +58,7 @@ struct Loads(
     let raw = CUIntPtr(bitPattern: user)                               // the pointer's bits, at its own width
     guard raw <= CUIntPtr(UInt32.max) else { return }                  // no ticket: a value C made up, ignored
     let ticket = UInt32(truncating: raw)                               // drops only zero bits, after the guard
-    var result = LoadState.failed(error)                               // a copy of the borrowed Int32
+    var result = LoadState.failed(error)                               // a copy: an Int32 is implicitly copyable
     if error == 0 && data != nil {
         result = .done(unsafe alloc List(copying: data, count: UInt(len)))   // copied into .heap
     }
@@ -69,26 +69,26 @@ let completedLoads = alloc MpscQueue<(UInt32, LoadState)>(capacity: 256)
 
 // The SDK keeps 'path' until the load completes, so only a static view, whose bytes
 // are never freed, may be passed.
-func requestFile(_ path: static StringView, _ loads: mutable Loads) -> Handle<LoadState> {
+func requestFile(_ path: static &Text, _ loads: mutable &Loads) -> Handle<LoadState> {
     let h = loads.requests.insert(.pending)
-    while loads.nextTicket == 0 || loads.tickets[loads.nextTicket] != nil {   // 0 would be a null user pointer
+    while loads.nextTicket == 0 || loads.tickets[&loads.nextTicket] != nil {  // 0 would be a null user pointer
         loads.nextTicket &+= 1                                               // skips tickets still in flight after a wrap
     }
     let ticket = loads.nextTicket
     loads.nextTicket &+= 1
-    loads.tickets[ticket] = h
+    loads.tickets[&ticket] = h
     unsafe {
-        let chars = path.cchars
+        let chars = &path.cchars
         plat.read_file_async(chars.baseAddress, CSize(chars.count), onFileLoaded, .init(bitPattern: CUIntPtr(ticket)))
     }
     return h
 }
 
 /// Called once per frame by main.
-func pumpLoads(_ loads: mutable Loads) {
+func pumpLoads(_ loads: mutable &Loads) {
     while let (ticket, result) = completedLoads.pop() {   // pop() never blocks; waitPop() would
-        guard let h = loads.tickets.removeValue(forKey: ticket) else { continue }   // a ticket never issued: ignored
-        if ref var r = &loads.requests[h] { r = consume result }   // skipped if the request was cancelled: 'result' is then dropped
+        guard let h = loads.tickets.removeValue(forKey: &ticket) else { continue }   // a ticket never issued: ignored
+        if ref var r = mutable &loads.requests[h] { r = consume result }   // skipped if the request was cancelled: 'result' is then dropped
     }
 }
 
@@ -102,8 +102,8 @@ func main() {
     var last = now()
     while true {
         let t = now()
-        pumpLoads(&loads)
-        tick(&game.value, dt: Float(t - last))                  // one checked access for the whole frame
+        pumpLoads(mutable &loads)
+        tick(mutable &game.value, dt: Float(t - last))          // one checked access for the whole frame
         last = consume t
     }
 }

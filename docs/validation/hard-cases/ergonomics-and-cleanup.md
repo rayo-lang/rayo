@@ -8,7 +8,7 @@
 
 **Write a state machine with five states, timers and transitions**, such as a network connection moving between connecting, handshaking, open, draining and closed, or an enemy's AI moving between idle, patrol, chase, attack and flee.
 
-- The code must read like ordinary application code: no ownership ceremony beyond `mutable`, and at most one handle lookup per object per state.
+- The code must read like ordinary application code: no ownership ceremony beyond the marks `&` and `mutable &`, and at most one handle lookup per object per state.
 - Compare its length to the same code in C#.
 
 ---
@@ -56,7 +56,7 @@ var seen = a.alloc List<Int>()              // a value from the arena 'a', used 
 **A `@noalloc` callback with a real-time deadline, called by a C library on its own thread, reads a `Published` configuration**, as an audio callback reads its mixer settings. Dropping the last owner of a reference-counted value destroys it at once, on the thread that drops it ([06](../../spec/06-memory-and-allocators/owning-values.md#sharedt-data-with-many-owners)).
 
 - **Must hold:** a callback that reads the configuration never waits, and runs no `deinit` and frees nothing that another thread's `publish` left to it. State how it keeps from dropping the last owner of a replaced configuration.
-- **Must accept** a `@noalloc` function that calls a DSP closure it takes as a `@noalloc (MutableSpan<Float>) -> Void`, drops a `Closure<@noalloc () -> Void>` it owns, and calls a `@c noalloc` pointer a C plugin handed over.
+- **Must accept** a `@noalloc` function that calls a DSP closure it takes as a `@noalloc (mutable &[Float]) -> Void`, drops a `Closure<@noalloc () -> Void>` it owns, and calls a `@c noalloc` pointer a C plugin handed over.
 - **Must accept** callbacks on the C library's thread that use a `@threadlocal` scratch buffer, which the thread's first entry initializes and its detach destroys. State what the first callback may allocate, and how a `@noalloc` callback avoids it.
 
 ### K4 · Cleanup at exit

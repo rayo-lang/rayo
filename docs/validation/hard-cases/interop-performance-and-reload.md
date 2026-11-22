@@ -52,7 +52,7 @@ A packed struct can put a field at a misaligned address, where a load or store o
 
 - The generated header must be enough to bind to.
 - **Must accept** an idiom for reading the list whose obligations on the caller's side are easy to state and keep, even when the list's storage came from an arena that is later reset or a heap that is later unregistered.
-- The caller calls back an `@export` function that takes a span and a weak pointer to the list, whose body appends to the list. State what the caller may pass as the span.
+- The caller calls back an `@export` function that takes a `&[T]` and a weak pointer to the list, whose body appends to the list. State what the caller may pass as the `&[T]`.
 - **Must accept** an `@export` function that builds a `String` in the current thread's scratch arena and gives the caller an owner that stays valid until the caller frees it through the header's function.
 
 ### E5 · SIMD values across the boundary
@@ -92,7 +92,7 @@ A packed struct can put a field at a misaligned address, where a load or store o
 
 **Firmware for a dual-core 32-bit microcontroller runs over its vendor's C SDK, with no operating system.** The cores have 32-bit atomic instructions, but no 64-bit ones, no floating-point unit and no divide instruction ([11](../../spec/11-compilation-model.md#what-a-target-must-provide)). The firmware drives a UART through memory-mapped registers, filters sensor samples in `Float`, and counts time in `Int` nanoseconds. It keeps a `Map` of the commands it reads from the UART, and its tests run on a 64-bit host from the same source.
 
-The criteria below use these declarations from the SDK's header, and these statements, where `msg` is a `Span<UInt8>` and `byte` a `UInt8`:
+The criteria below use these declarations from the SDK's header, and these statements, where `msg` is a `&[UInt8]` and `byte` a `UInt8`:
 
 ```c
 size_t board_uart_write(const uint8_t* data, size_t len);   // queues bytes to send, and returns how many it took
@@ -152,11 +152,11 @@ vel = lerp(…)            // a call to a small math function
 **Many types that conform to one protocol are run each iteration through the protocol**, as a server's middleware stages are for each request, or an engine's render passes for each frame. The second criterion passes each value, held as an existential, to this generic function:
 
 ```swift
-func run<T: P>(_ x: mutable T, …)      // generic over the protocol's conforming types
+func run<T: P>(_ x: mutable &T, …)     // generic over the protocol's conforming types
 ```
 
 - **Must hold:** no allocation per iteration and no hidden boxing, and the dispatch cost is visible in source.
-- **Must accept** passing each `mutable any P` parameter, each `MutableRef<any P>` element's `&r.value`, or each `Box<any P>` element's `&b.value`, to `run` above. State how that call runs, given that generics are monomorphized, and its code-size cost.
+- **Must accept** passing to `run` above each `mutable &any P` parameter `x`, as `mutable &x`, each `mutable &any P` element `r` of a list, as `mutable &r`, and each `Box<any P>` element's value, as `mutable &b.value`. State how that call runs, given that generics are monomorphized, and its code-size cost.
 
 ### F4 · Bounds checks in hot loops
 
@@ -214,7 +214,7 @@ spawn(at: rng.next(), heading: rng.next())    // each argument draws the next ra
     - a `@c` function pointer;
     - an `@export` symbol;
     - a static view;
-    - a `Span`, `MutableSpan` or `StringView` that an exported or `@c` function returns;
+    - a reference, such as a `&[T]`, a `mutable &[T]` or a `&Text`, that an exported or `@c` function returns;
     - a `List`, `String` or `TrailingArray` returned to C ([08](../../spec/08-c-interop/calling-rayo-from-c.md#ownership-that-crosses-to-c));
     - anything `unsafe` code passed to C.
 

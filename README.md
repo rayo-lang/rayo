@@ -13,14 +13,16 @@ Source files use the `.rayo` extension.
 
 ```swift
 struct Enemy(var pos: Vec3, var hp: Float)
-func heal(_ e: mutable Enemy) { e.hp = 100 }
+func show(_ e: &Enemy) { print("hp \(e.hp)") }
+func heal(_ e: mutable &Enemy) { e.hp = 100 }
 
 var a = Enemy(pos: .zero, hp: 100)
 var b = copy a                     // a copy, written out: Enemy is copyable, so this is a memcpy
 b.hp = 50                          // changes only 'b'
 let hp = a.hp                      // a copy with nothing written: a Float is implicitly copyable
-heal(&a)                           // a borrow: heal changes 'a' in place, without copying it
-ref let spot = a.pos               // also a borrow: 'a.pos' can't change while 'spot' is in use
+show(&a)                           // a shared borrow: show reads 'a' where it is, without copying it
+heal(mutable &a)                   // a mutable borrow: heal changes 'a' in place
+ref let spot = &a.pos              // also a borrow: 'a.pos' can't change while 'spot' is in use
 
 var names = alloc List<String>()   // an empty list, which owns the buffer it allocates as it grows
 names.append(alloc "grunt")        // a String owns its text, so it is made with 'alloc' too
@@ -28,15 +30,15 @@ var backup = alloc names.clone()   // a copy of heap data is a named call, and i
 var moved = consume names          // a move: using 'names' after this is a compile error
 
 var enemies = alloc Pool<Enemy>()
-let h = enemies.insert(b)          // 'b' moves in; h is a Handle<Enemy>, a small link to it that copies like an Int
+let h = enemies.insert(consume b)  // 'b' moves in; h is a Handle<Enemy>, a small link to it that copies like an Int
 enemies.remove(h)
 enemies[h]?.hp -= 10               // skipped: the element is gone, so enemies[h] is nil
 ```
 
 ## Key ideas
 
-- **Every value has one owner.** Handing a value over moves it, and the place it came from can't be used until it gets a new value. A call borrows what it is given, unless a parameter is declared `owned` or the code writes `consume`, and a binding says what it does: `let` and `var` own a value, and `ref let` and `ref var` refer to a place. Copies are written out, except those of an implicitly copyable type, such as a number, a `Bool` or a `Handle`: `copy x` for a copyable value, `alloc x.clone()` for one that owns heap memory ([01](docs/spec/01-values-and-ownership.md)).
-- **The compiler checks borrows inside each function.** Code that uses a value without owning it borrows it. While a value changes through one borrow, nothing else can touch it, and while a value is read, nothing can change it. No borrow escapes the function that makes it ([01](docs/spec/01-values-and-ownership/exclusivity.md#the-law-of-exclusivity)). A view, such as a `Span` of a list's elements, can't outlive the scope that lent it ([02](docs/spec/02-views-and-dependencies/scoped-values.md#scoped-values)).
+- **Every value has one owner.** Handing a value over moves it, and the place it came from can't be used until it gets a new value. Code says what it does with each place it hands on: `&a` lends it, `mutable &a` lends it for change, and `consume a` moves it. A binding says what it does too: `let` and `var` own a value, and `ref let` and `ref var` refer to a place. Copies are written out, except those of an implicitly copyable type, such as a number, a `Bool` or a `Handle`: `copy x` for a copyable value, `alloc x.clone()` for one that owns heap memory ([01](docs/spec/01-values-and-ownership.md)).
+- **The compiler checks borrows inside each function.** Code that uses a value without owning it borrows it. While a value changes through one borrow, nothing else can touch it, and while a value is read, nothing can change it. No borrow escapes the function that makes it ([01](docs/spec/01-values-and-ownership/exclusivity.md#the-law-of-exclusivity)). A reference, such as a `&[T]` of a list's elements, can't outlive the scope that lent it ([02](docs/spec/02-views-and-dependencies/scoped-values.md#scoped-values)).
 - **Links that live longer are checked at each use.** A link that must outlive a function, such as an enemy's target, is a `Handle<T>` into a `Pool<T>`, or a `WeakPointer<T>` to an object that a `UniquePointer<T>` owns. A link to something that is gone reads `nil`: it can go stale, but it never dangles. A link owns nothing, so cycles can't leak ([03](docs/spec/03-handles-and-objects.md)).
 - **No data races.** The same borrow rules check work handed to other threads, and only `Sendable` values can reach another thread. The compiler derives `Sendable` from what a type holds ([07](docs/spec/07-concurrency/race-freedom-and-sendable.md#what-may-cross-threads-sendable)).
 - **Allocators are values the code can name.** Every construction that allocates says `alloc`, every heap allocation goes through an allocator the code shows, and every collection records which one. An arena releases everything at once when it is reset, and that stays safe: a collection that outlives the reset panics when code next reaches its contents, and never reads reused memory ([06](docs/spec/06-memory-and-allocators.md)).
@@ -69,7 +71,7 @@ The spec starts with an [Introduction](docs/spec/introduction.md), then has one 
 | Doc | Covers |
 | --- | --- |
 | [Introduction](docs/spec/introduction.md) | The language, its safety model and the scope of this specification |
-| [01 Values and ownership](docs/spec/01-values-and-ownership.md) | Copy and move, parameters and bindings, borrows and `mutable`, the law of exclusivity |
+| [01 Values and ownership](docs/spec/01-values-and-ownership.md) | Copy and move, references and unsized types, parameters and bindings, the law of exclusivity |
 | [02 Views and dependencies](docs/spec/02-views-and-dependencies.md) | Views and scoped values, how the compiler tracks what they borrow, assigning references, and place and value properties |
 | [03 Handles and objects](docs/spec/03-handles-and-objects.md) | Pools and handles, `UniquePointer` and `WeakPointer`, pinning for C |
 | [04 Types](docs/spec/04-types.md) | Numbers, [SIMD](docs/spec/04-types/numbers-and-math.md#simd-and-math), structs, enums and [`when`](docs/spec/04-types/enums.md#matching-with-when-and-choosing-with-if), optionals, unions, strings, collections and iteration, `Pod`, `SoA` |

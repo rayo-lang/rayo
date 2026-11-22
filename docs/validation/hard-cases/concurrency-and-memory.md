@@ -13,7 +13,7 @@ ThreadScope.run { s in s.spawn { … } }      // starts threads that may borrow 
 ```
 
 - **`join`** takes two `@sendable` closures, each of which may write what it captures, and returns when both are done. `@sendable` means every capture must be `Sendable`, whether borrowed or owned, since only `Sendable` values reach another thread. `join` also requires what the closures return, an error included, to be `Sendable` ([07](../../spec/07-concurrency/thread-work.md#the-librarys-promise)).
-- **`forEachInParallel`** runs a non-`mutating` `@sendable (mutable Element) -> Void` body over a collection's elements.
+- **`forEachInParallel`** runs a non-`mutating` `@sendable (mutable &Element) -> Void` body over a collection's elements.
 - **`ThreadScope.run`** starts threads that may borrow the caller's locals, and joins them when its block ends.
 
 Work handed to other threads this way is **lent work** ([07](../../spec/07-concurrency/thread-work.md#lending-work-to-other-threads)). The library's `unsafe` core, its scheduling and its error policy are its own design. The cases check that its safe uses can be written, and that its own `unsafe` promise is small and easy to state.
@@ -36,7 +36,7 @@ Written this way, two threads may write one cell with nothing ordering the write
 
 ### C2 · Disjoint writes to one value from several threads (also C16)
 
-**Two closures work on one `world`: one writes `world.velocities`, and the other reads `world.positions`.** Separately, inside `ThreadScope.run`, the block spawns one thread per part of the work while it works too: one thread writes `world.bodies`, another writes `world.ai` and reads `world.perception`, and the block writes `world.audio`. A helper function takes the scope `mutable` and spawns two more threads over places its caller lends it.
+**Two closures work on one `world`: one writes `world.velocities`, and the other reads `world.positions`.** Separately, inside `ThreadScope.run`, the block spawns one thread per part of the work while it works too: one thread writes `world.bodies`, another writes `world.ai` and reads `world.perception`, and the block writes `world.audio`. A helper function takes the scope as a `mutable &` parameter and spawns two more threads over places its caller lends it.
 
 - **Must accept** `join` with the two closures, and all of the scoped threads, with no copies of the world and no `unsafe` outside std. Once the scope returns, every place the spawns borrowed is free again.
 
@@ -61,7 +61,7 @@ Written this way, two threads may write one cell with nothing ordering the write
 
 - **Must accept** with defined thread-safety for the allocators involved. A scratch arena that gives each thread its own block to allocate from, used from many threads, must be well-defined.
 - **Must accept** the lending thread using and freeing, after the join, what lent work allocated through an allocator that keeps state per thread.
-- **Must accept** generic code that runs a parallel loop over `T` elements with a `(mutable T) -> Void` body, constrained only by `T: Sendable` and what the element operations need.
+- **Must accept** generic code that runs a parallel loop over `T` elements with a `(mutable &T) -> Void` body, constrained only by `T: Sendable` and what the element operations need.
 
 ### C7 · Panic and errors in lent work
 
@@ -124,9 +124,9 @@ The criteria below use these statements, the first five in the tasks that handle
 ```swift
 let req = try await read(sock, timeout: .seconds(30))              // fails with .timedOut once 30 s pass with no bytes
 await sleep(for: .milliseconds(200))                               // a retry's backoff, on MonotonicClock
-let digest = await hashed                                          // a Future<Digest> that a worker thread fulfills: nil if its Promise is gone
+let digest = await consume hashed                                  // a Future<Digest> that a worker thread fulfills: nil if its Promise is gone
 var body = lease.arena.alloc List<UInt8>()                         // lease: the handler's own value naming its request's arena; 'body' lives across awaits
-let host = req.host.view; try await write(sock, page); log(host)   // error: the view 'host' is live across the await
+let host = &req.host; try await write(sock, &page); log(host)      // error: the reference 'host' is live across the await
 
 guard let h = try? conns.start(serve(sock)) else { continue }      // nil when the set is full: the task, handed back, is dropped
 conns.cancel(h)                                                    // the client is gone: its handler is destroyed where it waits
@@ -160,7 +160,7 @@ let db = try block(on: connect(dbAddress))                         // in main, b
 ```swift
 world.results = alloc scratch.clone()   // clones the list into .heap, the ambient allocator here
 frameArena.reset()                      // resets the arena that built 'scratch'
-world.results.append(r)                 // grows the kept list after the reset
+world.results.append(consume r)         // grows the kept list after the reset
 ```
 
 - **Must accept** the code above: the clone's buffers, its elements' included, come from `.heap`.

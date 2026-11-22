@@ -20,7 +20,7 @@ The first version proves the language end to end with the smallest set of featur
 
 v0.1 adds:
 
-- functions with labeled, borrowed parameters, results and recursion;
+- functions with labeled parameters, results and recursion, where a `&T` parameter borrows the place a call lends it with `&a`, as `show(&boss)`, and an `Int` or `Bool` parameter `x: T` owns a copy of its argument ([01](docs/spec/01-values-and-ownership/parameters.md#parameters));
 - `Int` and `Bool`, with integer literals, the arithmetic operators `+`, `-`, `*`, `/` and `%`, unary `-`, the comparisons, and `&&`, `||` and `!`;
 - overflow, which panics in a debug build and wraps in a release build, and division by zero, which panics in both;
 - `let` and `var` locals, assignment and compound assignment;
@@ -29,7 +29,7 @@ v0.1 adds:
 - struct declarations, whose names are the types of locals, parameters and results, and `copy` of a struct;
 - making a struct with its primary initializer, as `Enemy(hp: 100, armor: 5)`, which takes its arguments owned, and reading a field of a struct where a borrow of the field suffices, as `e.hp - 5` or `print(e.hp)`;
 - a field of a struct type, given by a nested initializer call or by a local, which the call moves, and read through the struct that holds it, as `e.stats.hp`;
-- `copy` of a field of a local or a borrowed parameter, as `copy e.stats` or `copy e.stats.hp`, which leaves the struct whole;
+- `copy` of a field of a local or a `&T` parameter, as `copy e.stats` or `copy e.stats.hp`, which leaves the struct whole;
 - assigning and compound-assigning a field of a `var` local, as `e.hp -= 5`, and moving a field out, which leaves the struct unusable until the field is assigned again ([01](docs/spec/01-values-and-ownership/moving-values-out.md#what-can-be-moved-from));
 - `print(Int)`, and `print(Bool)`, which prints `true` or `false` ([04](docs/spec/04-types/collections.md#printing)).
 
@@ -40,13 +40,14 @@ An inline array, `[N of T]`, holds `N` values in place, with no heap, and takes 
 v0.2 adds:
 
 - the `UInt` type, with literals typed by context, arithmetic and comparisons under the overflow rule, the conversions `UInt(i)` and `Int(u)`, and `print(UInt)` ([04](docs/spec/04-types/numbers-and-math.md#numbers));
-- `[N of T]` as the type of locals, borrowed parameters, results, struct fields and array elements, nested arrays included, made by a literal or by `.init(repeating:)`;
+- `[N of T]` as the type of locals, results, struct fields and array elements, and of the place a `&T` parameter borrows, nested arrays included, made by a literal or by `.init(repeating:)`;
 - reading, copying, assigning and compound-assigning an element as `a[i]`, through fields and nested arrays, with a `UInt` index ([04](docs/spec/04-types/collections.md#inline-array-elements));
 - `a.count`, a `UInt`;
 - the `index out of range` panic in every build, and a compile error for an integer literal index out of range;
-- a `ref let` that borrows a local or a parameter, or a field or an element of either, read-only, as `ref let x = a[i]`, and the compile error for a `ref let` given a value, which names `let` and `var` ([01](docs/spec/01-values-and-ownership/bindings.md#bindings-that-refer-to-a-place));
-- the compile error for a `let` or `var` given such a place, which names `copy`, `consume` and `ref let`, and the one for an assignment given one, which names `copy` and `consume` ([01](docs/spec/01-values-and-ownership/bindings.md#bindings-that-own-a-value));
-- `consume` of the same places, as `let x = consume e`, which moves a local or a field of one, and is an error where a borrowed parameter or an element can't be moved from ([01](docs/spec/01-values-and-ownership/moving-values-out.md#moving-values-out));
+- a `ref let` that borrows a local or a parameter, or a field or an element of either, read-only, as `ref let x = &a[i]` ([01](docs/spec/01-values-and-ownership/bindings.md#bindings-that-refer-to-a-place));
+- the compile errors for a `ref let` given a bare place, which names `&`, and for one given a value, which names `let` and `var`;
+- the compile error for a `let` or `var` given such a place, which names `copy`, `consume` and `&`, and the one for an assignment given one, which names `copy` and `consume` ([01](docs/spec/01-values-and-ownership/bindings.md#bindings-that-own-a-value));
+- `consume` of the same places, as `let x = consume e`, which moves a local or a field of one, and is an error where a `&T` parameter or an element can't be moved from ([01](docs/spec/01-values-and-ownership/moving-values-out.md#moving-values-out));
 - implicit copies of `Int`, `UInt` and `Bool`, which leave the place usable, in a `let`, a `var`, an assignment, a `return`, an initializer's argument and an array literal's element, while a struct or an array keeps the errors ([01](docs/spec/01-values-and-ownership/moves-copies-destruction.md#implicit-copies)).
 
 ## v0.2.5: `Float` and `Double`
@@ -67,8 +68,8 @@ Its proof program extends v0.2's.
 
 v0.3 adds:
 
-- `mutable` and `owned` parameters, with the [law of exclusivity](docs/spec/01-values-and-ownership/exclusivity.md#the-law-of-exclusivity), and the error for an `owned` parameter that no code reads ([05](docs/spec/05-protocols-generics-and-closures/functions-and-closures.md#unused-values));
-- `mutating func`, which takes `self` as a `mutable` parameter.
+- `mutable &T` parameters, which a call lends a place with `mutable &a`, and parameters `x: T` of a struct or array type, which own their arguments, with the [law of exclusivity](docs/spec/01-values-and-ownership/exclusivity.md#the-law-of-exclusivity), and the error for an owning parameter that no code reads ([05](docs/spec/05-protocols-generics-and-closures/functions-and-closures.md#unused-values));
+- `mutating func`, whose `self` names the receiver's place as a `mutable &T` parameter names its argument's.
 
 ## Not yet planned
 
@@ -109,12 +110,12 @@ Statements and control flow:
 
 Ownership and borrowing:
 
-- `ref var` bindings, made with `&`, and the errors for a `ref var` without `&`, a `ref let` with it, and a `let` or `var` given `&place` ([01](docs/spec/01-values-and-ownership/bindings.md#bindings-that-refer-to-a-place)): v0.2 builds `ref let` alone;
-- `consume` of any other place, such as an `owned` parameter or a temporary ([01](docs/spec/01-values-and-ownership/moving-values-out.md#moving-values-out)): v0.2 builds `consume` of a local or a field of one;
+- `ref var` bindings, as `ref var m = mutable &p`, and the errors for a `ref var` given `&p` and a `ref let` given `mutable &p` ([01](docs/spec/01-values-and-ownership/bindings.md#bindings-that-refer-to-a-place)): v0.2 builds `ref let` alone;
+- `consume` of any other place, such as a parameter that owns its argument, or a temporary ([01](docs/spec/01-values-and-ownership/moving-values-out.md#moving-values-out)): v0.2 builds `consume` of a local or a field of one;
 - `ImplicitlyCopyable`, its conformances declared by a struct or an enum, and the other implicitly copyable types, such as tuples, `Handle` and `T?` ([01](docs/spec/01-values-and-ownership/moves-copies-destruction.md#implicitly-copyable-types)): v0.2 copies `Int`, `UInt` and `Bool` implicitly, and v0.2.5 `Float` and `Double`;
-- implicit copies in the positions v0.2 doesn't build, such as a condition's binding, a `for` or `when` name, an `owned` argument and a tuple literal's element ([01](docs/spec/01-values-and-ownership/moves-copies-destruction.md#implicit-copies));
-- `copy` of a field of a temporary, as `copy makeEnemy().stats`, and a `let` of one, which owns it ([01](docs/spec/01-values-and-ownership/moves-copies-destruction.md#copies)): v0.1 copies a field of a local or a borrowed parameter, and v0.2 borrows one with a `ref let`;
-- views such as `Span`, which are [scoped values](docs/spec/02-views-and-dependencies/scoped-values.md), and the dependencies that check them ([02](docs/spec/02-views-and-dependencies.md#dependencies));
+- implicit copies in the positions v0.2 doesn't build, such as a condition's binding, a `for` or `when` name and a tuple literal's element ([01](docs/spec/01-values-and-ownership/moves-copies-destruction.md#implicit-copies));
+- `copy` of a field of a temporary, as `copy makeEnemy().stats`, and a `let` of one, which owns it ([01](docs/spec/01-values-and-ownership/moves-copies-destruction.md#copies)): v0.1 copies a field of a local or a `&T` parameter, and v0.2 borrows one with a `ref let`;
+- references held as values, as `let best = &enemies[0]` holds a `&Enemy`, and the other views, which are [scoped values](docs/spec/02-views-and-dependencies/scoped-values.md), with the dependencies that check them ([01](docs/spec/01-values-and-ownership/references.md#references), [02](docs/spec/02-views-and-dependencies.md#dependencies)): v0.1 and v0.2 build references only as `&T` parameters and `ref let` bindings;
 - closures and function values ([05](docs/spec/05-protocols-generics-and-closures/functions-and-closures.md#closure-kinds));
 - handles and objects ([03](docs/spec/03-handles-and-objects.md#03--handles-and-objects)).
 

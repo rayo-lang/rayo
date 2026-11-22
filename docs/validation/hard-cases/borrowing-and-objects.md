@@ -2,9 +2,9 @@
 
 [Hard cases](../hard-cases.md)
 
-## A. Borrowed and stored references
+## A. Borrowed references and stored links
 
-**Borrows are checked statically within a function, with no lifetime parameters.** A view of memory that can be freed must stay within the scope that lent it, though, so a `Span` or a `StringView` can't be stored in long-lived state ([02](../../spec/02-views-and-dependencies/scoped-values.md#scoped-values)). Stored references move to the dynamic tier instead: weak pointers, `Slice` and `Handle`, each checked at each use. These cases probe both sides of that line: code that should stay free and static, and code that needs stored references but shouldn't need `unsafe`.
+**Borrows are checked statically within a function, with no lifetime parameters.** A view of memory that can be freed must stay within the scope that lent it, though, so a reference such as a `&[T]` or a `&Text` can't be stored in long-lived state ([02](../../spec/02-views-and-dependencies/scoped-values.md#scoped-values)). Stored links move to the dynamic tier instead: weak pointers, `Slice` and `Handle`, each checked at each use. These cases probe both sides of that line: code that should stay free and static, and code that needs stored links but shouldn't need `unsafe`.
 
 ### A1 · Views into a buffer the function owns (also A4)
 
@@ -17,11 +17,11 @@
 **Code collects views of a text into a list it owns, and uses the list afterwards.** It does so through a helper, a loop and a callback:
 
 ```swift
-func splitLines(_ text: StringView, into out: mutable List<StringView>) { ... }
+func splitLines(_ text: &Text, into out: mutable &List<&Text>) { ... }
 
-splitLines(source.view, into: &lines)                           // the helper appends to the caller's list
-for entry in table.entries { names.append(entry.name.view) }   // a loop over a collection
-forEachLine(src.view) { line in lines.append(line) }           // a callback
+splitLines(&source, into: mutable &lines)                    // the helper appends to the caller's list
+for entry in &table.entries { names.append(&entry.name) }   // a loop over a collection
+forEachLine(&src) { line in lines.append(&line) }           // a callback
 print(lines.count)
 ```
 
@@ -30,22 +30,22 @@ The caller has to know which text the list views. Changing that text, as `source
 The criteria below also use these patterns:
 
 ```swift
-work.append(data[mutableRange: 0..<n])       // a quicksort's worklist: the first pending range, as a span
-while var s = work.popLast() { … }           // each pass pops the next pending range
-lexer.lex(into: &tokens)                     // appends tokens that view the lexer's source
-fill(&keys, &values)                         // fills two lists of views
-let texts = alloc t.map { $0.text }          // 't' is a Span<Token>
-let labels = alloc entries.map { $0.name.view }   // a view of each entry's name
-for row in rows { spans.append(row.span) }   // 'rows' is a List<[4 of Float]>
-copyAll(from: src, into: &dst)               // copies the views that 'src' holds into 'dst'
+work.append(mutable &data[0..<n])              // a quicksort's worklist: the first pending range, as a 'mutable &[Int]'
+while var s = work.popLast() { … }             // each pass pops the next pending range
+lexer.lex(into: mutable &tokens)               // appends tokens that view the lexer's source
+fill(mutable &keys, mutable &values)           // fills two lists of references
+let texts = alloc t.map { $0.text }            // 't' is a '&[Token]'
+let labels = alloc entries.map { &$0.name }    // a reference to each entry's name
+for row in &rows { runs.append(&row[..<4]) }   // 'rows' is a List<[4 of Float]>
+copyAll(from: &src, into: mutable &dst)        // copies the references that 'src' holds into 'dst'
 ```
 
 - **Must accept** the helper, the loop and the callback in the first block, and a user-defined sequence, such as a lexer used as a `for` sequence, whose elements are collected the same way, with no fallback to index loops.
 - In the helper and the callback, the dependency is created *inside the callee*, and the caller must learn about it with no annotation, or with a small checked one.
-- **Must accept** a quicksort without recursion that keeps its pending ranges as spans in a worklist, starting and popping as above, with `data` untouchable until `work` is dead.
-- **Must accept**, with no `where` clause, the `lex` and `fill` calls above over two `List<StringView>`s, each list used afterwards: a list takes on what the other arguments view, not the arguments themselves.
-- **Must accept** the `map` over a `Span<Token>` and the `map` over `entries` above, each result used after the call, and the loop over a `List<[4 of Float]>`, with `spans` used after the loop.
-- **Must accept** the `copyAll` call above over two `List<StringView>`s, with a checked annotation, then `src` changed while `dst`'s views are used.
+- **Must accept** a quicksort without recursion that keeps its pending ranges as mutable references in a worklist, starting and popping as above, with `data` untouchable until `work` is dead.
+- **Must accept**, with no `where` clause, the `lex` and `fill` calls above over two `List<&Text>`s, each list used afterwards: a list takes on what the other arguments view, not the arguments themselves.
+- **Must accept** the `map` over a `&[Token]` and the `map` over `entries` above, each result used after the call, and the loop over a `List<[4 of Float]>`, with `runs` used after the loop.
+- **Must accept** the `copyAll` call above over two `List<&Text>`s, with a checked annotation, then `src` changed while `dst`'s references are used.
 
 ### A3 · A result that depends on only one argument
 
@@ -57,14 +57,14 @@ let entry = symbols.find(tok.text)             // view into symbols; key only us
 lexer.advance()                                // mutates lexer
 use(entry)
 
-func labelOf(_ d: any Named) -> StringView { d.label() }   // an ordinary helper over a borrowed existential
+func labelOf(_ d: &any Named) -> &Text { d.label() }   // an ordinary helper over an existential reference
 ```
 
 The difficulty is that, by default, a call's result depends on everything the call was lent, even an argument it only read ([02](../../spec/02-views-and-dependencies/dependency-lifetimes.md#precise-dependencies-opt-in)).
 
 - **Must accept** this sequence, possibly with a small annotation on `find` that the compiler checks. If the spec's answer is "restructure", count it as Solved with cost, and state how common the pattern is in parsers and lookups.
 - **Must accept** a struct holding a view of a request and a view of a table, passed to a lookup whose result depends only on the table, then the request replaced while the result is used.
-- **Must accept** ordinary helpers with no annotation, such as `span.min(by: …)`, `max(a.view, b.view)` or `grid.row(y + 1)`, whose results depend only on what they view, never on a scalar argument such as `y + 1`, and `labelOf` above, whose result is used after its statement.
+- **Must accept** ordinary helpers with no annotation, such as `xs.min(by: …)`, `longer(&a, &b)` or `grid.row(y + 1)`, whose results depend only on what they view, never on a scalar argument such as `y + 1`, and `labelOf` above, whose result is used after its statement.
 
 ### A5 · Long-lived views into a long-lived buffer
 
@@ -89,7 +89,7 @@ for (int i : path) cur = cur->children[i].get();    // re-target the cursor to a
 cur->children.push_back(std::make_unique<Node>());
 ```
 
-A cursor that binds a place can't be re-targeted with `=`, which writes the place the binding names ([02](../../spec/02-views-and-dependencies/dependency-lifetimes.md#assigning-a-reference-to-a-var)).
+A `ref var` cursor names one place for good, so `=` writes the node it names. A cursor that moves is a `var` that holds a `mutable &Node`, which assigning another reference points elsewhere ([02](../../spec/02-views-and-dependencies/dependency-lifetimes.md#assigning-a-reference-to-a-var)).
 
 - **Must accept** a loop that re-targets the mutable cursor to a child each iteration.
 - **Must accept** the same walk when the children are `List<UniquePointer<Node>>` and the tree is 10,000 levels deep, without a run-time mark held per level.
@@ -99,27 +99,27 @@ A cursor that binds a place can't be re-targeted with `=`, which writes the plac
 **Code needs two *computed* places of one value mutably at once**: place properties with a `mutate`, not stored fields ([02](../../spec/02-views-and-dependencies/place-and-value-properties.md#place-properties-borrow-and-mutate)).
 
 ```swift
-ref var p = &world.physics     // a place property's mutate
-ref var r = &world.render      // another one, on the same world
-step(&p, &r)
+ref var p = mutable &world.physics     // a place property's mutate
+ref var r = mutable &world.render      // another one, on the same world
+step(mutable &p, mutable &r)
 ```
 
 The criteria below also use these patterns:
 
 ```swift
-var lives = particles.mutableLife                    // an SoA column, taken as a MutableSpan<Float>
+var lives = mutable &particles.life                          // an SoA column, taken as a 'mutable &[Float]'
 
-node.next = nil                                      // through a place property that hands out a stored optional field
-_ = node.next.take()                                 // takes the value out through the same property, and drops it
-pool[a]?.hp = pool[b]!.hp                            // one element's field, assigned from another's
-world.enemies[h]?.hp -= reinforce(&world.enemies)    // the right side lends the whole pool for change
-let hp = target?.hp                                  // a copy through an optional chain
-if ref let c = h?.cell { use(c.tag.span) }           // a view through an optional chain
+node.next = nil                                              // through a place property that hands out a stored optional field
+_ = node.next.take()                                         // takes the value out through the same property, and drops it
+pool[a]?.hp = pool[b]!.hp                                    // one element's field, assigned from another's
+world.enemies[h]?.hp -= reinforce(mutable &world.enemies)    // the right side lends the whole pool for change
+let hp = target?.hp                                          // a copy through an optional chain
+if ref let c = &h?.cell { use(&c.tag.span) }                 // a reference through an optional chain
 ```
 
 - State whether this compiles. If it doesn't, give the idiom and its cost. Rust has the same limitation, so "same as Rust, and here is the workaround" is an acceptable answer.
-- **Must accept** a user container, such as a ring buffer over raw memory, whose subscript's `mutate` hands out an element, and a function that takes the container `mutable` and returns a view of that element.
-- **Must accept** an `SoA<T>` column, a view of the buffer that holds one field of `T`, taken as a `MutableSpan` as `lives` is above, and moved into a struct of views, into a closure, or into an `owned` parameter.
+- **Must accept** a user container, such as a ring buffer over raw memory, whose subscript's `mutate` hands out an element, and a function that takes the container as a `mutable &` parameter and returns a reference to that element.
+- **Must accept** an `SoA<T>` column, the buffer that holds one field of `T`, taken as a `mutable &[T]` as `lives` is above, and moved into a struct of references, into a closure, or into a parameter that owns it.
 - **Must accept** the optional chains through place properties above, the first two through one that hands out a stored optional field.
 
 ### A8 · A graph with cross-links, freed all at once
@@ -152,7 +152,7 @@ struct Font {
 
 ### A10 · Lending iterator over mutable chunks
 
-**Iterate `MutableSpan<Float>` chunks of 64 elements from a list, and pass each chunk to a kernel that mutates it.** In Rust:
+**Iterate `mutable &[Float]` chunks of 64 elements from a list, and pass each chunk to a kernel that mutates it.** In Rust:
 
 ```rust
 for chunk in data.chunks_mut(64) { simd_kernel(chunk); }
@@ -216,10 +216,10 @@ std::sort(targets.begin(), targets.end(), [&](Handle a, Handle b) {
 The criteria below use these function values:
 
 ```swift
-let put: (mutable List<StringView>) -> Void = { … }                  // a local function value made from a literal
+let put: (mutable &List<&Text>) -> Void = { … }                      // a local function value made from a literal
 let h = Handler(onClick: { … })                                      // a literal passed to a struct's initializer
 let r = wrap({ [move s] in s.count })                                // a closure kept by its concrete type in a generic struct
-each(enemies.span) { e in if e.hp < 10 { low.append(tag.view) } }    // a closure passed for a 'some F' parameter
+each(&enemies.span) { e in if e.hp < 10 { low.append(&tag) } }      // a closure passed for a 'some F' parameter
 ```
 
 - **Must accept** a safe idiom, spelled out, such as a handle plus an event queue, or a context passed at fire time.
@@ -231,7 +231,7 @@ each(enemies.span) { e in if e.hp < 10 { low.append(tag.view) } }    // a closur
 - **Must accept** a local tokenizer closure that advances a captured position and returns views of a shared source, with two tokens live at once.
 - **Must accept** a `mutating` closure local that owns a moved-in list, passed to a function taking `consuming () -> Void` and then called again, its list destroyed once.
 - **Must accept** a closure kept by its concrete type in a generic struct, as `r` keeps it above, with its field passed to a function that takes a plain function type.
-- **Must accept** the call to `each` above through a `some mutating (Enemy) -> Void` parameter, with `low` depending only on `tag` afterwards.
+- **Must accept** the call to `each` above through a `some mutating (&Enemy) -> Void` parameter, with `low` depending only on `tag` afterwards.
 
 ### A17 · Remembering what a function saw
 
@@ -316,25 +316,25 @@ The criteria below use these declarations and statements:
 consuming func close() -> Void!IoError               // on a file whose deinit closes it
 consuming func intoItems() -> List<T>                // on a wrapper, moving its field out
 
-give(makeLoot().item)                                // a field moved out of a call result
-upload(builder.finish(builder.count))                // 'finish' is consuming
-adopt(list, list.count)                              // 'adopt' takes its first parameter owned
-when connect().state { .open(buf) { … } … }          // matches part of a temporary whose type has a deinit
-when &connect() { .open(b) { b.append(0) } … }       // changes a payload in place
-for s in consume tags { names.append(s) }            // 'tags' is an inline array of Strings
-ref let e = if c { enemies[0] } else { makeEnemy() } // a place on one path, a value on the other
-ref let b = attr ?? Bounds(lo: 0, hi: 1)             // the same, through ??
+give(makeLoot().item)                                    // a field moved out of a call result
+upload(builder.finish(builder.count))                    // 'finish' is consuming
+adopt(consume list, list.count)                          // 'adopt' owns its first parameter
+when connect().state { .open(buf) { … } … }              // matches part of a temporary whose type has a deinit
+when mutable &connect() { .open(b) { b.append(0) } … }   // changes a payload in place
+for s in consume tags { names.append(consume s) }        // 'tags' is an inline array of Strings
+ref let e = if c { &enemies[0] } else { &makeEnemy() }   // a place on one path, a temporary on the other
+ref let b = &attr ?? &Bounds(lo: 0, hi: 1)               // the same, through ??
 ```
 
 - **Must accept** moving it without cloning. If the values live in a pool and the containers hold handles, show that instead, and state which is idiomatic.
-- **Must accept** the same moves through `replace(&slot, with:)`, `swap`, an `Optional` field's `take()` or `remove(at:)`.
+- **Must accept** the same moves through `replace(mutable &slot, with:)`, `swap`, an `Optional` field's `take()` or `remove(at:)`.
 - **Must accept** moving a field out of an owned local, or out of a call result as `give` does above, whose type has no `deinit`. The rest is destroyed at the scope's or statement's end.
 - **Must accept** a `deinit` handing a field, or a `List` in its enum's own payload, to another owner.
 - **Must accept** `close` above on a file whose `deinit` closes it, closing it once on every path, and a wrapper's `intoItems` above, which moves its field out.
-- **Must accept** the `finish` call above for a `consuming` `finish`, and the `adopt` call for an `owned` first parameter.
+- **Must accept** the `finish` call above for a `consuming` `finish`, and the `adopt` call for a first parameter that owns its argument.
 - **Must accept** matching a temporary whose type has a `deinit`, as the first `when` above does, and changing a payload in place, as the second does.
 - **Must accept** the loop over `consume tags` above, over an inline array of `String`s, with a `break`.
-- **Must accept** the bindings of `e` and `b` above, each borrowing on one path and owning on the other, used in later statements.
+- **Must accept** the bindings of `e` and `b` above, each naming a place on one path and a temporary kept for it on the other, used in later statements.
 
 ### B7 · Queries over optional columns and components
 

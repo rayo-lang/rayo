@@ -53,11 +53,11 @@ extension World: TimeSource {                       // lets tasks stepped with a
 // MARK: - Systems
 
 /// Picks the closest player for each enemy that has lost its target.
-func acquireTargets(_ world: mutable World) {
-    for e in &world.enemies where e.target == nil || world.players[e.target] == nil {
+func acquireTargets(_ world: mutable &World) {
+    for e in mutable &world.enemies where e.target == nil || world.players[e.target] == nil {
         var best: Handle<Player>? = nil
         var bestDist: Float = .infinity
-        for (h, p) in world.players.entries {       // immutable borrow; disjoint from enemies
+        for (h, p) in &world.players.entries {      // a shared borrow, disjoint from enemies
             let d = distanceSquared(p.pos, e.pos)
             if d < bestDist { bestDist = d; best = h }
         }
@@ -66,9 +66,9 @@ func acquireTargets(_ world: mutable World) {
 }
 
 /// Moves enemies toward their targets, in parallel across enemies on std's job system.
-func steer(_ world: mutable World, dt: Float) {
+func steer(_ world: mutable &World, dt: Float) {
     world.enemies.forEachInParallel { e in              // not mutating, so it may run on many threads at once
-        guard e.target != nil, ref let p = world.players[e.target] else { // players: read-only capture
+        guard e.target != nil, ref let p = &world.players[e.target] else { // players: read-only capture
             e.vel *= 0.9
             return
         }
@@ -79,19 +79,19 @@ func steer(_ world: mutable World, dt: Float) {
 }
 
 /// Resolves contact damage. Mutations to other pools go through the command buffer.
-func contact(_ world: mutable World) {
-    for (h, e) in world.enemies.entries {
-        guard e.target != nil, ref let p = world.players[e.target] else { continue }
+func contact(_ world: mutable &World) {
+    for (h, e) in &world.enemies.entries {
+        guard e.target != nil, ref let p = &world.players[e.target] else { continue }
         if distanceSquared(p.pos, e.pos) < 1 {
             // A handle is implicitly copyable, so the command gets a copy of the borrowed enemy's target.
-            world.commands.append(.damagePlayer(e.target, amount: damage(for: e.kind)))
+            world.commands.append(.damagePlayer(e.target, amount: damage(for: &e.kind)))
             world.commands.append(.despawn(h))
         }
     }
 }
 
-func damage(for kind: EnemyKind) -> Float {
-    return when kind {
+func damage(for kind: &EnemyKind) -> Float {
+    return when &kind {
         .grunt  { 5 }
         .runner { 3 }
         .brute  { 20 }
@@ -99,14 +99,14 @@ func damage(for kind: EnemyKind) -> Float {
 }
 
 /// Applies deferred structural changes once all iteration is over.
-func applyCommands(_ world: mutable World) {
+func applyCommands(_ world: mutable &World) {
     let commands = world.commands.take()              // moves the contents out; world.commands is left empty
-    for c in commands {                               // 'c' borrows each command in place
-        when c {
+    for c in &commands {                              // 'c' refers to each command in place
+        when &c {
             .despawn(h) {
                 world.enemies.remove(h)               // every copy of h goes stale at once
             }
-            .spawn(kind, pos) {                       // 'c' is a place: 'kind' borrows its part, and 'pos' is a copy
+            .spawn(kind, pos) {                       // each name refers to its part of 'c'; a Vec3 copies with nothing written
                 _ = world.enemies.insert(Enemy(kind: copy kind, pos: pos))   // the new handle isn't needed
             }
             .damagePlayer(h, amount) {
@@ -118,7 +118,7 @@ func applyCommands(_ world: mutable World) {
 
 // MARK: - A scripted sequence spanning frames
 
-task func waveSpawner(count: owned UInt, every interval: owned Duration, around center: owned Vec3) with (world: mutable World) {
+task func waveSpawner(count: UInt, every interval: Duration, around center: Vec3) with (world: mutable &World) {
     for i in 0..<count {
         let angle = Float(i) / Float(count) * 2 * .pi
         let pos = center + Vec3(cos(angle), 0, sin(angle)) * 12
@@ -139,27 +139,27 @@ public struct Game(
 
 public func newGame(viewport: IVec2) -> UniquePointer<Game> {
     var game = Game()
-    game.world.viewport = viewport                    // a copy of the borrowed IVec2
+    game.world.viewport = viewport                    // a copy: an IVec2 is implicitly copyable
     _ = game.scripts.start(waveSpawner(count: 10, every: .seconds(2), around: .zero))   // the first wave; tick steps it each frame
     return alloc UniquePointer(consume game)
 }
 
-public func tick(_ game: mutable Game, dt: Float) {
+public func tick(_ game: mutable &Game, dt: Float) {
     game.world.clock += Duration.seconds(dt)          // Float widens to Double implicitly
-    acquireTargets(&game.world)
-    steer(&game.world, dt: dt)
-    contact(&game.world)
-    game.scripts.step(&game.world)                    // one task step per frame
-    applyCommands(&game.world)
+    acquireTargets(mutable &game.world)
+    steer(mutable &game.world, dt: dt)
+    contact(mutable &game.world)
+    game.scripts.step(mutable &game.world)            // one task step per frame
+    applyCommands(mutable &game.world)
 }
 
 // MARK: - Editor tuning panel, generated from reflection
 
-func drawTuning<T>(_ value: mutable T, _ ui: mutable DebugUI) {
+func drawTuning<T>(_ value: mutable &T, _ ui: mutable &DebugUI) {
     static for field in T.fields where field.has(Tuning.self) {
         static if field.type == Float {
             let bounds = field.attribute(Bounds.self) ?? Bounds(0, 1)
-            ui.slider(field.name, &value[field], min: bounds.min, max: bounds.max)
+            ui.slider(field.name, mutable &value[field], min: bounds.min, max: bounds.max)
         }
     }
 }

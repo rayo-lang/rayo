@@ -25,12 +25,12 @@
 **Rules 1 and 2 cover a view taken from a place, and a value derived from another** ([02](../../spec/02-views-and-dependencies/dependency-projection-and-results.md#rule-1-projection)):
 
 - **Projection.** A view taken from a place reaches only that place's storage and what it owns, so it depends on the place.
-- **View conversions are projections.** A `String` or a `List` converted to its view, where one is expected, lends it by a shared borrow of its place, as `.view` and `.span` do ([05](../../spec/05-protocols-generics-and-closures/implicit-conversions.md#implicit-conversions)), so the view depends on the place.
+- **Reference conversions are projections.** A `&String` converted to a `&Text`, or a `&List<T>` to a `&[T]`, where one is expected, is still a shared borrow of the place it was made from, as `&list.span` is ([05](../../spec/05-protocols-generics-and-closures/implicit-conversions.md#implicit-conversions)). So the converted reference depends on that place.
 - **Sub-views of a shared view**, from a `get` or a place property declared `where return outlives self`, depend only on what the view carries. Verification checks the two facts that make this safe ([02](../../spec/02-views-and-dependencies/dependency-lifetimes.md#staying-valid-after-a-parameter-moves-on-outlives)):
     - nothing the view carries can be changed through it, since its type holds no mutable view;
     - nothing it carries ends with it, since destroying it is no use.
 
-  Without the first, an iterator over a `MutableSpan` could hand out a view and then replace the data under it. Without the second, dropping a read guard would release the lock under what it lent. A view of data the type holds inline still depends on `self`.
+  Without the first, an iterator over a `mutable &[T]` could hand out a view and then replace the data under it. Without the second, dropping a read guard would release the lock under what it lent. A view of data the type holds inline still depends on `self`.
 - **A value property's change** lends a copy that `set` takes back when the access ends. A view of the copy depends on the access, which is held until the view's last use, so the copy and the places the access was lent stay as they were until then ([02](../../spec/02-views-and-dependencies/place-and-value-properties.md#value-properties-get-and-set)). The access began in this function, so rule 5 keeps such a view inside it.
 - **Transitivity.** A derived value reaches nothing its source can't. A struct's or tuple's per-field sets only split that reach by stored field ([02](../../spec/02-views-and-dependencies/dependency-lifetimes.md#naming-a-field)).
 
@@ -40,14 +40,15 @@
 
 **A callee returns only what rule 5 lets it, an error included, and rule 3 gives the result all of that**, so the result is covered. Rule 5 lets a callee return these:
 
-- its borrowed and `mutable` parameters;
+- the places its `&T` and `mutable &T` parameters name;
 - what they carry;
-- what its scoped `owned` parameters carried in;
+- what its scoped owning parameters carried in;
 - static storage.
 
 **A shallow argument gives a sealed result only what it carries.** A shallow value is copyable and holds no inline array, so it owns no memory. The only safe ways to view its own bytes are these:
 
-- an `any P` made from it;
+- a reference to it or to a part of it, which is a reference to a sized type;
+- an existential reference made from it;
 - a closure capturing it by reference;
 - an interpolated literal borrowing it.
 
@@ -58,7 +59,7 @@
 **A place a closure captures exclusively ties the result to the closure.** Besides the result, only the closure reaches that place, and its next call may change or free it. So the result depends on the closure exclusively, and the next call conflicts while it lives ([02](../../spec/02-views-and-dependencies/dependency-projection-and-results.md#closure-calls)):
 
 ```swift
-var grow = { () -> Span<Int> in buf.append(0); return buf.span }   // captures 'buf' exclusively
+var grow = { () -> &[Int] in buf.append(0); return &buf.span }   // captures 'buf' exclusively
 let a = grow()                   // 'a' views buf's elements, and depends on 'grow' exclusively
 grow()                           // error: 'grow' is borrowed by 'a' (used below); this call may move buf's elements
 use(a)                           // 'a' is still live here
@@ -70,21 +71,21 @@ use(a)                           // 'a' is still live here
 
 ## Rule 4
 
-**Rule 4, absorption, covers what a call stores.** After a call, a scoped `mutable` argument takes on what the call's other arguments borrow ([02](../../spec/02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-4-absorption)), since the callee may have stored views of them in it:
+**Rule 4, absorption, covers what a call stores.** After a call, a scoped argument lent with `mutable &` takes on what the call's other arguments borrow ([02](../../spec/02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-4-absorption)), since the callee may have stored views of them in it:
 
-- **A callee stores into a `mutable` parameter only what rule 5 lets it**, and absorption adds all of that to the argument's set. Another `mutable` argument contributes what it carries, not its place, since rule 5 rejects storing a view of another `mutable` parameter's place unless a `where` item names it, and then absorption adds it.
-- **A store through an exclusive view lands in memory the view's exclusive dependencies own.** Those places can now reach what was stored, so it joins their sets, transitively ([02](../../spec/02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-4-absorption)). An `owned` mutable view, such as a `MutableSpan`, a `MutableRef<any P>` or a `mutating` closure, can be stored through too, so it absorbs as a `mutable` argument does. A generic value whose type may be an owned mutable view absorbs the same way, unless its constraints include `Copyable` or `~Scoped`.
-- **A borrowed argument absorbs nothing**, because nothing is stored through a shared path into a place that can hold a view. What safe code can write through a shared path holds only unscoped values: an object's value, a thread-local and the contents of a `Synchronized` value must all be unscoped, `~Scoped` ([02](../../spec/02-views-and-dependencies/scoped-values.md#generic-code-and-scoped)).
-- **Creating a closure is a call with its captures as arguments**, so the closure absorbs what they carry. Calling it lets its `mutable` arguments absorb its set, and the closure itself absorbs only what its `keep` arguments carry ([05](../../spec/05-protocols-generics-and-closures/functions-and-closures.md#what-a-closure-may-keep-keep)).
+- **A callee stores into a `mutable &` parameter only what rule 5 lets it**, and absorption adds all of that to the argument's set. Another `mutable &` argument contributes what it carries, not its place, since rule 5 rejects storing a view of another `mutable &` parameter's place unless a `where` item names it, and then absorption adds it.
+- **A store through an exclusive view lands in memory the view's exclusive dependencies own.** Those places can now reach what was stored, so it joins their sets, transitively ([02](../../spec/02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-4-absorption)). An owned mutable view, such as a struct of mutable references, a `List<mutable &any Damageable>` or a `mutating` closure, can be stored through too, so it absorbs as a `mutable &` argument does. A generic value whose type may be an owned mutable view absorbs the same way, unless its constraints include `Copyable` or `~Scoped`.
+- **A `&` argument absorbs nothing**, because nothing is stored through a shared path into a place that can hold a view. What safe code can write through a shared path holds only unscoped values: an object's value, a thread-local and the contents of a `Synchronized` value must all be unscoped, `~Scoped` ([02](../../spec/02-views-and-dependencies/scoped-values.md#generic-code-and-scoped)).
+- **Creating a closure is a call with its captures as arguments**, so the closure absorbs what they carry. Calling it lets its `mutable &` arguments absorb its set, and the closure itself absorbs only what its `keep` arguments carry ([05](../../spec/05-protocols-generics-and-closures/functions-and-closures.md#what-a-closure-may-keep-keep)).
 - **Assigning a whole value replaces a set only where the place is known.** The old value is destroyed, so nothing it reached is reachable through the place. Through a binding that may name either of several places, the assignment adds to each, since the others may still hold their old views. A write through an exclusive view adds too, since the view may cover only part of what it depends on.
-- **A `mutable` argument's fields may trade what they carry**, so after the call each field has the union of all of them, unless a `where` item proves otherwise ([02](../../spec/02-views-and-dependencies/dependency-lifetimes.md#naming-a-field)).
+- **A `mutable &` argument's fields may trade what they carry**, so after the call each field has the union of all of them, unless a `where` item proves otherwise ([02](../../spec/02-views-and-dependencies/dependency-lifetimes.md#naming-a-field)).
 
 ## Rule 5
 
 **Rule 5 checks each body against what its signature tells callers, so a caller's sets are covered without seeing the body** ([02](../../spec/02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-5-the-callee-side)). What it rejects is what rules 3 and 4 couldn't report:
 
-- a view of what the function owns or began, each released or ended when the call returns: its locals, the storage its `owned` parameters own, a thread-local, and a dynamic access or a value property's change begun inside it. The non-`mutable` parameters of a C entry count as owned, since C passes them by value ([08](../../spec/08-c-interop/calling-rayo-from-c.md#calling-rayo-from-c));
-- a store into a `mutable` parameter `p` that depends on a place overlapping `p`, since the caller's set for `p` would have to name `p` itself;
+- a view of what the function owns or began, each released or ended when the call returns: its locals, the storage its owning parameters own, a thread-local, and a dynamic access or a value property's change begun inside it. The parameters that C passes a C entry by value count as owned ([08](../../spec/08-c-interop/calling-rayo-from-c.md#calling-rayo-from-c));
+- a store into a `mutable &` parameter `p` that depends on a place overlapping `p`, since the caller's set for `p` would have to name `p` itself;
 - a store through a parameter's exclusive dependencies that depends on the parameter's own storage, which absorption never reports.
 
 **Static storage is always allowed**, since it is never moved or destroyed ([07](../../spec/07-concurrency/global-state.md#shutdown)). The views a `Synchronized` global lends stay valid by its contract: a guard by its lock, and `Once.get()` by data never written again, which the global never frees ([07](../../spec/07-concurrency/synchronization.md#the-synchronized-contract)).
@@ -93,7 +94,7 @@ use(a)                           // 'a' is still live here
 
 **What a C entry hands back to C may depend only on its parameters, `const`s and places in a global `let`'s own storage** ([08](../../spec/08-c-interop/calling-rayo-from-c.md#what-a-c-entry-hands-back-to-c)). Once it returns, nothing in Rayo holds what it borrowed: a lock guard is released, and an open no longer counts as a use of its allocator. So a reset or an unregistration could free an owning value's storage while C still holds a view of it.
 
-**A scoped `mutable` parameter counts as used at every exit**, so no path out, an error's included, frees what the callee just stored a view of.
+**A scoped `mutable &` parameter counts as used at every exit**, so no path out, an error's included, frees what the callee just stored a view of.
 
 ## Rule 6
 
@@ -102,12 +103,12 @@ use(a)                           // 'a' is still live here
 **A set names an access by the site that began it, so a site in a loop holds one access at a time.** Each time the site begins an access, no value that depends on the access it began the last time may be used from then on:
 
 ```swift
-for w in nodes { names.append(w.value!.name.view) }   // error: the second pass's append uses 'names', which depends on the first pass's access
+for w in &nodes { names.append(&w.value!.name) }   // error: the second pass's append uses 'names', which depends on the first pass's access
 ```
 
 ## Mutable views
 
-**A value that can write what it views carries an exclusive dependency on it** ([02](../../spec/02-views-and-dependencies/dependency-projection-and-results.md#mutable-views)). Otherwise a function could turn a shared borrow into a `MutableSpan`, which would write what another shared borrow still reads, against Exclusive. The two exceptions are exclusive by other means: a dynamic exclusive access, checked at run time, and a guard, whose lock grants no conflicting view ([07](../../spec/07-concurrency/synchronization.md#the-synchronized-contract)). `unsafe` code that builds a mutable view promises the same of what it builds.
+**A value that can write what it views carries an exclusive dependency on it** ([02](../../spec/02-views-and-dependencies/dependency-projection-and-results.md#mutable-views)). Otherwise a function could turn a shared borrow into a `mutable &[T]`, which would write what another shared borrow still reads, against Exclusive. The two exceptions are exclusive by other means: a dynamic exclusive access, checked at run time, and a guard, whose lock grants no conflicting view ([07](../../spec/07-concurrency/synchronization.md#the-synchronized-contract)). `unsafe` code that builds a mutable view promises the same of what it builds.
 
 **An iterator that hands out mutable views lends them one at a time** ([04](../../spec/04-types/collections.md#iteration)). Each depends on the iterator exclusively until the next `next()`, so two are never live at once. A `mutableZip` iterates only by consuming, so no second iterator over it exists to hand out its views again.
 
@@ -146,5 +147,5 @@ for w in nodes { names.append(w.value!.name.view) }   // error: the second pass'
 - **Every path of a `borrow` or `mutate` body that returns hands out a place, or `nil`**, so the caller always gets one.
 - **An object's `value` keeps its mark until the access ends**, at the last use of every value that depends on it, and the language releases it then (rule 6).
 - **An optional place property or a tuple of places exists only in its parts.** No `T?` or tuple of them lies in memory, so nothing writes, lends or views one whole.
-- **A change through `get` and `set`** lends the `get`'s result and passes it to `set`, which changes `self`. So it is rejected when that result may depend on `self` or on a `mutable` argument of the access, which `set` would change while its `newValue` still views it ([02](../../spec/02-views-and-dependencies/place-and-value-properties.md#value-properties-get-and-set)). A move-only `owned` argument can't move into both calls.
+- **A change through `get` and `set`** lends the `get`'s result and passes it to `set`, which changes `self`. So it is rejected when that result may depend on `self` or on a `mutable &` argument of the access, which `set` would change while its `newValue` still views it ([02](../../spec/02-views-and-dependencies/place-and-value-properties.md#value-properties-get-and-set)). A move-only argument that the access owns can't move into both calls.
 - **A panic leaves each value whole and owned once** ([02](../../spec/02-views-and-dependencies/place-and-value-properties.md#panics-during-a-change)). Through a place property, changes already made stay in storage, as direct writes would. Through a value property, the copy is destroyed and `set` never runs, so the old value stays. An under-aligned field's temporary is written back instead, since it holds the field's only value.

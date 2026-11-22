@@ -9,13 +9,13 @@
 - **A move copies bytes and ends the source** ([01](../../spec/01-values-and-ownership/moves-copies-destruction.md#moves)). Only a place the code owns can be moved from. Once moved from, it can't be used until it is given a new value, so the bytes stand for the value in one place only. Otherwise both places would be used and destroyed as one value, which Owned forbids.
 - **A copy duplicates nothing owned.** `copy`, an implicit copy, a copyable `const`, and the operations that 01 lists as copying apply only to copyable types, since `ImplicitlyCopyable` refines `Copyable` ([01](../../spec/01-values-and-ownership/moves-copies-destruction.md#operations-that-copy)). Copyable types have no `deinit` and own no heap memory ([01](../../spec/01-values-and-ownership/moves-copies-destruction.md#copyable-types)), so a copy is never a second owner of anything. Everything that owns memory is move-only, and `clone()` allocates its own.
 - **Some types are move-only whatever their fields, since a copy would alias** ([01](../../spec/01-values-and-ownership/moves-copies-destruction.md#types-that-are-always-move-only)):
-    - **Mutable views.** A copy of a mutable view, such as a `MutableRef<any P>` or an exclusive `SoA` row, would be a second mutable alias, which Exclusive forbids.
+    - **Exclusive views.** A copy of a mutable reference, such as a `mutable &any P`, or of an exclusive `SoA` row would be a second mutable alias, which Exclusive forbids.
     - **Guards.** A copy of a guard would unlock its lock a second time.
     - **`Synchronized` values.** A copy would be a second place with the value's identity, so threads would no longer all synchronize on the same memory ([Threads](runtime-and-concurrency.md#threads)).
     - **Function values, `Closure`s and task states.** A copy of a `mutating` or `consuming` function value, a `Closure` or a task's state would be a second owner of the same captures or locals, which Owned forbids.
 - **A place the code doesn't own always holds a value**, since a caller, an alias or a later `deinit` may still reach it, across a `throw`, an early return and an `await` too. Valid needs a value there for whoever reads or destroys it next. So nothing is consumed from these places ([01](../../spec/01-values-and-ownership/moving-values-out.md#what-can-be-moved-from)):
     - a global;
-    - a borrowed or `mutable` parameter;
+    - a `&T` or `mutable &T` parameter, which names the caller's place;
     - an element;
     - a place reached through a weak pointer or an accessor.
 
@@ -50,20 +50,20 @@
 
 ```swift
 items.append(items.count)     // fine: items.count is read, and done, before append borrows items
-f(&x, x)                      // error: two borrows of x overlap for the whole call
+f(mutable &x, &x)             // error: two borrows of x overlap for the whole call
 ```
 
 **An optional chain or `!` reads the optional, so its borrow begins there.** An assignment through an optional chain works out the rest of its place after its right side, whose accesses have then ended.
 
-**A borrowed argument may be a copy of its bits** ([01](../../spec/01-values-and-ownership/parameters.md#borrowed-arguments)), since nothing changes it during the call. The arguments that are always the caller's place are exactly those whose address matters:
+**A `&T` argument may be a copy of its bits** ([01](../../spec/01-values-and-ownership/parameters.md#borrowed-arguments)), since nothing changes it during the call. The arguments that are always the caller's place are exactly those whose address matters:
 
 - a `Synchronized` value, whose identity is its address, and which changes through a shared borrow;
 - the argument of `ptr(to:)`, whose result is its address;
 - one that a result, an error, a place property's place or an absorbing argument may still view after the call, which would otherwise view the callee's copy.
 
-**Which arguments these are follows from the signature alone, and conversions keep conventions.** So a call through a function value passes its arguments as a direct call does.
+**Which arguments these are follows from the signature alone, and conversions keep parameter types.** So a call through a function value passes its arguments as a direct call does.
 
-**A `mutable` argument's changes reach the caller's place**, through a written-back temporary too ([01](../../spec/01-values-and-ownership/parameters.md#parameters)).
+**A `mutable &` argument's changes reach the caller's place**, through a written-back temporary too ([01](../../spec/01-values-and-ownership/parameters.md#parameters)).
 
 **Only a changeable place is written** ([01](../../spec/01-values-and-ownership/bindings.md#changeable-places)), so a shared borrow never becomes a write. Each exception brings its own exclusivity:
 
