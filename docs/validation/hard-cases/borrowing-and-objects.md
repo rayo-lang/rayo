@@ -21,7 +21,7 @@ func splitLines(_ text: StringView, into out: mutable List<StringView>) { ... }
 
 splitLines(source.view, into: &lines)                           // the helper appends to the caller's list
 for entry in table.entries { names.append(entry.name.view) }   // a loop over a collection
-forEachLine(src.view) { line in lines.append(copy line) }      // a callback
+forEachLine(src.view) { line in lines.append(line) }           // a callback
 print(lines.count)
 ```
 
@@ -34,7 +34,7 @@ work.append(&data[0..<n])                    // a quicksort's worklist: the firs
 while let s = work.popLast() { … }           // each pass pops the next pending range
 lexer.lex(into: &tokens)                     // appends tokens that view the lexer's source
 fill(&keys, &values)                         // fills two lists of views
-let texts = alloc t.map { copy $0.text }     // 't' is a Span<Token>
+let texts = alloc t.map { $0.text }          // 't' is a Span<Token>
 let labels = alloc entries.map { $0.name.view }   // a view of each entry's name
 for row in rows { spans.append(row.span) }   // 'rows' is a List<[4 of Float]>
 copyAll(from: src, into: &dst)               // copies the views that 'src' holds into 'dst'
@@ -111,9 +111,9 @@ let lives = &particles.life                          // an SoA column, taken as 
 
 node.next = nil                                      // through a place property that hands out a stored optional field
 _ = node.next.take()                                 // takes the value out through the same property, and drops it
-pool[a]?.hp = copy pool[b]!.hp                       // one element's field, assigned from another's
+pool[a]?.hp = pool[b]!.hp                            // one element's field, assigned from another's
 world.enemies[h]?.hp -= reinforce(&world.enemies)    // the right side lends the whole pool for change
-let hp = copy target?.hp                             // a copy through an optional chain
+let hp = target?.hp                                  // a copy through an optional chain
 if ref let c = h?.cell { use(c.tag.span) }           // a view through an optional chain
 ```
 

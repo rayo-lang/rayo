@@ -29,10 +29,10 @@ let hot = &heat.span                          // a MutableSpan<Float>: borrows t
 **A view that holds a mutable borrow is also move-only, `~Copyable`**, since two copies would be two mutable aliases:
 
 ```swift
-struct Span<Element>(                                  // shared view: copyable
+struct Span<Element>(                                  // shared view: implicitly copyable, 16 bytes
     public unsafe let baseAddress: *Element,
     public let count: UInt,
-): Scoped
+): Scoped, ImplicitlyCopyable
 
 struct MutableSpan<Element>(                           // exclusive view: move-only
     public unsafe let baseAddress: *Element,
@@ -211,7 +211,7 @@ func show(_ hint: Hint, _ token: Token) {
 - **Parts.** A static value's fields, elements, payloads and ranges are static too, since they view the same data. So `keywords[0]` is a `static Token`, `keywords[0].text` a `static StringView`, and `keywords[1].text[0..<2]` a static view. A `var` field of a static value takes only a static value.
 - **Type arguments.** On a generic type, `static` applies to the scoped type arguments too, and leaves an unscoped one as it is. So `static List<StringView>` is the same type as `List<static StringView>`, a `static Span<Token>` views `static Token`s, and a `static Span<Preset>` views plain `Preset`s. A type argument that may be scoped or not, such as a type parameter or an associated type not constrained `~Scoped`, is a compile error there.
 - **Members.** A static value has its plain type's members, which it is lent to as its plain type, shared, so `keywords[0].text.count` works. A `mutating` member can be called on it only when every scoped field and payload of its type has a type argument's type, a raw pointer to one counting as one, as `List`'s, `Optional`'s and an inline array's do. Then the member is the static instance's own, and takes static values, as `List<static StringView>.append` does. Any other `mutating` member could store a view of shorter-lived data in it, so calling one is a compile error.
-- **Conformances.** It conforms to its plain type's protocols through that type's witnesses, so a `Set<static Token>` hashes as `Token` does. It is copyable, `Sendable` and `TrivialFree` exactly when its plain type is, and `Frozen` when what it views is (below).
+- **Conformances.** It conforms to its plain type's protocols through that type's witnesses, so a `Set<static Token>` hashes as `Token` does. It is copyable, implicitly copyable, `Sendable` and `TrivialFree` exactly when its plain type is, and `Frozen` when what it views is (below).
 - **Reflection.** It reads as its plain type, with the same fields, cases and layout, except that each scoped field's and payload's type is its static type. So `field.type` and `value[field]` give a `static StringView` for a `static Token`'s `text`, and `T.construct` takes static values. Its `T.name` puts `static` before its plain type's name, and its `T.id` is its own ([09](../09-compile-time/reflection.md#what-reflection-can-read)).
 
 ### Converting to and from a static type

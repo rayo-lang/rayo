@@ -24,7 +24,7 @@ A place that may be changed or lent with `&`, such as a `var` that owns its valu
 To move a value out of a place the code owns, implicitly or with `consume place` ([01](docs/spec/01-values-and-ownership/moving-values-out.md#moving-values-out)).
 
 **Copy**:
-A second value with the same contents: `copy x` duplicates a copyable value's bytes, and `alloc x.clone()` a move-only value's storage ([01](docs/spec/01-values-and-ownership/moves-copies-destruction.md#copies)).
+A second value with the same contents: `copy x` duplicates a copyable value's bytes, an implicitly copyable value is copied with nothing written, and `alloc x.clone()` copies a move-only value's storage ([01](docs/spec/01-values-and-ownership/moves-copies-destruction.md#copies)).
 
 **Copyable**:
 A type whose values `copy` duplicates byte for byte, without allocating ([01](docs/spec/01-values-and-ownership/moves-copies-destruction.md#copyable-types)).
@@ -35,6 +35,13 @@ How a place is held when nothing else reaches it while it is used, though never 
 
 **Hidden local**:
 A local the language declares to keep a value that a statement can't name, such as a `when` subject or a loop's sequence ([01](docs/spec/01-values-and-ownership/moves-copies-destruction.md#destruction)).
+
+**Implicit copy**:
+The copy made, with nothing written, of an implicitly copyable value taken from a place, which leaves the place usable ([01](docs/spec/01-values-and-ownership/moves-copies-destruction.md#implicit-copies)).
+
+**Implicitly copyable**:
+A copyable type that conforms to `ImplicitlyCopyable`, promising that its copy is cheap, such as `Int` or `Handle`, so taking it from a place copies it with no `copy` written ([01](docs/spec/01-values-and-ownership/moves-copies-destruction.md#implicitly-copyable-types)).
+_Avoid_: Copy type, trivially copyable
 
 **Law of exclusivity**:
 The rule that nothing else reaches a place while it is mutably borrowed, and nothing changes it while it is borrowed shared ([01](docs/spec/01-values-and-ownership/exclusivity.md#the-law-of-exclusivity)).

@@ -6,9 +6,13 @@ The [README](../README.md) introduces Rayo. This page makes the case for it: the
 
 Six principles decide Rayo's trade-offs.
 
-1. **Costs are visible.** Allocation, dynamic dispatch, copies and unsafe memory access are spelled out in source. Nothing implicitly counts references, boxes or collects garbage. Nothing copies beyond what 01 lists ([01](spec/01-values-and-ownership/moves-copies-destruction.md#operations-that-copy)), with two exceptions:
+1. **Costs are visible.** Allocation, dynamic dispatch, copies and unsafe memory access are spelled out in source, except the copies a type declares cheap (below). Nothing implicitly counts references, boxes or collects garbage. Nothing copies beyond what 01 lists ([01](spec/01-values-and-ownership/moves-copies-destruction.md#operations-that-copy)), with two exceptions:
     - a `String` made from a literal, as in `alloc "jump"`, copies the literal's bytes at its first write or growth ([04](spec/04-types/collections.md#strings));
     - a closure moved into a `Closure` may put the captures its capture list shows in an allocated context, which the `Closure` type shows and no `alloc` marks ([05](spec/05-protocols-generics-and-closures/functions-and-closures.md#unscoped-closures-closuref)).
+
+   A copy that a type declares cheap is the one copy left unwritten: an `Int`, a `Handle` or a `Vec3` copies where another value would move ([01](spec/01-values-and-ownership/moves-copies-destruction.md#implicitly-copyable-types)). Writing every copy would make the cheapest operation the one code writes most. In eight Rust codebases, measured from rustc's MIR, the copies Rust makes with nothing written are 5.5% of all `let`s and assignments, and 19% of assignments. 87% of them are of scalars or of types of 16 bytes or less.
+
+   The languages that came to regret silent copies regretted expensive ones: Rust's large `Copy` arrays, Mojo's `List` and `Dict`, Swift's reference counting. Rust and Mojo answer by separating "can be copied" from "copies silently", and letting the type's author promise the second. Rayo does the same with `ImplicitlyCopyable`, and an array never makes that promise, so a `[4096 of UInt8]` never copies silently.
 
    Where the compiler stages a place through a temporary, a declaration announces it:
     - a `@layout(.packed)` struct ([04](spec/04-types/structs.md#packed-structs-and-under-aligned-places));
@@ -52,7 +56,7 @@ Six principles decide Rayo's trade-offs.
 
 | Problem | Rayo's answer | Spec |
 | --- | --- | --- |
-| ARC retain/release traffic; the optimizer moves refcounts between builds | No implicit reference counting: only reference-counted pointers such as `Shared<T>` count, where the code makes an owner. Handing a value over moves it, and every copy is written out. | [01](spec/01-values-and-ownership.md) |
+| ARC retain/release traffic; the optimizer moves refcounts between builds | No implicit reference counting: only reference-counted pointers such as `Shared<T>` count, where the code makes an owner. Handing a value over moves it, and every copy is written out, except one its type declares cheap, such as an `Int`'s. | [01](spec/01-values-and-ownership.md) |
 | ARC cycles leak unless code marks each back-reference `weak` or `unowned` | Stored references (weak pointers, handles) own nothing, so a back-reference never keeps its target alive, and a dead target reads `nil`. | [03](spec/03-handles-and-objects.md#objects-and-weak-pointers-uniquepointert-and-weakpointert) |
 | Release cascades free big graphs synchronously | Arenas reset in O(1), and a `TrivialFree` value is released into its arena without walking it. Ownership moves, so a library can also destroy a value later or a piece at a time. | [06](spec/06-memory-and-allocators/allocation-lifecycle.md#releasing-a-value-without-destroying-it-trivialfree) |
 | Unspecialized generics, existentials, exclusivity and COW checks appear after harmless changes | Generics are always monomorphized, `any P` is written out and never boxes implicitly, dynamic exclusivity checks run only where a type or declaration announces them, and there is no copy-on-write, only the one deferred copy a `String` made from a plain literal or a static view takes, as `alloc "jump"` does, with no count to check ([04](spec/04-types/collections.md#strings)). | [03](spec/03-handles-and-objects.md#dynamic-exclusivity), [05](spec/05-protocols-generics-and-closures.md) |
@@ -102,7 +106,7 @@ struct World(
 )
 
 extension World: TimeSource {               // what elapsed(_:) counts in: here, simulation time
-    var now: Instant<World> { copy clock }  // a copy, written out: the World keeps its clock
+    var now: Instant<World> { clock }       // a copy: an Instant is implicitly copyable, so the World keeps its clock
 }
 
 // Moves every enemy toward its target.
@@ -145,7 +149,7 @@ func main() {
 
 What it shows:
 
-- **Values and handles.** Game data is ordinary values in `Pool`s. An enemy's `target` is a `Handle`, so once the player is removed, `world.players[t]` reads `nil`. `hero` moves into the new enemy, and `copy clock` is a copy written out ([01](spec/01-values-and-ownership/moves-copies-destruction.md#copies)).
+- **Values and handles.** Game data is ordinary values in `Pool`s. An enemy's `target` is a `Handle`, so once the player is removed, `world.players[t]` reads `nil`. The new enemy gets a copy of the handle `hero`, and `now` a copy of `clock`, both with nothing written, since a `Handle` and an `Instant` declare their copies cheap ([01](spec/01-values-and-ownership/moves-copies-destruction.md#implicitly-copyable-types)).
 - **Race-free parallel loops.** The closure in `steer` runs on several threads at once. It compiles because it writes only its own enemy and only reads `world.players`; also writing `world.players` would be a compile error ([07](spec/07-concurrency/thread-work.md#lending-work-to-other-threads)).
 - **Tasks.** `openDoor` pauses at `await`, and continues when it is woken and its owner steps it. Its wait counts the world's own time, so it wakes itself at every pass of the main loop, and each pass checks the clock. It holds no borrow across an `await`, so it never keeps a stale pointer into `world` ([07](spec/07-concurrency/tasks.md#semantics)).
 - **Reflection and attributes.** `Bounds` is an ordinary struct used as an attribute. The editor finds it by reflecting over `Enemy`'s fields, and `@reflect(private)` lets it see fields that aren't public ([09](spec/09-compile-time.md)).

@@ -204,7 +204,7 @@ for r in &rx { handle(r) }                    // the same loop
 **`tryReceive()` never parks, and tells an empty channel from a disconnected one:**
 
 ```swift
-enum TryReceiveError: Error {
+enum TryReceiveError: Error, ImplicitlyCopyable {
     case empty              // connected, with no item yet
     case disconnected       // every Sender is gone, and no item is left
 }
@@ -213,7 +213,7 @@ enum TryReceiveError: Error {
 **`receive(timeout:)` parks as `receive()` does, until `timeout` has passed on `MonotonicClock`, and tells a timeout from a disconnection** ([Time](#time-duration-and-instant)):
 
 ```swift
-enum ReceiveTimeoutError: Error {
+enum ReceiveTimeoutError: Error, ImplicitlyCopyable {
     case timedOut           // connected, and no item came before the timeout passed
     case disconnected       // every Sender is gone, and no item is left
 }
@@ -235,6 +235,8 @@ enum TrySendError<T>: Error {
     case disconnected(T)    // the Receiver is gone
 }
 ```
+
+**The two error enums without payloads are implicitly copyable, and std declares `Disconnected<T>` and `TrySendError<T>` implicitly copyable where `T` is**, since each holds only its case and the item ([01](../01-values-and-ownership/moves-copies-destruction.md#implicitly-copyable-types)).
 
 **A send's result is a `Result`, so the unused-value rule makes the sender check it or drop it on purpose** ([05](../05-protocols-generics-and-closures/functions-and-closures.md#unused-values)):
 
@@ -389,8 +391,8 @@ extension SpinQueue: unsafe Synchronized {}          // or, instead, in an exten
 **std counts time in whole nanoseconds, held in an `Int64`, so times add and compare exactly on every target.** A `Duration` is a length of time, which every clock shares. An `Instant<Clock>` is a point in time on one clock, so the instants of two clocks have different types, and never mix:
 
 ```swift
-struct Duration(let nanoseconds: Int64): Hashable, Comparable                     // may be negative; Duration.zero is no time
-struct Instant<Clock: TimeSource>(let nanoseconds: Int64): Hashable, Comparable   // nanoseconds since Clock's own start
+struct Duration(let nanoseconds: Int64): Hashable, Comparable, ImplicitlyCopyable                     // may be negative; Duration.zero is no time
+struct Instant<Clock: TimeSource>(let nanoseconds: Int64): Hashable, Comparable, ImplicitlyCopyable   // nanoseconds since Clock's own start
 
 static func seconds(_ s: Double) -> Duration { … }              // Duration's: .seconds(0.5)
 static func milliseconds(_ ms: Int64) -> Duration { … }         // Duration's, as are microseconds(_:) and nanoseconds(_:)
@@ -400,7 +402,7 @@ static func milliseconds(_ ms: Int64) -> Duration { … }         // Duration's,
 
 ```swift
 protocol TimeSource { var now: Instant<Self> { get } }
-struct MonotonicClock(): TimeSource { … }       // the system's clock for waits: MonotonicClock().now is an Instant<MonotonicClock>
+struct MonotonicClock(): TimeSource, ImplicitlyCopyable { … }   // the system's clock for waits: MonotonicClock().now is an Instant<MonotonicClock>
 ```
 
 **`MonotonicClock` is the clock of every wait on real time**: a timeout, `Thread.sleep(for:)`, and a task's `sleep(for:)` ([Awaitables in std](tasks.md#awaitables-in-std)). Its `now` never decreases, and how it relates to a calendar is left open. A program supplies other clocks as types of its own, such as a game whose simulation time stops while it is paused. Their instants can't reach a wait on real time, such as a `Waker`'s `wake(at:)`, which takes an `Instant<MonotonicClock>`.

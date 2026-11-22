@@ -118,12 +118,12 @@ func drawMarkers(_ enemies: mutable List<Enemy>, _ hud: Hud) {
 let deaths = Mutex(alloc List<Vec3>())
 enemies.forEachInParallel { e in
     if e.hp <= 0 {
-        deaths.lock { list in list.append(copy e.pos) }   // fine: one thread at a time holds the list
+        deaths.lock { list in list.append(e.pos) }        // fine: one thread at a time holds the list
     }
 }
 
 let g = deaths.lock()                    // a MutexGuard<List<Vec3>>
-g.value.append(copy boss.pos)
+g.value.append(boss.pos)
 _ = g                                    // unlocks now; otherwise the end of the scope does
 
 deaths.lock { _ in

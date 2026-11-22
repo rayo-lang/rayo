@@ -8,8 +8,8 @@ A link to a value in a collection can be a **handle**: a small index into a pool
 
 ```swift
 var enemies = alloc Pool<Enemy>(capacity: 4096)
-let h = enemies.insert(Enemy(pos: spawn, hp: 100))   // h: Handle<Enemy>, 8 bytes, copyable
-squad.members.append(copy h)                         // store copies anywhere
+let h = enemies.insert(Enemy(pos: spawn, hp: 100))   // h: Handle<Enemy>, 8 bytes, implicitly copyable
+squad.members.append(h)                              // store copies anywhere: 'h' stays usable
 
 enemies[h]?.hp -= 10                                 // nil, and skipped, if the enemy is gone
 enemies.remove(h)                                    // every copy of h goes stale at once
@@ -19,13 +19,15 @@ if enemies[h] == nil { … }                           // true: a stale handle r
 **`pool[h]` is an optional place property** ([02](02-views-and-dependencies/place-and-value-properties.md#optional-places-and-tuples-of-places)): it hands out the element in place, or `nil`. The standard library declares `Handle` this way:
 
 ```swift
-@align(8) public struct Handle<T> private init(public let index: UInt32, public let generation: UInt32): Copyable, Hashable {
+@align(8) public struct Handle<T> private init(public let index: UInt32, public let generation: UInt32): ImplicitlyCopyable, Hashable {
     public var bits: UInt64 { … }             // its 8 bytes as one UInt64, for C to hold
     public init?(bits: UInt64) { … }          // nil only for generation 0
 }
 ```
 
 **`Handle` is 8-aligned, so C holds it as a `uint64_t`** ([08](08-c-interop/calling-rayo-from-c.md#c-representations)). A handle holds an index and a generation, never an address, so it is 8 bytes on every target, whatever its pointer width ([11](11-compilation-model.md#what-a-target-must-provide)). `Handle<T>?` is 8 bytes too, since its `nil` is all zero bits, which no handle has: a handle's generation is never 0 ([04](04-types/enums.md#optionals)).
+
+**`Handle` is implicitly copyable**, since its copy is 8 bytes and names the same element. So code passes and stores handles with no `copy` written ([01](01-values-and-ownership/moves-copies-destruction.md#implicitly-copyable-types)).
 
 **Other modules build a handle only through `init?(bits:)`, since its primary initializer is private.** So `Handle` isn't `Pod` ([04](04-types/data-layout.md#plain-data-pod-and-bit-casts)): a type that guards an invariant, here a generation that is never 0, must not be forged from bytes.
 
@@ -40,7 +42,7 @@ A `UniquePointer` owns one value, its **object**, in memory from any allocator. 
 
 ```swift
 var renderer = alloc UniquePointer(Renderer(device: dev))   // the one owner, move-only
-let r: WeakPointer<Renderer> = renderer.weak()              // copyable: store any number, cycles included
+let r: WeakPointer<Renderer> = renderer.weak()              // implicitly copyable: store any number, cycles included
 
 struct Sprite(var mesh: MeshId, var renderer: WeakPointer<Renderer>)                     // a weak pointer as a field
 struct Node(var parent: WeakPointer<Node>?, var children: List<UniquePointer<Node>>)     // tree with parent pointers
@@ -65,6 +67,8 @@ r.value!.stats.drawCalls += 1                  // '!' panics if the object is go
 
 **Owners and weak pointers are 8 bytes and 8-aligned, on every target.** Each holds where to find its object, such as a slot index, together with the object's generation, and a generation unique for the whole run needs a field of its own ([below](#destroying-an-object)). A weak pointer needs it to read `nil` once the object is gone, and an owner to go stale when something else destroys its object. So neither's size follows the target's pointer width ([11](11-compilation-model.md#what-a-target-must-provide)). Their `nil` is all zero bits, so `UniquePointer<T>?` and `WeakPointer<T>?` are 8 bytes too, and a weak pointer's bits fit a C `uint64_t` ([below](#weak-pointers-as-bits-and-handing-objects-to-c)).
 
+**A weak pointer is implicitly copyable**, since every copy reaches the same object, or reads `nil` with the rest ([01](01-values-and-ownership/moves-copies-destruction.md#implicitly-copyable-types)).
+
 ### Dynamic exclusivity
 
 **The law of exclusivity holds for an object's value too, checked at run time** ([01](01-values-and-ownership/exclusivity.md#the-law-of-exclusivity)), since the static checker can't see which weak pointers name one object. Every access to the value, through the owner or any weak pointer, is checked:
@@ -79,7 +83,7 @@ r.value!.stats.drawCalls += 1                  // '!' panics if the object is go
 
 ```swift
 let mixer = alloc Shared(Mutex(AudioMixer()))              // AudioMixer must be Sendable
-let m: WeakShared<Mutex<AudioMixer>> = mixer.weak()        // copyable and Sendable: may go to any thread
+let m: WeakShared<Mutex<AudioMixer>> = mixer.weak()        // implicitly copyable and Sendable: may go to any thread
 
 _ = Thread.start { [copy m, copy clip] in                  // '_ =' detaches the thread: nothing joins it
     if let mx = m.upgrade() { mx.value.lock { $0.play(clip) } }   // one more owner of the mixer for as long as 'mx' lives

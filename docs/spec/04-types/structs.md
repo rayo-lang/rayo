@@ -104,19 +104,19 @@ let s = Spawner(owner: nil)              // 'target', 'cooldown' and 'spawned' m
 public struct Fraction private init(let num: Int, let den: Int) {   // other modules can't call the primary
     public init(_ num: Int, over den: Int) {
         precondition(den != 0, "zero denominator")
-        self.init(num: copy num, den: copy den)
+        self.init(num: num, den: den)                 // each Int is copied in
     }
 }
 
 public struct Body private init(let mass: Float, let invMass: Float, var velocity: Vec3 = .zero) {
     public init(mass: Float) -> Self!PhysicsError {
         guard mass > 0 else { throw .badMass }          // 'self' doesn't exist yet: only the arguments are checked
-        self.init(mass: copy mass, invMass: 1 / mass)   // every field is set at once
+        self.init(mass: mass, invMass: 1 / mass)        // every field is set at once
     }
 }
 ```
 
-**Every other `init` is secondary, and delegates.** It computes and checks what the primary initializer needs, then calls `self.init(…)`. It is an ordinary function whose parameters are borrowed unless marked. So it passes `copy x`, or an `owned` parameter, on to the primary one, as `Fraction` does above.
+**Every other `init` is secondary, and delegates.** It computes and checks what the primary initializer needs, then calls `self.init(…)`. It is an ordinary function whose parameters are borrowed unless marked. So it passes `copy x`, or an `owned` parameter, on to the primary one. A parameter of an implicitly copyable type is copied in with nothing written, as `Fraction` passes its `Int`s above ([01](../01-values-and-ownership/moves-copies-destruction.md#implicit-copies)).
 
 **A secondary initializer calls `self.init` at most once on every path, and exactly once on every path that returns the new value.** A call that a path could reach twice, as one in a loop could, is a compile error. The call reaches the primary initializer directly or through other secondary ones, and secondary initializers that call each other without reaching it are a compile error.
 
@@ -144,7 +144,7 @@ public struct Body private init(let mass: Float, let invMass: Float, var velocit
 
 func sum(_ r: NetRec) -> UInt32 {
     var total: UInt32 = 0
-    for i in r.ids { total += i }         // error: binds elements of an under-aligned field in place
+    for i in r.ids { total += i }         // error: the loop borrows an under-aligned field in place
     for i in copy r.ids { total += i }    // fine: iterates an aligned copy
     return total
 }
@@ -157,7 +157,7 @@ func sum(_ r: NetRec) -> UInt32 {
 
 **A place guaranteed less than its type's alignment, at any depth, is under-aligned, and is used only by value.** So `recs[1].id` in a `List` of the 5-byte `Rec` above is under-aligned: `id` is at offset 0, but `recs[1]` itself is guaranteed only 1. Using it by value means that nothing borrows it where it lies:
 
-- **No views.** Any borrow of it but an argument is a compile error: a `ref let` or `ref var` binding, a `when` subject, a span, an `any P` or a place property's place. So is a `for` or `when` name that binds it in place. A closure captures the aligned place that holds it instead ([05](../05-protocols-generics-and-closures/functions-and-closures.md#capturing-places)).
+- **No views.** Any borrow of it but an argument is a compile error: a `ref let` or `ref var` binding, a `when` subject, a loop's sequence, a span, an `any P` or a place property's place. So is a `for` or `when` name that binds it in place. A closure captures the aligned place that holds it instead ([05](../05-protocols-generics-and-closures/functions-and-closures.md#capturing-places)).
 - **Arguments go through an aligned temporary.** It is copied in, and back for a `mutable` one, a receiver included. A place property reached through such a receiver, or whose place may lie in such an argument, hands out a place in the temporary. So it is changed as a value property is, through a copy ([02](../02-views-and-dependencies/place-and-value-properties.md#value-properties-get-and-set)), and the temporary is written back when the access ends. A call is a compile error if the argument place would enter the dependency set of its scoped result, an error included ([02](../02-views-and-dependencies/dependency-projection-and-results.md#rule-3-call-results)), or be absorbed into another argument ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-4-absorption)).
 - **A panic still writes the temporary back.** The temporary holds the field's only value, since it was copied out bit for bit, so destroying it and keeping the field's old bytes would destroy one value twice. So unlike a value property's copy, it is written back, and changes made before the panic stay ([10](../10-errors-and-safety/panics.md#unwinding)). The write-back happens where the unwind would destroy the temporary, before the value holding the field, which was there before the access began ([01](../01-values-and-ownership/moves-copies-destruction.md#destruction-by-unwinding)).
 
@@ -169,7 +169,7 @@ struct Env<T>(var rec: Rec, var body: T)
 
 func unpack<T: Copyable>(_ m: Msg<T>, _ e: Env<T>) {
     let p = copy m.payload      // by value: under-aligned, since T may need more than 4
-    let id = copy e.rec.id      // by value: under-aligned, since Env<UInt8> misaligns it
+    let id = e.rec.id           // a copy, by value: under-aligned, since Env<UInt8> misaligns it
 }
 ```
 

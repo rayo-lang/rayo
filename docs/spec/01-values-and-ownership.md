@@ -9,6 +9,7 @@ var a = Enemy(pos: .zero, hp: 100)
 var b = consume a                  // a move: 'b' takes over the enemy, and 'a' can't be used any more
 var c = copy b                     // a copy, written out: Enemy is copyable, so this is a memcpy
 c.hp = 50                          // 'b' is unchanged
+var hp = b.hp                      // a copy, not written: a Float is implicitly copyable
 ref let seen = b                   // a borrow: a read-only name for 'b', nothing copied
 log(seen.hp)
 
@@ -16,13 +17,18 @@ func heal(_ e: mutable Enemy) { e.hp = 100 }
 heal(&b)                           // lends 'b' to heal, which changes it in place: no copy
 ```
 
-In this example, `a` hands its enemy to `b`, `copy b` makes a separate value in `c`, `seen` refers to `b` where it lies, and `heal` changes `b` through a borrow. The following rules explain why each operation leaves a different set of names usable.
+In this example, `a` hands its enemy to `b`, `copy b` makes a separate value in `c`, and `hp` gets a copy of `b.hp` with nothing written, since a `Float` is implicitly copyable. `seen` refers to `b` where it lies, and `heal` changes `b` through a borrow. The following rules explain why each operation leaves a different set of names usable.
 
 A **place** is storage that holds a value: a local, a global, a parameter or a temporary, or a part of one, such as `enemy.hp` or `list[i]`.
 
 **Every value has one owner**, which decides when the value is destroyed. The exception is reference counting: `Shared<T>` lets several owners share one value, and the last owner to let go destroys it ([06](06-memory-and-allocators/owning-values.md#sharedt-data-with-many-owners)). Code that uses a value without owning it **borrows** it.
 
-**A second value exists only where the code asks for one**: with `copy` or `clone()`, by taking a copyable `const` ([Constants](01-values-and-ownership/moving-values-out.md#constants)), or through an operation that copies its operands ([Operations that copy](01-values-and-ownership/moves-copies-destruction.md#operations-that-copy)).
+**A second value exists only where the code or the value's type asks for one:**
+
+- with `copy` or `clone()` ([Copies](01-values-and-ownership/moves-copies-destruction.md#copies));
+- by taking a value of an implicitly copyable type, such as an `Int`, from a place ([Implicit copies](01-values-and-ownership/moves-copies-destruction.md#implicit-copies));
+- by taking a copyable `const` ([Constants](01-values-and-ownership/moving-values-out.md#constants));
+- through an operation that copies its operands ([Operations that copy](01-values-and-ownership/moves-copies-destruction.md#operations-that-copy)).
 
 ## Tiers of checking
 

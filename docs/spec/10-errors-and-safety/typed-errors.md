@@ -49,6 +49,7 @@ func loadLevel(_ path: StringView) -> Level!(IoError | ParseError)   // the same
 **`Result` is an ordinary enum, so its payloads decide its conformances, as any enum's do.** It is:
 
 - `Copyable` when `Success` and `Failure` both are ([01](../01-values-and-ownership/moves-copies-destruction.md#copyable-types)), so a `Result` holding a move-only `Level` is move-only;
+- implicitly copyable when both are, which std declares, since an enum conforms only by listing the protocol ([01](../01-values-and-ownership/moves-copies-destruction.md#implicitly-copyable-types));
 - `Sendable` when both are ([07](../07-concurrency/race-freedom-and-sendable.md#what-may-cross-threads-sendable)), so a loader thread can hand its outcome to another thread;
 - `Frozen` when both are ([06](../06-memory-and-allocators/owning-values.md#frozen-types-with-no-interior-mutability));
 - `TrivialFree` when both are ([06](../06-memory-and-allocators/allocation-lifecycle.md#releasing-a-value-without-destroying-it-trivialfree));
@@ -216,7 +217,7 @@ func show(_ outcome: Level!(IoError | ParseError)) {
 }
 ```
 
-`try copy r` takes a copy of a copyable `Result` instead.
+`try copy r` takes a copy of a copyable `Result` instead, and `try r` takes a copy of an implicitly copyable one with nothing written.
 
 ## Handling errors with `do` and `catch`
 

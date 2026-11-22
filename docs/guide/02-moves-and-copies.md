@@ -75,35 +75,50 @@ Most parameters aren't `owned`. A plain parameter, with nothing written before i
 
 ## Adding to a list
 
-A list owns the values in it, so `append`'s parameter is `owned`. Adding a variable's value to a list moves the value in, whatever its type:
+A list owns the values in it, so `append`'s parameter is `owned`. Adding a variable's number to a list still leaves the variable usable:
 
 ```swift
 let best = 30
 hits.append(best)
-log("best is \(best)")          // error: 'best' was moved
+log("best is \(best)")          // fine: best is 30
 ```
 
-The list now owns the 30, just as a list of strings would own a string added the same way.
+The list owns a copy of the 30, and `best` keeps its own. An `Int` is **implicitly copyable**: its type promises that a copy is cheap, so where a value of it would move, Rayo copies it instead, with nothing written ([01](../spec/01-values-and-ownership/moves-copies-destruction.md#implicitly-copyable-types)). The number types and `Bool` are implicitly copyable, and so are a few small values the standard library declares that way, such as `Vec3`.
 
-`best` is a `let`, and it still moved. A `let` can't change, but it can hand its value over. After that, it can't be used at all. So wherever you can use a `let`, it still holds the value it started with.
+A struct you declare isn't, unless it says so. Chapter 1's `Enemy` holds only numbers, but passing one to an `owned` parameter moves it:
 
-In C, Java or Swift, `best` would be copied quietly, since it's an `Int`. Rayo moves it instead. That's no slower: a move copies at most the same few bytes a copy would ([01](../spec/01-values-and-ownership/moves-copies-destruction.md#moves)).
+```swift
+var wave = alloc List<Enemy>()
+let boss = Enemy(pos: .zero, hp: 500)
+wave.append(boss)
+log("boss has \(boss.hp)")      // error: 'boss' was moved
+```
 
-The difference is what happens to `best` afterwards. In Rayo, a value passed to an `owned` parameter moves, whatever its type. So you can tell whether a variable is still usable after a call without knowing its type. And a second value never appears unless you ask for one.
+The list now owns the enemy, just as a list of strings would own a string added the same way. `boss` is a `let`, and it still moved. A `let` can't change, but it can hand its value over. After that, it can't be used at all. So wherever you can use a `let`, it still holds the value it started with.
+
+In C++ or Swift, `boss` would be copied quietly, since an `Enemy` is a few plain numbers. Rayo moves it instead. That's no slower: a move copies at most the same few bytes a copy would ([01](../spec/01-values-and-ownership/moves-copies-destruction.md#moves)). And a second enemy never appears unless you ask for one.
 
 A value written in the call, as in `hits.append(12)`, is made right there, so no variable gives anything up.
 
 ## Copies
 
-To add `best` to the list and still use it afterwards, add a copy:
+To add `boss` to the list and still use it afterwards, add a copy:
 
 ```swift
-let best = 30
-hits.append(copy best)
-log("best is \(best)")          // fine: best is 30
+let boss = Enemy(pos: .zero, hp: 500)
+wave.append(copy boss)
+log("boss has \(boss.hp)")      // fine: boss has 500
 ```
 
-`copy` duplicates a value's own bytes. An `Int`'s bytes are the whole value, so the copy is a second, separate number ([01](../spec/01-values-and-ownership/moves-copies-destruction.md#copies)).
+`copy` duplicates a value's own bytes. An `Enemy`'s bytes are the whole value, so the copy is a second, separate enemy ([01](../spec/01-values-and-ownership/moves-copies-destruction.md#copies)). An implicit copy of an `Int` is the same `copy`, made without the word.
+
+Why not copy every such value quietly? Because a copy's cost grows with the value. An `Int` is 8 bytes, but a struct can hold a long array, and a quiet copy of it would hide real work in a line that reads like a move. So a type copies with nothing written only when its author promises its copies stay cheap, by listing `ImplicitlyCopyable`:
+
+```swift
+struct EntityId(let index: UInt32, let generation: UInt32): ImplicitlyCopyable
+```
+
+The compiler checks the promise as far as it can: every field must be implicitly copyable too. Everything else that can be copied takes `copy`, so each copy the code doesn't spell out is one its type has declared cheap.
 
 `copy` doesn't work on a list:
 
@@ -114,7 +129,7 @@ let twin = alloc hits.clone()   // a second list, sharing nothing with the first
 
 `copy` would duplicate only the list's own bytes, and those don't hold its values. They only say where the values are on the heap. So a copy of them would be a second list sharing the first one's heap memory. When both lists were destroyed, that memory would be freed twice.
 
-So `copy` works only on a **copyable** type, such as a number or a `Bool`. A type can be copyable only if it owns nothing outside its own bytes ([01](../spec/01-values-and-ownership/moves-copies-destruction.md#copyable-types)). `List` owns heap memory, so it's **move-only**, and `copy` refuses it.
+So `copy` works only on a **copyable** type, such as a number or an `Enemy`. A type can be copyable only if it owns nothing outside its own bytes ([01](../spec/01-values-and-ownership/moves-copies-destruction.md#copyable-types)). `List` owns heap memory, so it's **move-only**, and `copy` refuses it.
 
 To get a second list, you have to build one: allocate memory for it, and fill it with values of its own. Only the type knows what it owns and how to rebuild it, so its author writes a method for that, `clone()`. `List` has one. A move-only type you define has one only if you write it. A clone allocates, so you write `alloc` before it, as you do when you make a list.
 
@@ -173,16 +188,16 @@ older = consume current         // older's first list is destroyed, and 'current
 
 `return` needs no `consume`: it moves a local's value out to the caller, since the local goes out of scope as the function returns. `newRound` builds the list it hands back, so it is declared `alloc func`, and a call to it takes `alloc`, as making a list does. Chapter 6 shows what that gives the function ([Memory and allocators](06-memory-and-allocators.md#the-ambient-allocator)).
 
-To outlive a change, a variable's old value has to be copied into a `let` of its own:
+An implicitly copyable value needs none of the three. Declaring or assigning a variable from one copies it:
 
 ```swift
 var hp = 100
-let before = copy hp
+let before = hp                 // a copy: 'hp' and 'before' each hold 100
 hp -= 10
 log("lost \(before - hp)")      // lost 10
 ```
 
-Declared with `ref let` instead, `before` would borrow `hp`. Then `-=` would be an error, since `hp` can't change while `before` is still used.
+`before` keeps the old value past the change, since it holds a copy of its own. Declared with `ref let` instead, `before` would borrow `hp`. Then `-=` would be an error, since `hp` can't change while `before` is still used. And `consume hp` still moves the number, leaving `hp` empty, if that is what you mean.
 
 ## A value that may have moved
 
@@ -215,7 +230,7 @@ If `hits` isn't used again, there's nothing to fix. The compiler still places th
 - [01 Moves](../spec/01-values-and-ownership/moves-copies-destruction.md#moves): what a move does.
 - [01 Moving values out](../spec/01-values-and-ownership/moving-values-out.md#moving-values-out): every construct that moves a value, and what can be moved from.
 - [01 Parameters](../spec/01-values-and-ownership/parameters.md#parameters): `owned` and the other parameter conventions.
-- [01 Copies](../spec/01-values-and-ownership/moves-copies-destruction.md#copies): `copy` and `clone()`, and which types are copyable.
+- [01 Copies](../spec/01-values-and-ownership/moves-copies-destruction.md#copies): `copy` and `clone()`, which types are copyable, and which copy with nothing written.
 - [01 Bindings](../spec/01-values-and-ownership/bindings.md#bindings): what `let`, `var`, `ref let` and `ref var` each do with what they're given.
 - [01 Destruction](../spec/01-values-and-ownership/moves-copies-destruction.md#destruction): when a value is destroyed, and in what order.
 - [01 Places that hold no value](../spec/01-values-and-ownership/moving-values-out.md#places-that-hold-no-value): how the compiler tracks what each variable holds on every path.

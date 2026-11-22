@@ -16,10 +16,11 @@ var queued = consume cmds         // 'consume' moves the list out of 'cmds' into
 cmds = queued                     // error: assigning a place takes 'copy' or 'consume'
 ```
 
-**`consume x`, returning a local, and passing a place to a function that keeps it move the value.** The new owner takes it over, and the place it came from can't be used until it gets a new value, so the value's bytes stand for it in one place only.
+**`consume x`, returning a local, and passing a place to a function that keeps it move the value.** The new owner takes it over, and the place it came from can't be used until it gets a new value, so the value's bytes stand for it in one place only. A value of an implicitly copyable type, such as an `Int`, is copied instead by each of these but `consume`, and its place stays usable ([Implicit copies](#implicit-copies)).
 
 **An assignment or a declaration takes a place's value only where it writes `consume`.** A `let` or `var` given a place writes `copy` or `consume` before it, or is declared `ref let` to borrow the place read-only, as an argument does ([Bindings](bindings.md#bindings-that-own-a-value)). An assignment given a place writes `copy` or `consume`, and leaving both out is a compile error that names them, since the place it assigns stores a value of its own, which a borrow isn't. These need neither:
 
+- one of an implicitly copyable type, which copies the place ([Implicit copies](#implicit-copies));
 - one from a copyable `const`, which gives a new value ([Constants](moving-values-out.md#constants));
 - one whose conversion makes a value of its own from the place, such as a view or a numeric widening ([Conversions](bindings.md#conversions));
 - a declaration from a place in a temporary's own storage, which the binding owns ([Bindings](bindings.md#bindings-that-own-a-value));
@@ -34,18 +35,20 @@ cmds = queued                     // error: assigning a place takes 'copy' or 'c
 ## Copies
 
 ```swift
-var spawn = copy e.pos                     // Vec3 is copyable: copy duplicates its bytes
+var spare = copy enemies[0]                // Enemy is copyable: copy duplicates its bytes
+spare.hp = 50                              // enemies[0] is unchanged
+var spawn = e.pos                          // Vec3 is implicitly copyable: copied with nothing written
 spawn.y += 2                               // e.pos is unchanged
 var loadout = alloc player.items.clone()   // List owns heap memory: clone allocates a new buffer
 var a = copy player.items                  // error: 'List<Item>' is not copyable
 ```
 
-**Copies are written out.** Code asks for a copy in one of two forms:
+**Copies are written out, unless the type declares them cheap.** Code asks for a copy in one of two forms:
 
 - **`copy x`** duplicates the bytes of a copyable value, as `memcpy` does. It never allocates.
 - **`alloc x.clone()`** copies a move-only value together with what it owns, such as a `List` and its buffer. It allocates, and is always written as a named call. `clone()` receives the copy's allocator from the `alloc` before it ([06](../06-memory-and-allocators/allocator-basics.md#functions-that-make-a-new-value-alloc-func)).
 
-Taking a copyable `const` also makes a new value ([Constants](moving-values-out.md#constants)), and so do the few operations defined to copy their operands ([below](#operations-that-copy)).
+**A value of an implicitly copyable type, such as `Int` or `Vec3`, is copied with nothing written**, where a place would otherwise be moved or bound ([Implicit copies](#implicit-copies)). Its type promises that the copy is cheap ([Implicitly copyable types](#implicitly-copyable-types)). Taking a copyable `const` also makes a new value ([Constants](moving-values-out.md#constants)), and so do the few operations defined to copy their operands ([below](#operations-that-copy)).
 
 ### Copyable types
 
@@ -66,7 +69,7 @@ struct Handle<T>(…): Copyable                         // the compiler confirms
 struct MutableSpan<Element>(…): Scoped, ~Copyable     // two copies could change one element at once
 ```
 
-Generic code treats an unconstrained type parameter as possibly move-only, so copying a `T` requires `T: Copyable`.
+Generic code treats an unconstrained type parameter as possibly move-only, so copying a `T` requires `T: Copyable`. Copying one with nothing written requires `T: ImplicitlyCopyable` ([below](#implicitly-copyable-types)).
 
 ### Types that are always move-only
 
@@ -80,9 +83,64 @@ Generic code treats an unconstrained type parameter as possibly move-only, so co
 - **`Closure<F>`**, which owns every capture, so a copy would be a second owner of them ([05](../05-protocols-generics-and-closures/functions-and-closures.md#unscoped-closures-closuref)).
 - **A task's state**, which holds the task's parameters and the locals live across an `await`, so a copy would be a second owner of them ([07](../07-concurrency/tasks.md#semantics)).
 
+### Implicitly copyable types
+
+**A copyable type whose copy is cheap may promise that its copies need no `copy` written.** If every copy were written, even an `Int`'s, the cheapest operation would be the one code writes most. The marker protocol **`ImplicitlyCopyable`** refines `Copyable` and states the promise. Keeping the two apart keeps a large copyable value from ever copying silently: a copy that nothing writes is one its type has declared cheap. A type that conforms is **implicitly copyable**:
+
+- **Number types, `Bool` and raw pointers**, which the language makes conform, since each is one machine value ([04](../04-types/numbers-and-math.md#numbers), [10](../10-errors-and-safety/unsafe-code.md#raw-pointers)). A `Simd` vector of 16 bytes or less conforms too, such as a `Vec4` ([04](../04-types/numbers-and-math.md#simd-and-math)).
+- **A struct or enum that lists `ImplicitlyCopyable`.** The compiler confirms that the type is copyable and that every field and payload is implicitly copyable, as it confirms a listed `Copyable`. A `~Copyable` type can't conform.
+- **A tuple whose elements all conform**, since a tuple's type spells out each element, so a reader sees each value it copies.
+
+**A struct or enum conforms only by listing the protocol**, never by derivation, since only its author knows whether its copies stay cheap as it changes. A generic type lists it in a constrained extension, for the type arguments that make every field conform. Whether a type conforms is part of its module's interface ([11](../11-compilation-model.md#type-checking-is-local)).
+
+```swift
+struct EntityId(let index: UInt32, let generation: UInt32): ImplicitlyCopyable   // fine: both fields conform
+struct Enemy(var pos: Vec3, var hp: Float)                    // copyable, but a copy of it is written
+struct Tag(var id: EntityId, var name: String): ImplicitlyCopyable   // error: 'String' is not copyable
+extension Optional: ImplicitlyCopyable where T: ImplicitlyCopyable {}   // as the prelude declares it
+```
+
+**An inline array never conforms**, even a `[4 of Float]`. So a copy of an array is always written, and a `[4096 of UInt8]` never copies silently ([04](../04-types/collections.md#tuples-ranges-and-arrays)).
+
+**Generic code copies a `T` with nothing written only under `T: ImplicitlyCopyable`**, since an unconstrained or merely copyable `T` may be a large value. Under `T: Copyable` alone, it writes `copy x`.
+
+**No other type the language gives conforms**, such as an `any P`, a function value or a type value, so a copy of one is written.
+
+**The standard library declares the protocol on each copyable type that passes one test**: its copy is 16 bytes or less, and a second copy is as good as the first. So `Handle`, `Name`, `Allocator`, `Stamp` and `std.math`'s `Vec3` are implicitly copyable. A `Panic` is copyable but larger, so its copy is written. Each chapter that declares a copyable type of the standard library says whether it conforms.
+
+**The standard library declares the protocol on each of its generic types that holds only its type arguments and at most a tag, for the arguments that conform.** So a range of `Int`s, `T?` and `Result` conform where their arguments do, as `Optional`'s extension above declares. Such a type's copy costs what copies of its arguments cost, which their own types have declared cheap, so the test applies to them, not to the whole.
+
+### Implicit copies
+
+**A value of an implicitly copyable type taken from a place is copied, and the place stays usable.** Such a copy is an **implicit copy**. That holds wherever the place would otherwise be moved, or bound by a `let` or `var`:
+
+- a `let` or `var` initializer, including the last expression of an `if` or `when` arm, or of an `unsafe` block, whose position it hands on ([Bindings](bindings.md#if-and-when-as-values));
+- the right side of an assignment;
+- a `let` or `var` binding in a condition ([Bindings](bindings.md#conditions));
+- a `for` or `when` name whose subject isn't lent with `&` ([Bindings](bindings.md#for-and-when-names));
+- an argument to an `owned` parameter, an initializer's argument, an element of a tuple or array literal, and an enum case's payload;
+- the other constructs that take a value with no `consume` written, such as `return` ([Moving values out](moving-values-out.md#moving-values-out)).
+
+```swift
+var hp = 100
+var best = hp                      // a copy: Int is implicitly copyable, so 'hp' stays usable
+hp -= 10                           // 'best' is still 100
+best = hp                          // an assignment copies too
+let gone = consume hp              // a move: 'hp' can't be used until it gets a new value
+log(hp)                            // error: 'hp' was moved
+var lead = enemies[0]              // error: write 'copy' or 'consume' before 'enemies[0]', or declare 'ref let'
+```
+
+**What code writes keeps its meaning, whatever the type:**
+
+- **`copy p`** stays valid, and means the same.
+- **`consume p`** still moves `p`, which can't be used until it gets a new value. So does a `[move p]` capture ([05](../05-protocols-generics-and-closures/functions-and-closures.md#unscoped-closures-closuref)).
+- **A `ref let` or `ref var`** still refers to the place.
+- **A borrowed argument** still borrows, so a call copies nothing that its parameter doesn't keep.
+
 ### Operations that copy
 
-**Besides `copy`, `clone()` and taking a copyable `const`, these operations copy their copyable operands**, as part of what they are defined to do:
+**Besides `copy`, `clone()`, an implicit copy and taking a copyable `const`, these operations copy their copyable operands**, as part of what they are defined to do:
 
 - **Ranges.** A range operator borrows its operands and copies them in, so `0..<count` leaves `count` usable ([05](../05-protocols-generics-and-closures/operators.md#operators)).
 - **Vectors.** A `Simd` initializer, a load included, copies the lanes it borrows, a store copies its lanes into the span, and a lane read, a swizzle or a shuffle copies the lanes it reads, since no lane is ever viewed ([04](../04-types/numbers-and-math.md#simd-and-math)).

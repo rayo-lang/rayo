@@ -59,7 +59,7 @@ Here `enemyPresets` reaches run time, since `presets()` names it, even if nothin
 
 ```swift
 struct Preset(var name: String, var hp: Float) {
-    alloc func clone() -> Preset { Preset(name: alloc name.clone(), hp: copy hp) }   // so a List<Preset> can be cloned
+    alloc func clone() -> Preset { Preset(name: alloc name.clone(), hp: hp) }   // so a List<Preset> can be cloned
 }
 
 const enemyPresets: List<Preset> = alloc makePresets()   // built in the compiler, allocating as it goes

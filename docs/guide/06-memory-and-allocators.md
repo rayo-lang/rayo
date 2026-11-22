@@ -276,10 +276,10 @@ upload(m.vertices.read()!)                            // a Span<Vertex>: one che
 ```swift
 func spawnBoss(at pos: Vec3) -> Box<Enemy>!AllocError {
     do {
-        return try alloc Box(Enemy(pos: copy pos, hp: 5000))   // fails with AllocError instead of ending the program
+        return try alloc Box(Enemy(pos: pos, hp: 5000))        // fails with AllocError instead of ending the program
     } catch {
         evictUnusedAssets()                                     // make room, then try once more
-        return try alloc Box(Enemy(pos: copy pos, hp: 5000))   // 'pos' is borrowed, so each attempt copies it
+        return try alloc Box(Enemy(pos: pos, hp: 5000))        // 'pos' is borrowed, so each attempt copies it
     }
 }
 ```

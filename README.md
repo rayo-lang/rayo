@@ -18,6 +18,7 @@ func heal(_ e: mutable Enemy) { e.hp = 100 }
 var a = Enemy(pos: .zero, hp: 100)
 var b = copy a                     // a copy, written out: Enemy is copyable, so this is a memcpy
 b.hp = 50                          // changes only 'b'
+let hp = a.hp                      // a copy with nothing written: a Float is implicitly copyable
 heal(&a)                           // a borrow: heal changes 'a' in place, without copying it
 ref let spot = a.pos               // also a borrow: 'a.pos' can't change while 'spot' is in use
 
@@ -27,14 +28,14 @@ var backup = alloc names.clone()   // a copy of heap data is a named call, and i
 var moved = consume names          // a move: using 'names' after this is a compile error
 
 var enemies = alloc Pool<Enemy>()
-let h = enemies.insert(b)          // 'b' moves in; h is a Handle<Enemy>, a small, copyable link to it
+let h = enemies.insert(b)          // 'b' moves in; h is a Handle<Enemy>, a small link to it that copies like an Int
 enemies.remove(h)
 enemies[h]?.hp -= 10               // skipped: the element is gone, so enemies[h] is nil
 ```
 
 ## Key ideas
 
-- **Every value has one owner.** Handing a value over moves it, and the place it came from can't be used until it gets a new value. A call borrows what it is given, unless a parameter is declared `owned` or the code writes `consume`, and a binding says what it does: `let` and `var` own a value, and `ref let` and `ref var` refer to a place. Copies are written out: `copy x` for a copyable value, `alloc x.clone()` for one that owns heap memory ([01](docs/spec/01-values-and-ownership.md)).
+- **Every value has one owner.** Handing a value over moves it, and the place it came from can't be used until it gets a new value. A call borrows what it is given, unless a parameter is declared `owned` or the code writes `consume`, and a binding says what it does: `let` and `var` own a value, and `ref let` and `ref var` refer to a place. Copies are written out, except those of an implicitly copyable type, such as a number, a `Bool` or a `Handle`: `copy x` for a copyable value, `alloc x.clone()` for one that owns heap memory ([01](docs/spec/01-values-and-ownership.md)).
 - **The compiler checks borrows inside each function.** Code that uses a value without owning it borrows it. While a value changes through one borrow, nothing else can touch it, and while a value is read, nothing can change it. No borrow escapes the function that makes it, so Rayo needs no lifetime annotations ([01](docs/spec/01-values-and-ownership/exclusivity.md#the-law-of-exclusivity)). A view, such as a `Span` of a list's elements, can't outlive the scope that lent it ([02](docs/spec/02-views-and-dependencies/scoped-values.md#scoped-values)).
 - **Links that live longer are checked at each use.** A link that must outlive a function, such as an enemy's target, is a `Handle<T>` into a `Pool<T>`, or a `WeakPointer<T>` to an object that a `UniquePointer<T>` owns. A link to something that is gone reads `nil`: it can go stale, but it never dangles. A link owns nothing, so cycles can't leak ([03](docs/spec/03-handles-and-objects.md)).
 - **No data races.** The same borrow rules check work handed to other threads, and only `Sendable` values can reach another thread. The compiler derives `Sendable` from what a type holds ([07](docs/spec/07-concurrency/race-freedom-and-sendable.md#what-may-cross-threads-sendable)).

@@ -34,7 +34,7 @@ For every case, report the **tier** the natural solution lands in, and one verdi
 | **Forbidden** | The pattern can't be written at all, even with `unsafe`. Always a failure. |
 | **Unsound** | Code the spec accepts as safe produces a data race, use-after-free, dangling view or other undefined behavior, with C and `unsafe` code that keep exactly what the spec asks of them ([08](../spec/08-c-interop/c-contract-and-embedding.md#what-c-must-uphold), [10](../spec/10-errors-and-safety/unsafe-code.md#unsafe-code)). It breaks a step of [safety argument](safety-argument.md). **Always the most severe finding.** |
 
-**Writing `copy` where the code makes a copy isn't ceremony**, since Rayo requires copies to be written out ([01](../spec/01-values-and-ownership/moves-copies-destruction.md#copies)). An extra copy that C++, C# or Swift wouldn't make is a cost.
+**Writing `copy` where the code makes a copy isn't ceremony**, since Rayo requires copies to be written out, except those of a type that declares its copy cheap, such as an `Int` ([01](../spec/01-values-and-ownership/moves-copies-destruction.md#copies)). An extra copy that C++, C# or Swift wouldn't make is a cost.
 
 **For each verdict, include the Rayo code you wrote (short) and the spec sections it relies on.** A case can't be marked Solved by pointing at a sentence in the spec: the code has to type-check under the rules as written.
 

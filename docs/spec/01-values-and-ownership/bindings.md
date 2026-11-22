@@ -18,6 +18,7 @@ ref let seen = enemies[0]          // refers to the enemy, read-only: nothing co
 ref var boss = &enemies[0]         // refers to it for change: boss.hp = 0 changes enemies[0]
 var spare = copy enemies[0]        // a second enemy of its own
 let last = enemies[1]              // error: write 'copy' or 'consume' before 'enemies[1]', or declare 'ref let'
+let hp = enemies[1].hp             // a Float is implicitly copyable: a copy, with nothing written
 ref var next = enemies[1]          // error: write '&enemies[1]'
 ref let other = &enemies[1]        // error: '&' lends for change; declare 'ref var'
 let first = consume enemies[0]     // error: an element can't move out of its list
@@ -31,8 +32,9 @@ let all = consume enemies          // a move: 'enemies' can't be used until it g
 | `ref var x = &place` | `_ x: mutable T` | A mutable **borrow** of a [changeable place](#changeable-places): `place` is reachable only through `x` while `x` is live | None |
 | `let x = consume place`, `var x = consume place` | `_ x: owned T` | A **move** from a place the code owns ([What can be moved from](moving-values-out.md#what-can-be-moved-from)): `place` can't be used until it gets a new value | A `memcpy` at most |
 | `let x = copy place`, `var x = copy place` | | An independent **copy** of a copyable value; a move-only one is copied with `alloc place.clone()` | A `memcpy` |
-| `let x = f()`, `var x = f()` | | The binding owns the value, even a move-only scoped value such as a `MutableSpan` or a lock guard ([02](../02-views-and-dependencies/scoped-values.md#scoped-values)); `_ = x` ends it early | None |
-| `let x = place`, `var x = place` | | A compile error that names `copy`, `consume` and `ref let`, with the exceptions below | |
+| `let x = f()`, `var x = f()` | | The binding owns the value, even a move-only scoped value such as a `MutableSpan` or a lock guard ([02](../02-views-and-dependencies/scoped-values.md#scoped-values)); `_ = x` ends it early, unless its type is implicitly copyable | None |
+| `let x = place`, `var x = place`, of an implicitly copyable type | | An independent **copy**, with nothing written ([Implicit copies](moves-copies-destruction.md#implicit-copies)) | A `memcpy` |
+| `let x = place`, `var x = place`, of any other type | | A compile error that names `copy`, `consume` and `ref let`, with the exceptions below | |
 
 ## Bindings that refer to a place
 
@@ -56,12 +58,13 @@ ref let hp = makeEnemy().hp        // error: the enemy dies with the statement; 
 
 **A `let` or `var` declaration owns what it binds**, as a binding of a call's result does. So it can move its value on, and a `let` still can't change it. A condition's `let` or `var` owns an optional's payload by the same rules ([below](#conditions)).
 
-- **A `let` or `var` given a place writes `copy` or `consume` before it, or is declared `ref let`.** Leaving all three out is a compile error that names them, since the place's value already has an owner. That holds as well for an expression the initializer hands its position to: the last expression of an `if` or `when` arm or of an `unsafe` block ([below](#if-and-when-as-values)), or an operand of `??` ([04](../04-types/enums.md#optionals)).
+- **A `let` or `var` given a place writes `copy` or `consume` before it, or is declared `ref let`.** Leaving all three out is a compile error that names them, since the place's value already has an owner. That holds as well for an expression the initializer hands its position to: the last expression of an `if` or `when` arm or of an `unsafe` block ([below](#if-and-when-as-values)), or an operand of `??` ([04](../04-types/enums.md#optionals)). The exceptions are below.
 - **A `let` or `var` given `&place` is a compile error that says to write `ref var`**, since `&` lends the place, and a binding without `ref` refers to no place. Where `&place` makes a view of a type of its own, such as the mutable form of a `get`, the binding owns that view instead ([Lending a place for change](#lending-a-place-for-change)).
-- **An assignment from a place writes `copy` or `consume`**, and leaving both out is a compile error that names them, as [Moves](moves-copies-destruction.md#moves) says.
+- **An assignment from a place writes `copy` or `consume`**, and leaving both out is a compile error that names them, as [Moves](moves-copies-destruction.md#moves) says. A place of an implicitly copyable type needs neither, as below.
 
-**Three exceptions need none of `copy`, `consume` and `ref let`, since each gives the binding a value of its own to own:**
+**Four exceptions need none of `copy`, `consume` and `ref let`, since each gives the binding a value of its own to own:**
 
+- **A place of an implicitly copyable type** is copied, and stays usable ([Implicit copies](moves-copies-destruction.md#implicit-copies)). So `let x = p`, `var x = p` and `x = p` of an `Int` copy it.
 - **A copyable `const`** gives a new value each time ([Constants](moving-values-out.md#constants)).
 - **A conversion that makes a value from the place**, such as a view of it, a numeric widening, or a copyable value's conversion to or from its static type, gives a new value ([below](#conversions)).
 - **A place in a temporary's own storage dies with its statement**, such as `makeEnemy().pos`. So a `let` or `var` of one owns that value, moving it out as [What can be moved from](moving-values-out.md#what-can-be-moved-from) allows. Where that can't move it, the binding is a compile error unless it is written with `copy`, or with `alloc` and `.clone()`.
@@ -76,7 +79,7 @@ ref let hp = makeEnemy().hp        // error: the enemy dies with the statement; 
 - **A value property** gives the value its `get` returns, which a `let` owns ([02](../02-views-and-dependencies/place-and-value-properties.md#value-properties-get-and-set)).
 - **A place property** lends its place, as a stored field does, and can't be moved from ([02](../02-views-and-dependencies/place-and-value-properties.md#place-properties-borrow-and-mutate)).
 
-So a binding that fits one form is a compile error under the other. A `let` of a stored field takes `copy`, `consume` or `ref let`, and a `ref let` of a value property has no place to refer to:
+So a binding that fits one form is a compile error under the other. A `let` of a stored field takes `copy`, `consume` or `ref let`, and a `ref let` of a value property has no place to refer to. A `let` of an implicitly copyable field fits both, since it copies the stored field and owns what the `get` returns:
 
 ```swift
 extension Enemy { var isDead: Bool { hp <= 0 } }   // computed
@@ -85,6 +88,7 @@ func hit(_ e: mutable Enemy, _ d: Float) {
     ref let before = e.hp
     e.hp -= d                      // error: 'before' still refers to e.hp
     log(before)
+    let now = e.hp                 // stored: a copy of the Float, as a computed 'hp' would give
     let dead = e.isDead            // computed: the Bool it returned, which 'dead' owns
     ref let gone = e.isDead        // error: 'isDead' is computed, so there is no place to refer to; write 'let'
     save(dead)                     // fine: save takes an owned parameter
@@ -184,7 +188,7 @@ while let job = queue.pop() { run(job) }             // each job in turn, until 
 guard ref let e = world.enemies[h] else { return }   // refers to the enemy to the end of the scope
 ```
 
-- **A binding follows the rules of a declaration with the same word** ([above](#bindings)). `let` and `var` own the payload, so a `let` or `var` given a place is the compile error that names `copy`, `consume` and `ref let`. `ref let` refers to the payload read-only, and `ref var` refers to it for change, with `&` before its place. A `ref let` or `ref var` given a value is the compile error that says to write `let` or `var`.
+- **A binding follows the rules of a declaration with the same word** ([above](#bindings)). `let` and `var` own the payload, so a `let` or `var` given a place is the compile error that names `copy`, `consume` and `ref let`, unless the place's type is implicitly copyable, as `T?` is where `T` is. Then the binding owns a copy, and the place stays as it was. `ref let` refers to the payload read-only, and `ref var` refers to it for change, with `&` before its place. A `ref let` or `ref var` given a value is the compile error that says to write `let` or `var`.
 - **The right side is any expression of optional type**, `copy place` and `consume place` included. A `let` or `var` of a value, such as a call's result, takes the payload out of it. `consume x` moves the whole optional out of `x`, whether it holds a value or not, and the binding owns its payload. `copy x` gives the binding a copy, and leaves `x` free for the block to change.
 - **A binding whose right side isn't an optional is a compile error** that says to declare the name before the `if`, `while` or `guard`, since such a binding can't fail. A name for something that is always there belongs in a declaration.
 - **A `guard` binds as an `if` does**, and its names stay in scope after it, to the end of the enclosing block ([Names in scope](#names-in-scope)).
@@ -196,6 +200,7 @@ if let e = copy world.enemies[h] {
     spawnCorpse(e)
 }
 if let m = consume reply { send(m) }              // moves the optional out: 'reply' holds no value after this
+if let t = world.target { chase(t) }              // a Handle<Enemy>? is implicitly copyable: 't' owns a copy
 if ref let e = enemies[0] { … }                   // error: 'enemies[0]' isn't an optional; declare 'ref let e' before the 'if'
 ```
 
@@ -223,7 +228,7 @@ when state {
 
 | What the name binds | The name is |
 | --- | --- |
-| A part of a place, as in `for e in enemies` or `when event` | A read-only borrow of it |
+| A part of a place, as in `for e in enemies` or `when event` | A read-only borrow of it, or the owner of a copy when its type is implicitly copyable ([Implicit copies](moves-copies-destruction.md#implicit-copies)) |
 | A part of a place lent with `&`, as in `for e in &enemies` or `when &shape` | A mutable borrow of it, whatever its type |
 | A value: what an iterator hands out as its own, or a part of a call's result, of `consume s` or of `copy s` | Its owner |
 
@@ -246,7 +251,7 @@ when consume event {
     else {}
 }
 for e in enemies { e.hp = 0 }              // error: 'e' is a read-only borrow; write '&enemies' to change the elements
-for i in 0..<n { i += 1 }                  // error: 'i' owns its Int, and is read-only; declare 'var j = consume i' to change it
+for i in 0..<n { i += 1 }                  // error: 'i' owns its Int, and is read-only; declare 'var j = i' to change a copy
 ```
 
 ## Bindings with no name
@@ -324,7 +329,7 @@ The hidden local is declared where the binding is, and destroyed with it if its 
 **A converted value is a new value.** When a binding's declared type differs from its initializer's, the conversion says what it does with a place ([05](../05-protocols-generics-and-closures/implicit-conversions.md#implicit-conversions)):
 
 - **A numeric widening, and a copyable value's conversion to or from its [static type](../02-views-and-dependencies/scoped-values.md#converting-to-and-from-a-static-type), read the place** and make a new value, which the binding owns. A move-only value's conversion to or from its static type takes it, as the conversions below do.
-- **These conversions take the value**, so in a binding a place takes `consume` or `copy` before it, and leaving both out is a compile error that names them:
+- **These conversions take the value**, so in a binding a place takes `consume` or `copy` before it, and leaving both out is a compile error that names them. A place of an implicitly copyable type is copied instead, as `h` is below ([Implicit copies](moves-copies-destruction.md#implicit-copies)):
     - wrapping it in an optional or an error union, or as a `Result`'s `.success`;
     - making a `Box<T>` or an object pointer into one of an existential;
     - moving a closure into a `Closure`.
@@ -333,9 +338,10 @@ The hidden local is declared where the binding is, and destroyed with it if its 
 ```swift
 let total: Int = n                          // 'n' is an Int32: the widened Int is a new value 'total' owns
 let all: Span<Enemy> = enemies              // borrows the List 'enemies'; 'all' owns the view
-var spare: Handle<Enemy>? = copy h          // wrapping a copy of the handle
-let pick: Handle<Enemy>? = h                // error: wrapping takes the handle; write 'copy' or 'consume'
-var target: Handle<Enemy>? = consume h      // or wrapping the handle itself, moved out of 'h'
+var spare: Enemy? = copy boss               // wrapping a copy of the enemy
+let pick: Enemy? = boss                     // error: wrapping takes the enemy; write 'copy' or 'consume'
+var last: Enemy? = consume boss             // or wrapping the enemy itself, moved out of 'boss'
+var target: Handle<Enemy>? = h              // a Handle is implicitly copyable: wrapping a copy, and 'h' stays usable
 var d: any Drawable = sprite                // borrows 'sprite'; 'd' owns the view, and may later view another value
 ```
 
