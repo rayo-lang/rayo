@@ -150,7 +150,7 @@ hits.append(12)
 let same = hits                 // error: write 'consume' or '&' before 'hits'
 ```
 
-The error names two ways out, since a list can't be copied (below). `consume` moves the value over, as the rest of this section shows. `&hits` makes a **reference** to the list: a value that refers to the list where it lies, and owns nothing of it, the same way a `&List<Int>` parameter borrows its argument ([01](../spec/01-values-and-ownership/references.md#references)):
+The error names two ways out, since a list can't be copied (above). `consume` moves the value over, as the rest of this section shows. `&hits` makes a **reference** to the list: a value that refers to the list where it lies, and owns nothing of it, the same way a `&List<Int>` parameter borrows its argument ([01](../spec/01-values-and-ownership/references.md#references)):
 
 ```swift
 let same = &hits
@@ -176,7 +176,7 @@ let finished = consume hits
 log("\(hits.count)")            // error: 'hits' was moved
 ```
 
-Assigning to a variable that already exists works the same way, with `copy` or `consume`:
+Assigning to a variable that already exists works the same way, with `consume`, or `copy` for a copyable value:
 
 ```swift
 alloc func newRound() -> List<Int> {
@@ -187,7 +187,7 @@ alloc func newRound() -> List<Int> {
 
 let current = alloc newRound()  // 'current' owns the new list
 var older = alloc List<Int>()
-older = current                 // error: write 'copy' or 'consume' before 'current'
+older = current                 // error: write 'consume' before 'current'
 older = consume current         // older's first list is destroyed, and 'current' holds nothing
 ```
 
