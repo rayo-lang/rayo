@@ -6,6 +6,7 @@ extension Statement {
         // An access finds its place where it begins.
         case .begin(let id, let access): access.place.indexReads(at: access.range) + [.begin(id, access)]
         case .end(let id): [.end(id)]
+        case .depend(let place, let id): [.depend(place, on: id)]
         case .declare(let local): [.declare(local)]
         case .retire(let local): [.retire(local)]
         }

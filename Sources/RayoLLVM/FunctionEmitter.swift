@@ -153,8 +153,9 @@ struct FunctionEmitter {
             program.builder.endLife(of: places[local.index])
 
         // The local the function returns lies in its caller's slot, whose life the caller marks. The end of an access
-        // emits nothing, since an access is only its place's address.
-        case .declare, .retire, .end:
+        // emits nothing, since an access is only its place's address, and a dependence only keeps an access live for
+        // the ownership checks.
+        case .declare, .retire, .end, .depend:
             break
         }
     }

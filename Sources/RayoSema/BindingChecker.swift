@@ -76,7 +76,8 @@ struct BindingChecker {
         }
 
         let type = checkLocalType(declared, of: binding)
-        let local = names.declare(binding.name, type: type, kind: LocalKind(kind), at: binding.nameRange)
+        let localKind = LocalKind(kind, givenBy: declared.value)
+        let local = names.declare(binding.name, type: type, kind: localKind, at: binding.nameRange)
         return local.map { .binding($0, at: binding.nameRange, declared.value) }
     }
 
@@ -135,10 +136,11 @@ struct BindingChecker {
 }
 
 private extension LocalKind {
-    /// The kind of local that a declaration with `kind` declares.
-    init(_ kind: BindingKind) {
+    /// The kind of local that a declaration with `kind` and `value` declares. A `let` whose value hands it a place that
+    /// a local holds borrows that place; one given any other value, or none, owns its value.
+    init(_ kind: BindingKind, givenBy value: CheckedExpr?) {
         switch kind {
-        case .let: self = .let
+        case .let: self = (value?.handedPlaces ?? []).isEmpty ? .let : .borrowingLet
         case .var: self = .var
         }
     }

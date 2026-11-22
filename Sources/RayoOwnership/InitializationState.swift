@@ -55,9 +55,9 @@ struct InitializationState: DataflowState {
         case .declare(let local), .retire(let local):
             locals[local.index] = .declared
 
-        // Reaching a place through an access and ending one use only the value that the access's beginning used, and
-        // leaving the function uses none.
-        case .use, .end, .exit:
+        // Reaching a place through an access and ending one use only the value that the access's beginning used, a
+        // dependence leaves its place's value as it is, and leaving the function uses none.
+        case .use, .end, .depend, .exit:
             break
         }
     }

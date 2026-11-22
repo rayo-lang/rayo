@@ -17,7 +17,9 @@ struct LiveAccesses: DataflowState {
 
     mutating func apply(_ effect: Effect, in function: Void) {
         switch effect {
-        case .use(let id):
+        // A use reaches the place through the access, and a dependence needs the access live where a value comes to
+        // depend on it.
+        case .use(let id), .depend(_, let id):
             ids.insert(id)
 
         // Code before an access begins can't use it, whatever the code after it does.

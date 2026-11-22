@@ -29,6 +29,11 @@ struct FunctionBuilder: ~Copyable {
         return IRBody(locals: locals, blocks: blocks)
     }
 
+    /// Whether `local` is a `let` that borrows the place its declaration gives it.
+    func isBorrowing(_ local: LocalID) -> Bool {
+        if case .source(_, .borrowingLet, _, _) = locals[local.index] { true } else { false }
+    }
+
     mutating func newBlock() -> BlockID {
         blocks.append(PendingBlock())
         return BlockID(index: blocks.count - 1)

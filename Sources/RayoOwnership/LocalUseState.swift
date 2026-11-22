@@ -26,7 +26,7 @@ struct LocalUseState: DataflowState {
         case .declare(let local), .retire(let local):
             locals.remove(local)
 
-        case .read, .move, .store, .begin, .use, .end, .exit:
+        case .read, .move, .store, .begin, .use, .end, .depend, .exit:
             guard let local = uses.local(usedBy: effect) else { return }
             locals.insert(local)
         }

@@ -49,7 +49,7 @@ struct LocalLifeVerifier {
                 retired.remove(local)
             case .retire(let local):
                 retired.insert(local)
-            case .read, .move, .store, .begin, .use, .end, .exit:
+            case .read, .move, .store, .begin, .use, .end, .depend, .exit:
                 guard let used = uses.local(usedBy: effect) else { continue }
                 try verify(used, isNotIn: retired, at: label)
             }

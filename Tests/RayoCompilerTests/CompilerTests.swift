@@ -109,7 +109,7 @@ struct CompilerTests {
 
     @Test(arguments: ["--emit=checked", "--emit=ir"])
     func `'--emit' prints nothing for a file that doesn't check, and reports its errors`(option: String) {
-        let source = "func main() {\n    let x = 1\n    let y = x\n    print(x)\n}"
+        let source = "func main() {\n    let x = 1\n    let y = consume x\n    print(x)\n}"
         let compiled = compile([option, "a.rayo"], files: ["a.rayo": source])
         #expect(compiled.result.exitCode == 1)
         #expect(compiled.result.diagnostics.map(\.code) == [.usedAfterMove(name: "x")])
@@ -163,7 +163,7 @@ struct CompilerTests {
     }
 
     @Test func `each place an error labels is shown after it, as the file's path, the position and the label`() {
-        let source = "func f() {\n    let x = 1\n    let y = x\n    print(x)\n}"
+        let source = "func f() {\n    let x = 1\n    let y = consume x\n    print(x)\n}"
         let compiled = compile(["--check", "a.rayo"], files: ["a.rayo": source])
         #expect(compiled.result.exitCode == 1)
         #expect(compiled.result.errors == """

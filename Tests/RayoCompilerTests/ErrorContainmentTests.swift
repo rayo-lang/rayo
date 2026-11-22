@@ -73,7 +73,7 @@ struct ErrorContainmentTests {
             func main() {
                 g()
                 let x = 5
-                let y = x
+                let y = consume x
                 print(x)
                 print(y)
             }

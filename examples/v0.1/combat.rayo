@@ -44,7 +44,7 @@ func fight(between goblin: Enemy, and troll: Enemy) -> Int {
         // it no rest.
         if fatigue >= 6 && !g.enraged {
             fatigue %= 6
-            let worn = t.stats
+            let worn = consume t.stats
             t.stats = Stats(hp: worn.hp + 5, maxHp: worn.maxHp, armor: worn.armor)
             print(t.stats.hp)
             continue

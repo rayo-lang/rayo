@@ -24,13 +24,13 @@ bb0:
   declare %6
   branch read %2 @8:12-8:13, bb1, bb2
 bb1:
-  %6 @8:9-8:30 = operand move %3 @8:16-8:17 @8:16-8:17
+  %6 @8:9-8:38 = operand move %3 @8:16-8:25 @8:16-8:25
   goto bb3
 bb2:
-  %6 @8:9-8:30 = operand 4 @8:27-8:28
+  %6 @8:9-8:38 = operand 4 @8:35-8:36
   goto bb3
 bb3:
-  %4 @8:5-8:6 = operand read %6 @8:9-8:30 @8:9-8:30
+  %4 @8:5-8:6 = operand read %6 @8:9-8:38 @8:9-8:38
   declare %5
   %5 @9:5-9:6 = operand 5 @9:9-9:10
   declare %7

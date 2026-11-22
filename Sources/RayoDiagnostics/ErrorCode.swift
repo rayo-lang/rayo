@@ -399,6 +399,13 @@ public enum ErrorCode: Sendable, Hashable {
 
     @Code(315, error: "can't move {part}; write 'copy' before it to take a copy")
     case moveFromElement(part: ElementPart)
+
+    @Code(316, error: "can't move '{name}', which borrows its value; write 'copy' before it to take a copy")
+    case moveFromBorrowingLet(name: String)
+
+    @Code(317, error:
+        "can't move '{field}' out of '{local}', which borrows its value; write 'copy' before it to take a copy")
+    case moveFieldFromBorrowingLet(field: String, local: String)
 }
 
 extension ErrorCode {

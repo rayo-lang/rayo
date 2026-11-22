@@ -22,7 +22,7 @@ struct OwnershipStatementVerifier {
                     "the IR ends a\(id.index) at \(label), though only the ownership stage ends an access"
                 case .retire(let local):
                     "the IR retires %\(local.index) at \(label), though only the ownership stage retires a local"
-                case .compute, .declare, .begin: nil
+                case .compute, .declare, .begin, .depend: nil
                 }
                 if let message { throw IRViolation(function: function, message: message) }
             }

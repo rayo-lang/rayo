@@ -16,7 +16,7 @@ init "Hit(damage: Int)"(damage: owned Int) -> Hit
 func "main()"() -> Void {
   let %0 damage: Int @4:9-4:15
   var %1 s: Shot @5:9-5:10
-  let %2 h: Hit @8:9-8:10
+  borrow %2 h: Hit @8:9-8:10
   bind %0 @4:9-4:15
     integer 7: Int @4:18-4:19
   bind %1 @5:9-5:10

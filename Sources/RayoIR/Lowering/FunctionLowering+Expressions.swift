@@ -7,6 +7,9 @@ extension FunctionLowering {
     /// Lowers `expr`, the value of a position that `use`s it, as the computation of its value into `destination`, or,
     /// where `destination` is nil, of a value that is dropped.
     mutating func compute(_ expr: CheckedExpr, into destination: Destination?, as use: ValueUse) {
+        // A borrow makes the value of the local it declares depend on what it borrows, so it needs the local.
+        if use == .borrow, let destination { return borrow(expr, into: destination) }
+
         // An `if` whose value is dropped runs the branch its condition picks, and computes that branch's value for
         // what it does, so a Void `if` needs no temporary.
         if destination == nil, case .if(let condition, let then, let otherwise) = expr.kind {
@@ -16,6 +19,28 @@ extension FunctionLowering {
         // Any other value is one operation, whose operands are computed first.
         let value = rvalue(of: expr, as: use)
         builder.emit(value, into: destination, range: expr.range)
+    }
+
+    /// Lowers `expr`, the value of a borrowing `let`, into `destination`, the local it declares.
+    private mutating func borrow(_ expr: CheckedExpr, into destination: Destination) {
+        switch expr.kind {
+        // A place that a local holds is read through a read access, which the local's value then depends on, so the
+        // access lasts for as long as the local is used.
+        case .place(let place) where place.liesInLocal:
+            let borrowed = self.place(of: place)
+            let access = builder.begin(Access(.read, to: borrowed, at: expr.range))
+            builder.emit(.operand(.read(borrowed, at: expr.range)), into: destination, range: expr.range)
+            builder.emit(.depend(destination.place, on: access))
+
+        // An `if` hands the borrow to the branch that runs, which computes its value into the local itself, so the
+        // local depends on the access of whichever branch ran.
+        case .if(let condition, let then, let otherwise):
+            lowerIf(condition, then, otherwise, into: destination, as: .borrow)
+
+        // Any other value, a place in a temporary that dies with its statement included, is the local's own.
+        default:
+            compute(expr, into: destination, as: .take)
+        }
     }
 
     /// Lowers `expr`, the value of a position that `use`s it, to an operand that holds its value, computing it into a
@@ -31,6 +56,7 @@ extension FunctionLowering {
             switch use {
             case .read: .read(self.place(of: place), at: expr.range)
             case .take: .move(self.place(of: place), at: expr.range)
+            case .borrow: preconditionFailure("a borrow is lowered into the local it declares, as no operand")
             }
         // An array's count is a constant, which the type of the array it counts fixes.
         case .arrayCount(let place, let count): arrayCount(of: place, fixedAt: count, at: expr.range)
@@ -258,5 +284,12 @@ private enum EvaluatedArgument {
     static func borrowing(_ operand: Operand) -> EvaluatedArgument {
         guard case .read(let place, let range) = operand else { return .value(operand) }
         return .place(place, at: range, .read)
+    }
+}
+
+private extension CheckedPlace {
+    /// Whether a local holds the place, rather than a temporary that dies with its statement.
+    var liesInLocal: Bool {
+        if case .local = root { true } else { false }
     }
 }

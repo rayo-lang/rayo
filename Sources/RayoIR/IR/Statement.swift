@@ -17,6 +17,9 @@ public enum Statement: Equatable, Sendable {
     case begin(AccessID, Access)
     /// Ends the access, after which nothing reaches the place through it.
     case end(AccessID)
+    /// Makes the value at the place depend on the access, so that the access stays live while the value is used, as
+    /// a borrowing `let`'s value does on the access to the place it borrows.
+    case depend(Place, on: AccessID)
 }
 
 /// The operation a statement makes its value with, from its operands.

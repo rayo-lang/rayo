@@ -24,6 +24,11 @@ struct LivenessState: DataflowState {
         live[place.root]?.values.contains { $0.mayReach(place) } ?? false
     }
 
+    /// The locals holding a value, in whole or in part, that some code reads later.
+    var readLocals: Set<LocalID> {
+        Set(live.keys)
+    }
+
     var direction: DataflowDirection { .backward }
 
     /// Takes the state across `effect`, an effect in the function whose places `places` gives the types of.
@@ -48,7 +53,9 @@ struct LivenessState: DataflowState {
         case .exit:
             readReturnedParameters(of: places.body)
 
-        case .use, .end:
+        // Reaching a place through an access reads it through the access's beginning, and a dependence leaves its
+        // place's value as it is.
+        case .use, .end, .depend:
             break
         }
     }

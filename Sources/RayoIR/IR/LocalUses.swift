@@ -17,6 +17,8 @@ public struct LocalUses {
         case .read(let place, _), .move(let place, _): place.root
         case .store(let destination): destination.place.root
         case .begin(_, let access): access.place.root
+        // A dependence marks the value its place holds, which must be alive to hold it.
+        case .depend(let place, _): place.root
         // An access reaches its place until it ends.
         case .use(let id), .end(let id): accessedLocal(of: id)
         case .declare, .retire, .exit: nil

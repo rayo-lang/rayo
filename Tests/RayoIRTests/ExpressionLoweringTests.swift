@@ -17,11 +17,12 @@ struct ExpressionLoweringTests {
         try expectLowering(ofMain: body, toMatch: "temporary-declarations")
     }
 
-    @Test func `a local used as an operand is read, and a local that gives a declaration its value is moved`() throws {
-        try expectLowering(ofMain: "let a = 1\nlet b = -a\nlet c = a", toMatch: "reads-and-moves")
+    @Test func `a local used as an operand is read, and a local that 'consume' names is moved`() throws {
+        try expectLowering(ofMain: "let a = 1\nlet b = -a\nlet c = consume a", toMatch: "reads-and-moves")
     }
 
-    @Test func `'_ =', an assignment and a declaration's 'if' move a local, and an argument's 'if' reads it`() throws {
+    @Test func `'_ =', an assignment and a 'consume' in an 'if' move a local, and an argument's 'if' reads it`()
+        throws {
         let body = """
             let a = 1
             var b = 2
@@ -29,14 +30,14 @@ struct ExpressionLoweringTests {
             _ = b
             let t = true
             let d = 3
-            let e = if t { d } else { 4 }
+            let e = if t { consume d } else { 4 }
             let g = 5
             print(if t { g } else { e })
             """
         try expectLowering(ofMain: body, toMatch: "taken-positions")
     }
 
-    @Test func `a local in parentheses is moved where the bare local would be, and read where it would be`() throws {
+    @Test func `a local in parentheses is borrowed where the bare local would be, and read where it would be`() throws {
         try expectLowering(ofMain: "let a = 1\nlet b = (a)\nprint((b))", toMatch: "parenthesized-local")
     }
 

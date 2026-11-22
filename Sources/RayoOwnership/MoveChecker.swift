@@ -3,11 +3,12 @@ import RayoDiagnostics
 import RayoIR
 
 /// Checks that a program moves no value out of a place that can't give it up: a parameter whose value is its caller's,
-/// or an array's element, which its array holds for as long as the array holds a value.
+/// a borrowing `let`, whose value is the place's it borrows, or an array's element, which its array holds for as long
+/// as the array holds a value.
 enum MoveChecker {
-    /// Reports each move out of a parameter whose value is its caller's, out of an array's element, or out of a part
-    /// inside either, in every block of the body whose places `places` gives the types of, whether or not a path
-    /// reaches it.
+    /// Reports each move out of a parameter whose value is its caller's, out of a borrowing `let`, out of an array's
+    /// element, or out of a part inside any of them, in every block of the body whose places `places` gives the types
+    /// of, whether or not a path reaches it.
     static func errors(in places: PlaceTypes) -> [Diagnostic] {
         places.body.blocks.flatMap { $0.effects.joined() }.compactMap { error(at: $0, in: places) }
     }
@@ -23,19 +24,28 @@ enum MoveChecker {
             return Diagnostic(.moveFromElement(part: part), at: range)
         }
 
+        // Only a local of the source may not own its value; a temporary owns what lowering stores in it.
+        guard case .source(let local, let kind, _, _) = places.body.locals[place.root.index],
+              let name = places.sourceName(of: place) else { return nil }
+
+        // The error names the whole local, or the part moved out of it as the source writes it.
+        let part = place.steps.isEmpty ? nil : name
+        return code(movingOutOf: local, of: kind, part: part).map { Diagnostic($0, at: range) }
+    }
+
+    /// The error for a move out of the local `local` of `kind`, or out of `part` of it where that is given, or nil
+    /// where the local owns its value and may give it up.
+    private static func code(movingOutOf local: String, of kind: LocalKind, part: String?) -> ErrorCode? {
+        switch kind {
         // A parameter that doesn't own its value can't give it up.
-        guard case .source(let parameter, .parameter(let convention), _, _) = places.body.locals[place.root.index],
-              !convention.allowsMove else { return nil }
-
-        // A parameter is a local of the source, which names each place inside it.
-        guard let name = places.sourceName(of: place) else {
-            preconditionFailure("a parameter is a local of the source")
+        case .parameter(let convention) where !convention.allowsMove:
+            part.map { .moveFieldFromParameter(field: $0, parameter: local) } ?? .moveFromParameter(name: local)
+        // Nor can a borrowing `let`, whose value is the place's it borrows.
+        case .borrowingLet:
+            part.map { .moveFieldFromBorrowingLet(field: $0, local: local) } ?? .moveFromBorrowingLet(name: local)
+        case .let, .var, .parameter:
+            nil
         }
-
-        // The error names the whole parameter, or the part moved out of it as the source writes it.
-        let code: ErrorCode = place.steps.isEmpty
-            ? .moveFromParameter(name: parameter) : .moveFieldFromParameter(field: name, parameter: parameter)
-        return Diagnostic(code, at: range)
     }
 
     /// What `place` takes out of an element, named by the innermost array that the source names on the way to it. Its

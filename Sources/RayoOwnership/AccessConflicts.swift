@@ -71,9 +71,9 @@ struct AccessConflicts {
             let reach: Reach = access.kind == .read ? .read : .change
             check(reach, of: access.place, at: access.range, against: live.subtracting([id]))
 
-        // Using or ending an access, starting or ending a local's life, and leaving the function reach no place
-        // anew.
-        case .use, .end, .declare, .retire, .exit:
+        // Using or ending an access, making a value depend on one, starting or ending a local's life, and leaving the
+        // function reach no place anew.
+        case .use, .end, .depend, .declare, .retire, .exit:
             break
         }
     }
