@@ -61,15 +61,6 @@ runs:
         path: .build
         key: ${{ steps.name.outputs.key }}
         restore-keys: ${{ steps.name.outputs.prefix }}
-    - name: Diagnose the restored build
-      shell: bash
-      run: |
-        nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || true
-        ls -la .build .build/prebuilts .build/prebuilts/* 2>&1 | head -40
-        mkdir -p "$RUNNER_TEMP/restored"
-        cp .build/*.yaml "$RUNNER_TEMP/restored/" 2>/dev/null || true
-        ls -la "$RUNNER_TEMP/restored"
-        stat .build/checkouts/swift-syntax/Sources/SwiftSyntax/SyntaxProtocol.swift 2>&1 || true
     # A runner's network can stall partway through a fetch, so a fetch that fails is tried again, a few times with a
     # longer pause before each new try. Git gives up on a transfer that stays below 1 KB a second for a minute, so
     # a stall fails its try rather than hanging until the job times out.
@@ -142,6 +133,7 @@ runs:
         timed swift build -c release
         timed swift build -c release
         timed env GITHUB_RUN_ID=1 GITHUB_SHA=0 GITHUB_REF=refs/heads/other swift build -c release
+        timed env HOSTNAME=other swift build -c release
         round_trip
         timed swift build -c release
         bin=$(swift build -c release --show-bin-path)
