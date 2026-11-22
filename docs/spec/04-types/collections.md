@@ -463,7 +463,7 @@ protocol ConsumingSequence {                    // what a loop over a whole valu
 **A collection's shared and mutable iterators yield views of its elements, and its consuming iterator yields the elements themselves:**
 
 - its iterator yields `Borrow<T>`, a copyable, scoped shared view of one element;
-- its mutable iterator yields `MutableRef<T>`, a move-only exclusive one, a one-element `MutableSpan`;
+- its mutable iterator yields `MutableRef<T>`, a move-only exclusive one, a one-element `MutableSpan`, which lists `ExclusiveView` as `MutableSpan` does ([02](../02-views-and-dependencies/scoped-values.md#exclusiveview));
 - its consuming iterator yields each `T` itself.
 
 A pattern binds through the view's `value`, so move-only elements iterate like any others.

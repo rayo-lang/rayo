@@ -6,7 +6,7 @@ A C or C++ program uses a library written in Rayo:
 
 ```swift
 @export(c) func nav_load(_ desc: NavDesc) -> WeakShared<NavMesh> { ... }   // Shared.leak: the C caller owns the mesh
-@export(c, name: "nav_path") func findPath(_ mesh: WeakShared<NavMesh>, _ out: owned MutableSpan<Int32>) -> Int32 { ... }
+@export(c, name: "nav_path") func findPath(_ mesh: WeakShared<NavMesh>, _ out: MutableSpan<Int32>) -> Int32 { ... }
 
 @export(c) @c struct NavDesc(
     var width: Int32,

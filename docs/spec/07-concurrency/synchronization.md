@@ -116,6 +116,8 @@ log.lock { msgs in
 
 **`RwLock<T>` works like `Mutex`, with `read` (shared) and `write` (exclusive) in both forms.** Taking the write lock on a thread that holds either lock, or either lock on a thread that holds the write lock, panics, as relocking a `Mutex` does. A read lock taken again on a thread that holds one is granted at once, even while a writer waits, since that writer can't proceed before the outer read ends.
 
+**`MutexGuard` and an `RwLock`'s write guard list `ExclusiveView`**, since each changes only the data it lends, never the guard ([02](../02-views-and-dependencies/scoped-values.md#exclusiveview)). So a `let` that owns one, such as `g` above, changes the data through it. An `RwLock`'s read guard lends the data only shared, so it doesn't list it.
+
 **A panic that unwinds out of a lock's exclusive access poisons the lock.** That is a `Mutex`'s access, or an `RwLock`'s `write` access, through a guard or the closure form. An `RwLock`'s `read` access never poisons, since it changes nothing. The unwind still releases the lock, as it destroys the guard or ends the closure form's call, so a panic never leaves a lock held.
 
 **While a lock is poisoned, `lock`, `read` and `write` on it panic, until `clearPoison()` resets it:**

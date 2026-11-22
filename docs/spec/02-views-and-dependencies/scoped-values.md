@@ -59,18 +59,20 @@ hot = &cold.span                   // error: 'hot' is a let; replacing the view 
 
 **These types are exclusive views, and each writes only through itself:**
 
-- a type that conforms to `ExclusiveView` ([below](#exclusiveview)), such as `MutableSpan`, `MutableRef`, and the guard of a `Mutex` or of an `RwLock`'s write lock;
+- a type that conforms to `ExclusiveView` ([below](#exclusiveview)), such as `MutableSpan`, `MutableRef`, and the guard of a `Mutex` or of an `RwLock`'s write lock ([07](../07-concurrency/synchronization.md#locks-mutex-and-rwlock));
 - `mutable any P`, whose `mutating` requirements change only the value it views ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#any-p-explicit-dynamic-dispatch));
 - an exclusive `SoA` row, whose fields' places lie in the columns ([04](../04-types/data-layout.md#struct-of-arrays-soat));
 - a `mutating` function value, whose call changes only the closure it views ([05](../05-protocols-generics-and-closures/functions-and-closures.md#function-typed-values)).
 
-**`&v` of an exclusive view held with exclusive access lends a new view of what `v` views**, until that view's last use, as an argument or an initializer ([05](../05-protocols-generics-and-closures/implicit-conversions.md#implicit-conversions)). So `scale(&chunk)` above writes through `chunk`, and leaves it usable after the call. A parameter of an exclusive view's type is received owned unless it is declared `mutable` ([01](../01-values-and-ownership/parameters.md#parameters)), so `scale` owns the new view:
+**Every exclusive view is a [mutable view](dependency-projection-and-results.md#mutable-views), but not every mutable view writes only through itself.** A `consuming` function value ends when it is called, and a closure literal with an exclusive capture changes the closure itself. A value that holds a mutable view without listing `ExclusiveView`, such as a struct of spans, may change its own fields.
+
+**`&v` of an exclusive view held with exclusive access lends a new view of what `v` views**, until that view's last use, as an argument or an initializer ([05](../05-protocols-generics-and-closures/implicit-conversions.md#implicit-conversions)). So `scale(&chunk)` above writes through `chunk`, and leaves it usable after the call. A parameter of an exclusive view's type is received owned, as [01](../01-values-and-ownership/parameters.md#parameters) says, so `scale` owns the new view:
 
 ```swift
 func scale(_ s: MutableSpan<Float>) { for x in &s { x *= 2 } }   // 's' is received owned, so it writes through itself
 ```
 
-**A `mutable` parameter is lent the place `v` itself instead**, which must then be changeable, since the callee may replace the view ([05](../05-protocols-generics-and-closures/implicit-conversions.md#implicit-conversions)).
+A `mutable` parameter is lent the place `v` instead ([05](../05-protocols-generics-and-closures/implicit-conversions.md#implicit-conversions)).
 
 ### `ExclusiveView`
 

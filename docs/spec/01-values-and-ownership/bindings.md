@@ -351,7 +351,7 @@ var d: any Drawable = sprite                // borrows 'sprite'; 'd' owns the vi
 - a `var` field, an element, or a property with a `mutate` or a `set` ([02](../02-views-and-dependencies/place-and-value-properties.md#place-and-value-properties)), of a changeable place;
 - a place that an exclusive view held with [exclusive access](#exclusive-access) hands out through a `mutate`, such as `lives[0]` for a `MutableSpan` that a `let` owns.
 
-**Everything else is read-only, and so is whatever is reached through it**: a `let`, a `ref let`, a borrowed parameter, `self` in a plain method, a `let` field, a `const` and a global `let`.
+**Everything else is read-only**: a `let`, a `ref let`, a borrowed parameter, `self` in a plain method, a `let` field, a `const` and a global `let`. So is whatever is reached through one of these, except a place listed above, such as an element of a `MutableSpan` that a `let` owns.
 
 ```swift
 let x = makeEnemy()
@@ -371,14 +371,7 @@ let r = renderer.weak()
 _ = r.value?.submit(mesh)          // fine: an object's value is changeable through a let of a weak pointer
 ```
 
-**An exclusive view writes through itself with exclusive access, not a changeable place** ([02](../02-views-and-dependencies/scoped-values.md#exclusive-views)). Its `mutating` members, `mutate` accessors included, change only what it views, never the view. So a `let` that owns a `MutableSpan` writes its elements, but only a changeable place can be given another view:
-
-```swift
-let lives = &particles.life        // a MutableSpan<Float> that 'lives' owns
-lives[0] = 1                       // fine: writes an element through the view
-lives.sort()                       // fine: reorders the elements, and leaves the view as it was
-lives = &particles.age             // error: a let is read-only; replacing the view needs a 'var'
-```
+**An exclusive view writes through itself with exclusive access, not a changeable place**, which is why the places it hands out are changeable ([02](../02-views-and-dependencies/scoped-values.md#exclusive-views)).
 
 ### Exclusive access
 
@@ -388,6 +381,7 @@ lives = &particles.age             // error: a let is read-only; replacing the v
 | --- | --- |
 | an owned `let`, or a value an iterator hands out | yes |
 | a `ref var`, a `mutable` parameter, a part of a `&` subject | yes |
+| any other changeable place, or a parameter received owned | yes |
 | a `ref let`, a borrowed parameter, an element of a sequence that isn't lent | no |
 
 - **Every changeable place is held with exclusive access**, and so are these, which can't change: a `let` that owns its value, a `for` or `when` name that owns what it binds ([above](#for-and-when-names)), and `self` in an exclusive view's `mutating` member.
@@ -418,7 +412,7 @@ let v: mutable any Damageable = &boss                    // a mutable any P made
 **What follows `&` is a changeable place, a member of one that has a mutable form, or an exclusive view held with exclusive access.** Leaving `&` out is a compile error, and so is `&` on something that lends nothing for change. An exclusive view that isn't a changeable place lends only what it views: a new view of it, or its elements to a loop, never the place that holds the view ([02](../02-views-and-dependencies/scoped-values.md#exclusive-views)).
 
 - **`&` picks a mutable form.** Where a method or property has a shared and a mutable form of one name, the operand of `&` picks the mutable one ([04](../04-types/collections.md#shared-mutable-and-consuming-forms-of-one-method)). So a binding of `&particles.life` binds an [`SoA`](../04-types/data-layout.md#struct-of-arrays-soat) column as a `MutableSpan<Float>` that it owns, where a binding of `particles.life` gets a `Span<Float>`, as in the example below.
-- **A binding of a value lends nothing, so it takes no `&`.** A call result bound to a name is owned by its binding. That includes an **owned exclusive view**: a move-only scoped value ([02](../02-views-and-dependencies/scoped-values.md#scoped-values)), such as the guard that `registry.lock()` returns, which changes the registry through it.
+- **A binding of a value lends nothing, so it takes no `&`.** A call result bound to a name is owned by its binding. That includes an owned value of a move-only scoped type ([02](../02-views-and-dependencies/scoped-values.md#scoped-values)), such as the guard that `registry.lock()` returns, which changes the registry through it.
 - **A call result lent for change takes `&`, as any changeable place does**, when it is a `mutable` argument, a loop's sequence or a `when` subject. It is a temporary, which its statement owns, or which the loop or the `when` owns in a hidden local, as in the example below.
 - **A `zip` marks its own arguments**, as in `zip(&vels, forces)`, so a loop over it needs no `&` of its own ([04](../04-types/collections.md#iteration)).
 

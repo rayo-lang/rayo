@@ -242,6 +242,8 @@ h { finish() }                       // the closure converts to the optional's .
 
 **A body that names a borrowing binding captures the place the binding names**, as worked out when it was bound. The capture brings the binding's dependency set and the dynamic accesses the binding holds, which stay held while the closure lives.
 
+**A body that writes through an exclusive view that isn't a changeable place captures a new view of what it views**, not the place that holds it ([below](#closure-kinds)).
+
 ## Closure kinds
 
 A closure's type says what it does with its captures, and the compiler infers this kind from the literal's body:
@@ -259,7 +261,7 @@ A closure's type says what it does with its captures, and the compiler infers th
     - calling a `mutating` method on it;
     - capturing it exclusively in a nested literal.
 
-  Writing through a captured exclusive view calls a `mutating` member on it, so the literal captures the view exclusively. That needs exclusive access to the view, not a changeable place ([02](../02-views-and-dependencies/scoped-values.md#exclusive-views)), so a literal may write through a `let` that owns a `MutableSpan`.
+  **An exclusive view that isn't a changeable place is captured as `&` lends it**, such as a `let` that owns a `MutableSpan`. A literal that writes through one captures a new view of what it views, owned by the literal and lent exclusively, as `&lives` lends one ([01](../01-values-and-ownership/bindings.md#lending-a-place-for-change)). It never captures the place that holds the view, which isn't changeable. The new view depends on that place exclusively, so the `let` can't be used while the closure lives.
 
   A `mutating` function value is move-only, and calling it mutates the closure itself. So it is passed `mutable` or owned, and runs on one thread at a time.
 - **`consuming`.** A literal whose body moves out of a capture owns that capture. The body moves out with `consume input`, or by taking the capture anywhere a value is taken ([01](../01-values-and-ownership/moves-copies-destruction.md#moves)). The capture moves in when the closure is created, as `[move input]` would. Calling the closure consumes it, so the compiler checks it is called at most once. Copying a capture with `copy` doesn't make it `consuming`.
@@ -272,7 +274,8 @@ A closure's type says what it does with its captures, and the compiler infers th
 var n = 0
 particles.forEachInParallel { _ in n += 1 }   // error: writes 'n', so it is mutating, but the loop runs it on many threads
 let lives = &particles.life
-times(3) { lives[0] += 1 }                    // fine: writes through the view 'lives' owns, so the literal is mutating
+times(3) { lives[0] += 1 }                    // fine: captures a new view of what 'lives' views, and writes through it
+lives[0] = 0                                  // fine: the literal's last use is above, so 'lives' is free again
 ```
 
 **A parameter of `mutating` or `consuming` function type, or of `some F` where `F` is one, is received owned** unless declared `mutable`, since a borrowed one could never be called ([01](../01-values-and-ownership/parameters.md#parameters)). How a closure gets there depends on the parameter's type:
