@@ -76,6 +76,14 @@ struct ReferenceParameterTests {
         ])
     }
 
+    @Test(arguments: [("read(&c)", "10: error[E0213]: expected Int, found Bool"),
+                      ("showStats(&e)", "15: error[E0213]: expected Stats, found Enemy")])
+    func `'&' of a place of another type than the parameter's is a type mismatch at the '&'`(
+        statement: String, message: String,
+    ) {
+        #expect(messages(of: statement) == [message])
+    }
+
     @Test(arguments: [
         ("take(&a)", 10, "take", "an Int"), ("print(&a)", 11, "print", "an Int"),
         ("_ = UInt(&a)", 14, "UInt", "an Int"), ("_ = Stats(hp: &a)", 19, "Stats", "an Int"),

@@ -35,6 +35,33 @@ struct ImplicitCopyTests {
         ))
     }
 
+    // Each parameter owns its copy, and changes it, while the caller's places keep their values and are used after
+    // the call.
+    @Test(arguments: [["--debug"], ["--release"]])
+    func `an Int, UInt or Bool place given to a parameter that owns it is copied, and stays usable`(mode: [String]) {
+        let source = """
+            func main() {
+                var hp = 5
+                let level: UInt = 2
+                let alive = true
+                print(spent(hp, level, alive))
+                print(hp)
+                print(level)
+                print(alive)
+                hp = 9
+                print(spent(hp, level, !alive))
+            }
+            func spent(_ hp: Int, _ level: UInt, _ alive: Bool) -> Int {
+                hp -= 1
+                level += 1
+                alive = !alive
+                if alive { return 0 }
+                return hp + Int(level)
+            }
+            """
+        #expect(run(source, options: mode) == CommandResult(exitCode: 0, output: "7\n5\n2\ntrue\n0\n", errors: ""))
+    }
+
     // A `let`, a `var` and an assignment take an Int, a UInt or a Bool from a place that is used, and changed, after
     // them, and from a borrowed parameter's field.
     @Test(arguments: [["--debug"], ["--release"]])
