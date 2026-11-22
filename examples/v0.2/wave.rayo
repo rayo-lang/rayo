@@ -78,7 +78,7 @@ func indexOfStrongest(in enemies: [3 of Enemy]) -> UInt {
     var strongest: UInt = 0
     var i: UInt = 1
     while i < enemies.count {
-        if enemies[i].stats.hp > enemies[strongest].stats.hp { strongest = copy i }
+        if enemies[i].stats.hp > enemies[strongest].stats.hp { strongest = i }
         i += 1
     }
     return strongest

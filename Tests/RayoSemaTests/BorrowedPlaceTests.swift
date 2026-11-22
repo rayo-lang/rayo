@@ -36,9 +36,9 @@ struct BorrowedPlaceTests {
     // A `let` or `var` owns its value, and the place's value has an owner already, so the declaration writes how it
     // takes the value, or says that it refers to the place.
     @Test(arguments: [
-        ("var x = a", "var", "a"), ("var x = e.stats.hp", "var", "e.stats.hp"),
-        ("let x = e.slots[1]", "let", "e.slots[1]"), ("let x = g[i][0]", "let", "g[i][0]"),
-        ("var x = g[i + 1][0]", "var", "g[…][0]"),
+        ("var x = e", "var", "e"), ("var x = e.stats", "var", "e.stats"),
+        ("let x = e.slots", "let", "e.slots"), ("let x = g[i]", "let", "g[i]"),
+        ("var x = g[i + 1]", "var", "g[…]"),
     ])
     func `a 'let' or 'var' given a place names the place, and says to write 'copy', 'consume' or 'ref let'`(
         statement: String, keyword: String, place: String,
@@ -49,7 +49,7 @@ struct BorrowedPlaceTests {
     }
 
     // An assignment that borrowed its place would leave its target naming a value it doesn't own.
-    @Test(arguments: [("b = a", 9, "a"), ("e.stats.hp = g[0][1]", 18, "g[0][1]")])
+    @Test(arguments: [("g[0] = g[1]", 12, "g[1]"), ("e.slots = g[0]", 15, "g[0]")])
     func `an assignment of a place names the place, and says to write 'copy' or 'consume'`(
         statement: String, column: Int, place: String,
     ) {
@@ -60,11 +60,11 @@ struct BorrowedPlaceTests {
 
     // An `if` hands its position to the branch that runs, so each branch that ends in a place is reported there.
     @Test func `each branch of an 'if' that gives a 'let', a 'var' or an assignment a place is reported`() {
-        #expect(messages(of: "var x = if c { a } else if !c { b } else { copy a }").map { $0.prefix(16) } == [
-            "20: error[E0277]", "37: error[E0277]",
+        #expect(messages(of: "var x = if c { g[0] } else if !c { g[1] } else { copy g[0] }").map { $0.prefix(16) } == [
+            "20: error[E0277]", "40: error[E0277]",
         ])
-        #expect(messages(of: "let x = if c { 1 } else { e.stats.hp }").map { $0.prefix(16) } == ["31: error[E0277]"])
-        #expect(messages(of: "b = if c { 1 } else { a }").map { $0.prefix(16) } == ["27: error[E0278]"])
+        #expect(messages(of: "let x = if c { makeEnemy() } else { e }").map { $0.prefix(16) } == ["41: error[E0277]"])
+        #expect(messages(of: "e = if c { makeEnemy() } else { e }").map { $0.prefix(16) } == ["37: error[E0278]"])
     }
 
     // A value that no place holds is owned by what receives it, and so is a place in a temporary, which dies with its
@@ -76,6 +76,17 @@ struct BorrowedPlaceTests {
         "e.stats = consume e.stats",
     ])
     func `a value, a copy, a consume, a place in a temporary or a 'ref let' needs nothing written`(statement: String) {
+        #expect(messages(of: statement) == [])
+    }
+
+    // A `let`, a `var` or an assignment given a place of an implicitly copyable type takes a copy of its value.
+    @Test(arguments: [
+        "var x = a", "let x = e.stats.hp", "let x = g[i][0]", "var x = i", "let x = c", "b = a",
+        "e.stats.hp = g[0][1]", "var x = if c { a } else { b }",
+    ])
+    func `a 'let', a 'var' or an assignment given an Int, a UInt or a Bool place needs nothing written`(
+        statement: String,
+    ) {
         #expect(messages(of: statement) == [])
     }
 
