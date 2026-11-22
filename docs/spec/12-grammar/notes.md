@@ -116,15 +116,15 @@ var b: Box<Int>= a                                      // '>=' splits, so 'b' i
 let q = alloc SpscQueue<Shared<Snapshot>>(capacity: 3)  // '>>' splits, closing two argument lists
 ```
 
-## Parentheses and conventions in types
+## Parentheses in types
 
-**In a type, `(` and `mutable` each have more than one reading.** A `(` can open a function type's parameters, an error union, a tuple, or a single parenthesized type. Before a type, `mutable` can be a parameter convention or part of the type.
+**In a type, `(` has more than one reading.** It can open a function type's parameters, an error union, a tuple, or a single parenthesized type.
 
 **Every `(` in a type is decided with the same bounded lookahead as generic arguments** ([above](#operators-and-punctuation)):
 
 - **Function type parameters.** When the matching `)` is followed by `->`, the list is a function type's parameters, so `(IoError | ParseError) -> Void` takes one union parameter.
 - **Error unions and tuples.** Otherwise `(A | B)` is an error union and `(A, B)` a tuple.
-- **A single type.** A parenthesized single type without a label or a trailing comma is that type, not a one-element tuple. The exception is `(any P)` after `mutable`, or as the type argument of `Box` or an object pointer, which keeps the shared view apart from the form `any` makes there (below).
+- **A single type.** A parenthesized single type without a label or a trailing comma is that type, not a one-element tuple.
 
 ```swift
 typealias OnError = (IoError | ParseError) -> Void    // ')' then '->': one error-union parameter
@@ -134,16 +134,11 @@ typealias Count = (Int)                               // just Int, not a one-ele
 typealias Single = (Int,)                             // a one-element tuple
 ```
 
-**In a parameter's type, `mutable` directly followed by `any` is always the exclusive existential view type** ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#any-p-explicit-dynamic-dispatch)). The `mutable` convention on a shared existential view is written `mutable (any P)`, which lets a callee reassign which value the caller's shared view refers to:
-
-```swift
-func strike(_ d: mutable any Damageable) { ... }        // the exclusive existential view type
-func retarget(_ d: mutable (any Damageable)) { ... }    // the mutable convention on a shared existential view
-```
+**`mutable` before a parameter's type is always its convention, never part of the type**, so `mutable any Damageable` is the `mutable` convention on an `any Damageable` ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#any-p-explicit-dynamic-dispatch)).
 
 **An expression names a type in two ways**: by a type name followed by a member, as in `Vertex.self`, `T.fields` and `Int.max`, or as an operand of `==` or `!=` that compares types, as in `T == List<Int>` ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#value-parameters-and-type-values)).
 
-**Any other type in an expression is parenthesized.** A `(` in expression position begins such a type when what it holds starts as only a type can, with `*`, `any`, `some`, `mutable any`, `@c` or `[ … of`, or when the matching `)` is followed by `.self`. Any other such type is named through a `typealias` first:
+**Any other type in an expression is parenthesized.** A `(` in expression position begins such a type when what it holds starts as only a type can, with `*`, `any`, `some`, `@c` or `[ … of`, or when the matching `)` is followed by `.self`. Any other such type is named through a `typealias` first:
 
 ```swift
 let size = (*Int).size                // '*' starts as only a type can
@@ -152,8 +147,6 @@ typealias Pair = (Int, Float)
 let p = Pair.construct { … }          // any other such type is named through a typealias
 ```
 
-**In the type argument of `Box` or an object pointer, `any` right after `<` makes the unscoped existential** ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#any-p-explicit-dynamic-dispatch)). The unscoped existentials are types of their own, which binding a type parameter never makes. So the box that `Box<T>` gives with `T` bound to `any P` is written apart, as `Box<(any P)>`: a box holding a shared existential view.
-
 ## Trailing commas
 
-**Every comma-separated list closed by `)`, `]` or `>` allows a trailing comma**, as the productions show. With one, a parenthesized single expression or type, outside a call's arguments and a function type's parameters, is a one-element tuple, as `(x,)` and `(Int,)` are ([above](#parentheses-and-conventions-in-types)).
+**Every comma-separated list closed by `)`, `]` or `>` allows a trailing comma**, as the productions show. With one, a parenthesized single expression or type, outside a call's arguments and a function type's parameters, is a one-element tuple, as `(x,)` and `(Int,)` are ([above](#parentheses-in-types)).

@@ -75,7 +75,7 @@ Generic code treats an unconstrained type parameter as possibly move-only, so co
 
 **Some types are move-only whatever their fields, since a second copy would break what the type promises:**
 
-- **Exclusive views.** A `mutable any P` lends one place for change, and an exclusive `SoA` row lends one place in each column. Two copies would be two ways to change the same place at once ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#any-p-explicit-dynamic-dispatch), [04](../04-types/data-layout.md#struct-of-arrays-soat)).
+- **Exclusive `SoA` rows.** An exclusive `SoA` row lends one place in each column, and two copies would be two ways to change the same place at once ([04](../04-types/data-layout.md#struct-of-arrays-soat)).
 - **`Synchronized` types.** A `Synchronized` type, such as `Mutex` or `Atomic<Int>`, exists once, so every thread that shares it synchronizes on the same memory ([07](../07-concurrency/synchronization.md#the-synchronized-contract)).
 - **Lock guards.** A `@guard` type, such as `MutexGuard`, holds a lock for as long as it lives, and a copy would release the lock a second time ([02](../02-views-and-dependencies/dependency-lifetimes.md#lock-guards-are-released-on-the-thread-that-took-them)).
 - **`mutating` and `consuming` function values.** Calling a `mutating` one changes the closure itself, and a `consuming` one runs at most once ([05](../05-protocols-generics-and-closures/functions-and-closures.md#closure-kinds)).
@@ -104,7 +104,7 @@ extension Optional: ImplicitlyCopyable where T: ImplicitlyCopyable {}   // as th
 
 **Generic code copies a `T` with nothing written only under `T: ImplicitlyCopyable`**, since an unconstrained or merely copyable `T` may be a large value. Under `T: Copyable` alone, it writes `copy x`.
 
-**No other type the language gives conforms**, such as an `any P`, a function value or a type value, so a copy of one is written.
+**No other type the language gives conforms**, such as a function value or a type value, so a copy of one is written.
 
 **The standard library declares the protocol on each copyable type that passes one test**: its copy is 16 bytes or less, and a second copy is as good as the first. So `Handle`, `Name`, `Allocator`, `Stamp` and `std.math`'s `Vec3` are implicitly copyable. A `Panic` is copyable but larger, so its copy is written. Each chapter that declares a copyable type of the standard library says whether it conforms.
 

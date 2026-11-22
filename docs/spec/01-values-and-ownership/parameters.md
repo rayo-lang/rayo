@@ -30,7 +30,7 @@ remember(e.pos)                                         // a Vec3 is implicitly 
 **Some parameters are received `owned` with no `owned` written**, unless they are declared `mutable`. Each is used in a way that a borrowed parameter, which is read-only, can't be ([Changeable places](bindings.md#changeable-places)):
 
 - **Function values that change or consume their captures.** This covers a parameter of a `mutating` or `consuming` function type, and one of a type parameter constrained to one, written `some F` or named. Calling such a value changes or consumes the closure, so a borrowed one could never be called ([05](../05-protocols-generics-and-closures/functions-and-closures.md#closure-kinds)).
-- **Exclusive views.** This covers a parameter of `mutable any P`, of a type that conforms to `ExclusiveView`, such as `MutableSpan`, or of a type parameter constrained to it. Writing through such a view needs exclusive access to it, which a borrowed parameter lacks ([02](../02-views-and-dependencies/scoped-values.md#exclusive-views)). Writing `owned` on one says the same, and a `mutable` one lets the callee replace the caller's view too.
+- **Exclusive views.** This covers a parameter of a type that conforms to `ExclusiveView`, such as `MutableSpan` or `MutableRef<any P>`, or of a type parameter constrained to it. Writing through such a view needs exclusive access to it, which a borrowed parameter lacks ([02](../02-views-and-dependencies/scoped-values.md#exclusive-views)). Writing `owned` on one says the same, and a `mutable` one lets the callee replace the caller's view too.
 
 ## Argument labels
 

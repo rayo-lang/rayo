@@ -40,9 +40,9 @@ for d in &targets { d = &crate; break }       // by storing a borrow into a list
 
 **Writing a whole new value through an exclusive view adds and never replaces**, since the view may cover only part of what it depends on.
 
-**When such a place belongs to the caller, the store is a store into the caller's place, and rule 5 applies.** That holds whatever convention brought the view in: a `mutable` parameter, an `owned` `MutableSpan`, a `mutable any P`, or an owned `mutating` closure with exclusive captures. Every exclusive dependency a parameter carries in is treated like a `mutable` parameter, by rule 5 and by its use at every exit ([below](#rule-5-the-callee-side)).
+**When such a place belongs to the caller, the store is a store into the caller's place, and rule 5 applies.** That holds whatever convention brought the view in: a `mutable` parameter, an `owned` `MutableSpan` or `MutableRef`, or an owned `mutating` closure with exclusive captures. Every exclusive dependency a parameter carries in is treated like a `mutable` parameter, by rule 5 and by its use at every exit ([below](#rule-5-the-callee-side)).
 
-**On the caller's side, an `owned` argument that is a mutable view absorbs like a `mutable` one**, since it can be stored through too. Examples are an `owned` `MutableSpan`, a `mutable any P` and a `mutating` closure ([Mutable views](dependency-projection-and-results.md#mutable-views)). So `poison(consume left)` makes `views`, which `left` was split from, absorb the call's other arguments.
+**On the caller's side, an `owned` argument that is a mutable view absorbs like a `mutable` one**, since it can be stored through too. Examples are an `owned` `MutableSpan`, a `MutableRef<any P>` and a `mutating` closure ([Mutable views](dependency-projection-and-results.md#mutable-views)). So `poison(consume left)` makes `views`, which `left` was split from, absorb the call's other arguments.
 
 **A borrowed argument absorbs nothing, whatever it carries**, since nothing is stored through a borrowed view. What safe code can write through a shared path holds only unscoped values: an object's value, a thread-local and the contents of a `Synchronized` value ([Generic code and `~Scoped`](scoped-values.md#generic-code-and-scoped)).
 

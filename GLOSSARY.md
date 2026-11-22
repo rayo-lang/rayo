@@ -94,7 +94,7 @@ _Avoid_: lifetime, region, loan set
 An access to an object, a `Slice`'s buffer or a thread-local, checked at run time and held until nothing that depends on it is used ([02](docs/spec/02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-6-dynamic-accesses)).
 
 **Exclusive view**:
-A mutable view that changes only what it views, never itself, such as a type that conforms to `ExclusiveView` or a `mutable any P`. It writes through itself with exclusive access rather than a changeable place ([02](docs/spec/02-views-and-dependencies/scoped-values.md#exclusive-views)).
+A mutable view that changes only what it views, never itself, such as a type that conforms to `ExclusiveView`, a `MutableRef<any P>` included. It writes through itself with exclusive access rather than a changeable place ([02](docs/spec/02-views-and-dependencies/scoped-values.md#exclusive-views)).
 
 **Full statement**:
 A statement, or a condition or subject that counts as a statement of its own, whose end destroys the temporaries it made ([02](docs/spec/02-views-and-dependencies/dependency-projection-and-results.md#temporaries)).
@@ -262,7 +262,7 @@ The type a struct's, enum's or union's type parameter names after `=`, which a w
 _Avoid_: default generic parameter
 
 **Existential**:
-A value of type `any P` or `mutable any P`, or held in an unscoped form such as `Box<any P>`, whose concrete type is known only at run time ([05](docs/spec/05-protocols-generics-and-closures/protocols-and-generics.md#any-p-explicit-dynamic-dispatch)).
+A value of type `any P`, whose concrete type is known only at run time. Code reaches it through a borrow, a view such as `Borrow<any P>`, or an unscoped form such as `Box<any P>` ([05](docs/spec/05-protocols-generics-and-closures/protocols-and-generics.md#any-p-explicit-dynamic-dispatch)).
 _Avoid_: trait object, protocol type, boxed protocol
 
 **Function value**:

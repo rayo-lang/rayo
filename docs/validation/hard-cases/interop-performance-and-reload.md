@@ -156,7 +156,7 @@ func run<T: P>(_ x: mutable T, …)      // generic over the protocol's conformi
 ```
 
 - **Must hold:** no allocation per iteration and no hidden boxing, and the dispatch cost is visible in source.
-- **Must accept** passing each `mutable any P`, or each `Box<any P>` element's `&b.value`, to `run` above. State how that call runs, given that generics are monomorphized, and its code-size cost.
+- **Must accept** passing each `mutable any P` parameter, each `MutableRef<any P>` element's `&r.value`, or each `Box<any P>` element's `&b.value`, to `run` above. State how that call runs, given that generics are monomorphized, and its code-size cost.
 
 ### F4 · Bounds checks in hot loops
 

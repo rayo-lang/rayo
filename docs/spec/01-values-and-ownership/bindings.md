@@ -333,7 +333,7 @@ The hidden local is declared where the binding is, and destroyed with it if its 
     - wrapping it in an optional or an error union, or as a `Result`'s `.success`;
     - making a `Box<T>` or an object pointer into one of an existential;
     - moving a closure into a `Closure`.
-- **Making an `any P` from a place borrows the place shared**, as making any view of it does, and the binding, `let` or `var`, owns the view. So a `var` of one may later point at another value. `&place` makes a `mutable any P` instead ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#any-p-explicit-dynamic-dispatch)). A `String` or a `List` made into its view borrows the place shared too ([05](../05-protocols-generics-and-closures/implicit-conversions.md#implicit-conversions)).
+- **Making a `Borrow<any P>` from a place borrows the place shared**, as making any view of it does, and the binding, `let` or `var`, owns the view. So a `var` of one may later point at another value. A `ref let` or `ref var` of type `any P` refers to the place itself instead ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#any-p-explicit-dynamic-dispatch)). A `String` or a `List` made into its view borrows the place shared too ([05](../05-protocols-generics-and-closures/implicit-conversions.md#implicit-conversions)).
 
 ```swift
 let total: Int = n                          // 'n' is an Int32: the widened Int is a new value 'total' owns
@@ -342,7 +342,7 @@ var spare: Enemy? = copy boss               // wrapping a copy of the enemy
 let pick: Enemy? = boss                     // error: wrapping takes the enemy; write 'copy' or 'consume'
 var last: Enemy? = consume boss             // or wrapping the enemy itself, moved out of 'boss'
 var target: Handle<Enemy>? = h              // a Handle is implicitly copyable: wrapping a copy, and 'h' stays usable
-var d: any Drawable = sprite                // borrows 'sprite'; 'd' owns the view, and may later view another value
+var d: Borrow<any Drawable> = sprite        // borrows 'sprite'; 'd' owns the view, and may later view another value
 ```
 
 ## Changeable places
@@ -406,13 +406,13 @@ _ = r.value?.submit(mesh)          // fine: an object's value is changeable thro
 - the last expression of an `if` or `when` arm whose position lends a place for change;
 - a place holding a `mutating` closure, a `Closure<mutating …>` or a `mutating` function value, made into a new function value ([05](../05-protocols-generics-and-closures/implicit-conversions.md#implicit-conversions));
 - the place that a place property's `mutate` hands out ([02](../02-views-and-dependencies/place-and-value-properties.md#place-properties-borrow-and-mutate));
-- a place made into a `mutable any P` ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#any-p-explicit-dynamic-dispatch));
+- a place made into a `MutableRef<any P>` ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#any-p-explicit-dynamic-dispatch));
 - an exclusive view held with exclusive access that lends a new view of what it views ([02](../02-views-and-dependencies/scoped-values.md#exclusive-views)).
 
 ```swift
 for (i, e) in &makeEnemies().enumerated() { ... }       // the loop keeps the new list in a hidden local, and changes it
 ref var t = if left { &a } else { &b }                   // the arm's place is lent for change
-let v: mutable any Damageable = &boss                    // a mutable any P made from 'boss'
+targets.append(&boss)                                    // a MutableRef<any Damageable> made from 'boss'
 ```
 
 **What follows `&` is a changeable place, a member of one that has a mutable form, or an exclusive view held with exclusive access.** Leaving `&` out is a compile error, and so is `&` on something that lends nothing for change. An exclusive view that isn't a changeable place lends only what it views: a new view of it, or its elements to a loop, never the place that holds the view ([02](../02-views-and-dependencies/scoped-values.md#exclusive-views)).

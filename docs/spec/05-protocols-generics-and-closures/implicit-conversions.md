@@ -6,7 +6,7 @@ Most changes of type are written out, especially when they may lose information.
 
 ```swift
 var target: Handle<Enemy>? = consume h          // T to T?, taking h
-let seen: any Drawable = sprite                 // a shared borrow of 'sprite' to an existential view
+let seen: Borrow<any Drawable> = sprite         // a shared borrow of 'sprite' to an existential view
 let text: StringView = name                     // a shared borrow of the String 'name' to a view of its text
 func sum<T: Numeric>(_ xs: Span<T>) -> T        // takes any List<T>, lent as a view of its elements
 let total = sum(scores)                         // 'scores' is a List<Int>: a shared borrow, binding T to Int
@@ -18,11 +18,11 @@ let pickMax: (Int, Int) -> Int = max            // a named function to a functio
 
 - **`T` → `T?` and `T` → `T!E`.** Where a `U?` or a `U!E` is expected, a value that converts to `U` (below) converts and is then wrapped, as `.some` or `.success`, in the same local step, as a named `@c func` passed for a nullable C callback is. It takes the value ([01](../01-values-and-ownership/bindings.md#conversions)). So `return v` in a function that can fail returns `.success(v)` ([10](../10-errors-and-safety/typed-errors.md#propagating-errors-with-try)). No conversion goes the other way: a `Result` value gives up its success value only to `try` or a `.success` pattern. A call or an `await` that can't fail has its success type to begin with ([10](../10-errors-and-safety/typed-errors.md#what-a-failure-type-names)).
 - **Existentials** ([`any P`: explicit dynamic dispatch](protocols-and-generics.md#any-p-explicit-dynamic-dispatch)):
-    - A shared borrow of a `T` that meets every protocol of the composition converts to `any P`, and an exclusive borrow `&x` to `mutable any P`. A place converts by a shared borrow wherever an `any P` is expected, as any view of it is made, with nothing written ([01](../01-values-and-ownership/bindings.md#conversions)).
-    - `&v` of a `mutable any P` held with exclusive access makes a new view of the same value (below). A shared borrow of such a place gives a shared `any P` view of the same value, while the place stays borrowed shared.
-    - An existential of `P` converts to one of `Q` when `P` implies `Q`, as `any Widget` does to `any Drawable` when `Widget` inherits `Drawable`, or `any P & Sendable` to `any P`. A view stays a view, and an unscoped existential keeps its allocation. From a place, a shared view makes a new view of the same value while the place stays borrowed shared, a `mutable any P` is taken or, with `&v`, lends a new view, and an unscoped existential is taken.
+    - A shared borrow of a `T` that meets every protocol of the composition converts to `Borrow<any P>`, and an exclusive borrow `&x` to `MutableRef<any P>`. A place converts by a shared borrow wherever a `Borrow<any P>` is expected, as any view of it is made, with nothing written ([01](../01-values-and-ownership/bindings.md#conversions)).
+    - A place holding a `T` that meets them is lent as an `any P` to a parameter or a `ref let` of that type, and `&x` to a `mutable` parameter or a `ref var` of it, with no view made. The callee or the binding borrows the place itself, and calls through it dispatch dynamically.
+    - An existential of `P` converts to one of `Q` when `P` implies `Q`, as `any Widget` does to `any Drawable` when `Widget` inherits `Drawable`, or `any P & Sendable` to `any P`. A borrow stays a borrow of the same place, a view stays a view, and an unscoped existential keeps its allocation. From a place, a `Borrow` makes a new view of the same value while the place stays borrowed shared, a `MutableRef` is taken, and an unscoped existential is taken.
 - **Views** ([04](../04-types/collections.md#collections-and-strings)):
-    - A place holding a `String` converts to a `StringView` of its text, and one holding a `List<T>` to a `Span<T>` of its elements, by a shared borrow wherever that view is expected, as a place converts to `any P`. It copies and allocates nothing, so a function takes a `StringView` or a `Span<T>`, and its callers pass what they own with nothing written. The place stays borrowed shared while the view is in use ([01](../01-values-and-ownership/bindings.md#conversions)). A parameter of type `Span<T>`, with `T` a type parameter, takes a `List<U>` the same way, binding `T` to `U`, as `sum(scores)` above does.
+    - A place holding a `String` converts to a `StringView` of its text, and one holding a `List<T>` to a `Span<T>` of its elements, by a shared borrow wherever that view is expected, as a place converts to `Borrow<any P>`. It copies and allocates nothing, so a function takes a `StringView` or a `Span<T>`, and its callers pass what they own with nothing written. The place stays borrowed shared while the view is in use ([01](../01-values-and-ownership/bindings.md#conversions)). A parameter of type `Span<T>`, with `T` a type parameter, takes a `List<U>` the same way, binding `T` to `U`, as `sum(scores)` above does.
 - **Static values** ([02](../02-views-and-dependencies/scoped-values.md#converting-to-and-from-a-static-type)):
     - A static value converts to its plain type, as a `static StringView` does to a `StringView`, viewing the same data. So a literal goes wherever a `StringView` is expected.
     - A value converts to its static type where it depends only on static storage and immortal data, as a view of a global `let` does. Where a `static U` is expected, a value that converts to `U` (above) converts and then becomes static, in the same local step, as `T` → `T?` wraps one. A value that depends on anything else never converts, since it may view memory that can be freed.
@@ -52,12 +52,14 @@ let pickMax: (Int, Int) -> Int = max            // a named function to a functio
 
 **The exceptions make new views instead of converting a variable**, and each lends its place until the view's last use:
 
-- `&x` → `mutable any P`;
-- `&v`, for an exclusive view `v` of any type held with exclusive access → a new view of what `v` views, of `v`'s type: the same value for a `mutable any P`, and the same elements for a `MutableSpan` ([02](../02-views-and-dependencies/scoped-values.md#exclusive-views));
+- `&x` → `MutableRef<any P>`;
+- `&v`, for an exclusive view `v` of any type held with exclusive access → a new view of what `v` views, of `v`'s type: the same value for a `MutableRef<any P>`, and the same elements for a `MutableSpan` ([02](../02-views-and-dependencies/scoped-values.md#exclusive-views));
 - `&f` → the function value of a `mutating` closure or `Closure<mutating …>` `f`;
 - `&f`, for a `mutating` function value `f` held with exclusive access → a new view of the same closure.
 
 **Where a `mutable` parameter expects the exclusive view's own type, `&v` lends the place `v` instead**, as for any type, and `v` must then be a changeable place ([01](../01-values-and-ownership/bindings.md#changeable-places)).
+
+**A `mutable any P` parameter, or a `ref var` of type `any P`, takes `&x` of any `T` that meets the composition**, lending the place itself as an `any P`. That is safe though the types differ, since nothing assigns a whole `any P` ([`any P`: explicit dynamic dispatch](protocols-and-generics.md#any-p-explicit-dynamic-dispatch)), so the callee can't store a value of another type into the place.
 
 **So a function that takes a `mutating` callback can pass it on twice**, lending a new view of it each time:
 

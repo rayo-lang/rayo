@@ -47,7 +47,7 @@
 
 **A shallow argument gives a sealed result only what it carries.** A shallow value is copyable and holds no inline array, so it owns no memory. The only safe ways to view its own bytes are these:
 
-- an `any P` made from it;
+- a `Borrow<any P>` made from it;
 - a closure capturing it by reference;
 - an interpolated literal borrowing it.
 
@@ -73,7 +73,7 @@ use(a)                           // 'a' is still live here
 **Rule 4, absorption, covers what a call stores.** After a call, a scoped `mutable` argument takes on what the call's other arguments borrow ([02](../../spec/02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-4-absorption)), since the callee may have stored views of them in it:
 
 - **A callee stores into a `mutable` parameter only what rule 5 lets it**, and absorption adds all of that to the argument's set. Another `mutable` argument contributes what it carries, not its place, since rule 5 rejects storing a view of another `mutable` parameter's place unless a `where` item names it, and then absorption adds it.
-- **A store through an exclusive view lands in memory the view's exclusive dependencies own.** Those places can now reach what was stored, so it joins their sets, transitively ([02](../../spec/02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-4-absorption)). An `owned` mutable view, such as a `MutableSpan`, a `mutating` closure or a `mutable any P`, can be stored through too, so it absorbs as a `mutable` argument does. A generic value whose type may be an owned mutable view absorbs the same way, unless its constraints include `Copyable` or `~Scoped`.
+- **A store through an exclusive view lands in memory the view's exclusive dependencies own.** Those places can now reach what was stored, so it joins their sets, transitively ([02](../../spec/02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-4-absorption)). An `owned` mutable view, such as a `MutableSpan`, a `MutableRef<any P>` or a `mutating` closure, can be stored through too, so it absorbs as a `mutable` argument does. A generic value whose type may be an owned mutable view absorbs the same way, unless its constraints include `Copyable` or `~Scoped`.
 - **A borrowed argument absorbs nothing**, because nothing is stored through a shared path into a place that can hold a view. What safe code can write through a shared path holds only unscoped values: an object's value, a thread-local and the contents of a `Synchronized` value must all be unscoped, `~Scoped` ([02](../../spec/02-views-and-dependencies/scoped-values.md#generic-code-and-scoped)).
 - **Creating a closure is a call with its captures as arguments**, so the closure absorbs what they carry. Calling it lets its `mutable` arguments absorb its set, and the closure itself absorbs only what its `keep` arguments carry ([05](../../spec/05-protocols-generics-and-closures/functions-and-closures.md#what-a-closure-may-keep-keep)).
 - **Assigning a whole value replaces a set only where the place is known.** The old value is destroyed, so nothing it reached is reachable through the place. Through a binding that may name either of several places, the assignment adds to each, since the others may still hold their old views. A write through an exclusive view adds too, since the view may cover only part of what it depends on.
