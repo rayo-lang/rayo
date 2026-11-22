@@ -60,7 +60,12 @@ low[0] = 0                                          // writes samples[0]
 
 ## Reborrowing
 
-**`&r` or `mutable &r` of a place `r` that holds a reference refers to what `r` refers to.** The result is a new reference to the same place, which keeps `r` borrowed until the new reference's last use: shared for `&r`, exclusively for `mutable &r`. This is a **reborrow**. `mutable &r` needs `r` changeable and holding a `mutable &T`, since writing through a reference needs both ([above](#forwarding-through-a-reference)).
+**`&r` or `mutable &r` of a place `r` that holds a reference refers to what `r` refers to.** The result is a new reference to the same place, a **reborrow**, and what it depends on follows from the kind of reference `r` holds ([02](../02-views-and-dependencies.md#dependencies)):
+
+- **Through a shared reference.** `&r` of a place that holds a `&T` carries what `r` carries, and leaves `r` itself unborrowed. A `&T` is implicitly copyable, so a copy of `r` would give the same reference, and the new one needs nothing of the place that holds `r`.
+- **Through a mutable reference.** `&r` or `mutable &r` of a place that holds a `mutable &T` keeps `r` borrowed until the new reference's last use, shared for `&r` and exclusively for `mutable &r`, and carries what `r` carries too. While the new reference is used, `r` can't reach the place in a way that conflicts with it, so the two are never two ways to change one place.
+
+`mutable &r` needs `r` changeable and holding a `mutable &T`, since writing through a reference needs both ([above](#forwarding-through-a-reference)).
 
 **So a function can be given one mutable reference twice, one call after the other**, and the reference stays usable after each:
 

@@ -30,6 +30,7 @@ adopt(alloc backpack.items.clone())     // a clone is a new value, so nothing mo
 
 - **A parameter `x: T` owns its argument as a `var` owns its value.** It may change or consume it. It is destroyed when the call ends, by returning or a panic's unwind, unless the callee has moved it on ([Destruction by unwinding](moves-copies-destruction.md#destruction-by-unwinding)). A `consuming` method's `self` is held the same way.
 - **A `&T` parameter is a `ref let` of the caller's place, and a `mutable &T` parameter is a `ref var` of it** ([Bindings](bindings.md#bindings-that-refer-to-a-place)). So the parameter names the place, of type `T`, and passing it on writes `&x` or `mutable &x`. Through a `mutable &T` parameter, `x += 1` writes the caller's value, and `x = makeEnemy()` replaces it.
+- **A reference parameter given a reference value names the place that value refers to**, as a `ref` binding given one does ([Bindings](bindings.md#bindings-that-refer-to-a-place)). Such a value is a call's result that returns a reference, `consume m` of a place holding a `mutable &T`, or a copy of a place holding a `&T`. A `mutable &T` moved in this way ends with the call. The kinds agree as they do for a `ref` binding: a `&T` parameter takes a shared reference, and a `mutable &T` parameter a mutable one.
 - **Only a parameter whose type is a reference names a place.** A parameter whose type holds a reference, such as `(&Enemy)?` or `List<&Enemy>`, owns the value it is given, as any `x: T` does.
 - **Methods take `self` as their declaration says.** A plain `func` takes it as a `ref let`, a `mutating func` as a `ref var`, and a `consuming func` owns it. A struct's primary initializer takes its fields owned, since the value owns its fields ([04](../04-types/structs.md#initializers)). So `World(enemies: consume enemies)` moves `enemies` in.
 
@@ -39,6 +40,12 @@ func respawn(_ e: mutable &Enemy) {
     e = makeEnemy()                           // replaces the caller's enemy
     damage(mutable &e, by: 5)                 // lends it on for change
 }
+
+let seen = &boss
+show(seen)                                    // 'seen' holds a '&Enemy': a copy of it goes in, and 'e' names 'boss'
+damage(seen, by: 5)                           // error: 'damage' takes a mutable reference, and 'seen' holds a shared one
+var lead = mutable &boss
+damage(consume lead, by: 5)                   // 'e' names 'boss', and the moved reference ends with the call
 ```
 
 **Parameter types line up across an indirection.** A protocol witness, a function converted to a function type, and a function type converted to another declare each parameter with the type of what they stand for, a reference included, and take `self` the same way ([05](../05-protocols-generics-and-closures/implicit-conversions.md#implicit-conversions)). So a call through any of them passes its arguments as a direct call would ([below](#borrowed-arguments)).
