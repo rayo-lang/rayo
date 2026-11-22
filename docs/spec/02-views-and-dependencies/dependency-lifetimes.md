@@ -221,7 +221,7 @@ pair.flip()                                      // both fields now depend on 's
 **A borrowing binding is a name for the place it borrows, so `=` on it writes the place:**
 
 ```swift
-var cur = &tree.root
+ref var cur = &tree.root
 cur = Node()                                     // replaces the node in tree.root
 ```
 
@@ -230,7 +230,7 @@ A cursor walking down a structure moves the name itself with `rebind … to …`
 ```swift
 struct Node(var value: Int = 0, var children: List<Box<Node>> = alloc [])
 
-var cur = &tree.root
+ref var cur = &tree.root
 for i in path {
     guard i < cur.children.count else { break }
     rebind cur to &cur.children[i].value         // 'cur' now names that child; nothing is written
@@ -242,7 +242,7 @@ tree.root.value = 1                              // error if placed before the l
 **`rebind x to p` makes the local `x` name the place `p` from then on**, as if declared with it there.
 
 - `x` is a local declared in the same function or closure body, not a parameter or a capture.
-- `p` has `x`'s type, and is lent as `x`'s declaration lent its place: a changeable place marked `&` for a `var`, and a place with nothing written before it for a `let`, which still changes nothing.
+- `p` has `x`'s type, and is lent as `x`'s declaration lent its place: a changeable place marked `&` for a `ref var`, and a place with nothing written before it for a `ref let`, which still changes nothing. A binding that owns its value is lent the same way, `&` for a `var` and nothing for a `let` (below).
 
 **`=` never rebinds**: `cur = &child` is a compile error, and `rebind` does that instead. `&p` is a value only where it makes a view of a type of its own:
 

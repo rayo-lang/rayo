@@ -40,7 +40,7 @@ tuple-type-elems = (identifier ':')? type (',' (identifier ':')? type)* ','? ;  
 
 ```ebnf
 block         = '{' statement* '}' ;
-statement     = declaration | expression | assignment | guard-stmt
+statement     = declaration | ref-decl | expression | assignment | guard-stmt
               | for-stmt | while-stmt | repeat-stmt | do-stmt                (* 'if' and 'when' are expressions *)
               | 'return' expression? | 'throw' expression | 'break' label? | 'continue' label?
               | 'defer' block | 'unsafe' block | 'unchecked' block
@@ -54,7 +54,7 @@ statement     = declaration | expression | assignment | guard-stmt
 assignment    = expression assign-op expression ;
 assign-op     = '=' | '+=' | '-=' | '*=' | '/=' | '%=' | '&=' | '|=' | '^=' | '<<=' | '>>=' | '&+=' | '&-=' | '&*=' | '+|=' | '-|=' | '*|=' | '&<<=' | '&>>=' ;
                                                                    (* a ⊕= b is a = a ⊕ b, with a's place worked out once (05) *)
-rebind-stmt   = 'rebind' identifier 'to' expression ;                   (* rebind cur to &cur.children[i].value: '&' first for a var, nothing for a let (02) *)
+rebind-stmt   = 'rebind' identifier 'to' expression ;                   (* rebind cur to &cur.children[i].value: '&' first for a ref var, nothing for a ref let (02) *)
 
 if-expr       = 'if' condition (',' condition)* block ('else' (if-expr | block))? ;   (* has a value only with 'else' (04) *)
 guard-stmt    = 'guard' condition (',' condition)* 'else' block ;

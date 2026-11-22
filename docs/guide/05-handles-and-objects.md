@@ -49,7 +49,7 @@ var grunt = Enemy(pos: [5, 0, 5], target: copy p1)    // the enemy keeps a copy 
 players[p1]?.hp -= 10                          // changes the player in place, or does nothing if it's gone
 if var p = &players[p1] { p.pos.y += 1 }       // changes it through 'p'
 let hp = copy players[p1]?.hp ?? 0             // a copy of its hp, or 0
-let sure = players[p1]!                        // panics if it's gone
+ref let sure = players[p1]!                    // panics if it's gone
 
 players.remove(p1)                             // the player leaves the game
 let gone = players[grunt.target!] == nil       // true: every copy of the handle is stale
@@ -75,7 +75,7 @@ The pool keeps its elements densely packed, so a loop visits them without gaps. 
 ```swift
 let p2 = players.insert(Player(pos: [4, 0, 0]))
 let p3 = players.insert(Player(pos: [8, 0, 0]))
-let p = players[p2]!                           // borrows the player where it lies, inside the pool
+ref let p = players[p2]!                       // borrows the player where it lies, inside the pool
 players.remove(p3)                             // error: 'players' is borrowed by 'p' (used below)
 log("hp \(p.hp)")
 ```
@@ -160,8 +160,8 @@ save.value?.visible = true                             // still the same widget
 
 **Each access to an object takes a mark, and an access that conflicts with a live one panics** ([03](../spec/03-handles-and-objects.md#dynamic-exclusivity)). It's the law of exclusivity from chapter 3, checked at run time, since the compiler can't see which weak pointers name one object:
 
-- **A read access**, such as a `let` binding or a call to a plain method, holds a shared mark. Any number may be live at once.
-- **A modify access**, such as an assignment, a `var` binding of `&` or a `mutating` call, holds an exclusive mark. No other access may be live with it.
+- **A read access**, such as a `ref let` binding or a call to a plain method, holds a shared mark. Any number may be live at once.
+- **A modify access**, such as an assignment, a `ref var` binding of `&` or a `mutating` call, holds an exclusive mark. No other access may be live with it.
 - **Each mark lasts until the last use of whatever depends on the access**, as a borrow does ([02](../spec/02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-6-dynamic-accesses)).
 
 **Comparing a weak pointer's `value` with `nil` takes no mark**, so it never conflicts.
@@ -189,7 +189,7 @@ func switchPanels(_ shown: WeakPointer<Widget>, _ hidden: WeakPointer<Widget>) {
 }
 ```
 
-**A `let` that borrows an object's value holds a read access the same way**, so changing the object while the `let` is still in use panics ([01](../spec/01-values-and-ownership/bindings.md#what-a-borrowing-let-sees)).
+**A `ref let` that refers to an object's value holds a read access the same way**, so changing the object while the `ref let` is still in use panics ([01](../spec/01-values-and-ownership/bindings.md#what-a-ref-let-sees)).
 
 **Elements of a pool need no marks.** `&players[h1, h2]` lends two of them at once, and is `nil` when both handles name one player or either is stale ([01](../spec/01-values-and-ownership/exclusivity.md#two-elements-of-one-collection)).
 

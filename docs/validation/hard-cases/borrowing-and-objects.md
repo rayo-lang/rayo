@@ -99,8 +99,8 @@ A cursor that binds a place can't be re-targeted with `=`, which writes the plac
 **Code needs two *computed* places of one value mutably at once**: place properties with a `mutate`, not stored fields ([02](../../spec/02-views-and-dependencies/place-and-value-properties.md#place-properties-borrow-and-mutate)).
 
 ```swift
-var p = &world.physics     // a place property's mutate
-var r = &world.render      // another one, on the same world
+ref var p = &world.physics     // a place property's mutate
+ref var r = &world.render      // another one, on the same world
 step(&p, &r)
 ```
 
@@ -322,8 +322,8 @@ adopt(list, list.count)                              // 'adopt' takes its first 
 when connect().state { .open(let buf) { … } … }      // matches part of a temporary whose type has a deinit
 when connect() { .open(var b) { b.append(0) } … }    // changes a payload in place
 for s in consume tags { names.append(s) }            // 'tags' is an inline array of Strings
-let e = if c { enemies[0] } else { makeEnemy() }     // a place on one path, a value on the other
-let b = attr ?? Bounds(lo: 0, hi: 1)                 // the same, through ??
+ref let e = if c { enemies[0] } else { makeEnemy() } // a place on one path, a value on the other
+ref let b = attr ?? Bounds(lo: 0, hi: 1)             // the same, through ??
 ```
 
 - **Must accept** moving it without cloning. If the values live in a pool and the containers hold handles, show that instead, and state which is idiomatic.
