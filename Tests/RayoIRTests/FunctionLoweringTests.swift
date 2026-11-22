@@ -117,13 +117,14 @@ struct FunctionLoweringTests {
     }
 
     @Test func `a 'return' of a local moves its value out as the result`() throws {
-        try expectLowering(of: "func main() {}\nfunc seven() -> Int {\nlet x = 7\nreturn x\n}", toMatch: "return-local")
+        let made = "func made() -> Stats {\nlet s = Stats(hp: 7)\nreturn s\n}"
+        try expectLowering(of: "func main() {}\n\(made)\nstruct Stats(let hp: Int)", toMatch: "return-local")
     }
 
     @Test func `a body's one expression, and a 'return' of a field, move their place out as the result`() throws {
         let source = """
             func main() {}
-            func given(_ n: Int) -> Int { n }
+            func given(_ s: Stats) -> Stats { s }
             func stats(_ e: Enemy) -> Stats {
                 let f = copy e
                 return f.stats

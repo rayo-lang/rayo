@@ -57,7 +57,7 @@ struct ElementLoweringTests {
                 let a = [Stats(hp: 1)]
                 let i: UInt = 0
                 let x = consume a[i].hp
-                let grid = [[1, 2]]
+                let grid = [[Stats(hp: 2), Stats(hp: 3)]]
                 _ = grid[0][1]
             }
             struct Stats(var hp: Int)

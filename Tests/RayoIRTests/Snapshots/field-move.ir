@@ -1,23 +1,35 @@
-struct Enemy {
-  var hp: Int
-  let armor: Int
+struct Shot {
+  let range: Int
+  var hit: Hit
+}
+
+struct Hit {
+  var damage: Int
 }
 
 main "main()"
 
-init "Enemy(hp: Int, armor: Int)"(hp: owned Int, armor: owned Int) -> Enemy
+init "Shot(range: Int, hit: Hit)"(range: owned Int, hit: owned Hit) -> Shot
+
+init "Hit(damage: Int)"(damage: owned Int) -> Hit
 
 func "main()"() -> Void {
-  let %0 e: Enemy @2:5-2:6
-  let %1 a: Int @3:5-3:6
-  temp %2: Enemy
+  let %0 s: Shot @2:5-2:6
+  let %1 h: Hit @3:5-3:6
+  temp %2: Hit
+  temp %3: Shot
+  temp %4: Hit
 bb0:
   declare %0
-  %0 @2:5-2:6 = call "Enemy(hp: Int, armor: Int)"(1, 2) @2:9-2:31
-  declare %1
-  %1 @3:5-3:6 = operand move %0.1 @3:9-3:24 @3:9-3:24
   declare %2
-  %2 @4:5-4:27 = call "Enemy(hp: Int, armor: Int)"(3, 4) @4:5-4:27
-  _ = operand move %2.0 @4:5-4:30 @4:5-4:30
+  %2 @2:29-2:43 = call "Hit(damage: Int)"(7) @2:29-2:43
+  %0 @2:5-2:6 = call "Shot(range: Int, hit: Hit)"(4, read %2 @2:29-2:43) @2:9-2:44
+  declare %1
+  %1 @3:5-3:6 = operand move %0.1 @3:9-3:22 @3:9-3:22
+  declare %3
+  declare %4
+  %4 @4:25-4:39 = call "Hit(damage: Int)"(2) @4:25-4:39
+  %3 @4:5-4:40 = call "Shot(range: Int, hit: Hit)"(1, read %4 @4:25-4:39) @4:5-4:40
+  _ = operand move %3.1 @4:5-4:44 @4:5-4:44
   return
 }

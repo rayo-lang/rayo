@@ -1,15 +1,21 @@
+struct Stats {
+  let hp: Int
+}
+
 main "main()"
+
+init "Stats(hp: Int)"(hp: owned Int) -> Stats
 
 func "main()"() -> Void {
 bb0:
   return
 }
 
-func "seven()"() -> Int {
-  let %0 x: Int @3:5-3:6
+func "made()"() -> Stats {
+  let %0 s: Stats @3:5-3:6
 bb0:
   declare %0
-  %0 @3:5-3:6 = operand 7 @3:9-3:10
+  %0 @3:5-3:6 = call "Stats(hp: Int)"(7) @3:9-3:21
   return move %0 @4:8-4:9
 bb1:
   unreachable

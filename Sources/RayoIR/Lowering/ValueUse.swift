@@ -5,7 +5,8 @@ enum ValueUse {
     /// the place keeps it.
     case read
     /// Takes the value, as a declaration of a `let` or `var`, an assignment, a `return`, `_ =`, an owned
-    /// argument or an array literal's element does, so the place gives it up.
+    /// argument or an array literal's element does, so the place gives it up. A value of an implicitly copyable type
+    /// is copied instead, so the place keeps it.
     case take
     /// Borrows the value, as the declaration of a `ref let` does: a place that a local holds is read through an
     /// access that the local's value then depends on, so the place keeps its value, and can't change or move while
