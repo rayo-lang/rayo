@@ -50,16 +50,14 @@ extension ExpressionChecker {
         }
     }
 
-    /// Reports `lent`, given to `parameter`, which owns its argument of the type `expected` names, and takes the
-    /// place's value as the call would with nothing written, so the error leaves the body's meaning whole.
+    /// Reports `lent`, given to `parameter`, which owns its argument of the type `expected` names, and returns nil.
+    /// Nothing written says whether the call copies the place's value or moves it, so the argument fails.
     private func reportReference(
         _ lent: LentPlace, toOwning parameter: ArgumentParameter, _ expected: Expectation,
     ) -> CheckedExpr? {
-        file.errors.reportKeepingMeaning(
-            .referenceToOwnedParameter(name: parameter.callee, type: typeName(of: expected.type)), at: lent.range,
-        )
-        let place = CheckedExpr(kind: .place(lent.place), type: lent.placeType, range: lent.range)
-        return fitted(place, to: expected)
+        file.errors.report(.referenceToOwnedParameter(name: parameter.callee, type: typeName(of: expected.type)),
+                           at: lent.range)
+        return nil
     }
 
     /// Reports each place that `value` hands the `ref let` called `binding` in a local out of scope here: one that a
