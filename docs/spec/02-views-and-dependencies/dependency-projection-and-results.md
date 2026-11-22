@@ -163,6 +163,7 @@ forEachLine(src.view) { line in lines.append(line) }
 
 - a `MutableSpan` or a `MutableRef`, such as a `MutableRef<any P>`;
 - a lock guard;
+- an exclusive `SoA` row;
 - a `mutating` or `consuming` function value, or a closure with an exclusive capture;
 - a value holding one of these.
 

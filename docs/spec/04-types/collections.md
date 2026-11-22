@@ -525,7 +525,7 @@ for (x, y) in consume z { … }       // 'z' holds a mutableZip: its only iterat
 
 ### Shared and mutable views of one collection
 
-**A collection's shared and mutable views have names of their own.** The mutable one is made by a `mutating` member, whose name puts `mutable` before the shared one's:
+**A collection's shared and mutable views have names of their own**, since `&` before an expression only lends that place for change, so the member's name is what says which view a binding or an argument gets. The mutable one is made by a `mutating` member, whose name puts `mutable` before the shared one's:
 
 | Shared | Mutable |
 | --- | --- |
