@@ -98,6 +98,31 @@ struct MoveTests {
         ])
     }
 
+    @Test func `'consume' moves the place out, so a later use of it is reported as a use after a move`() {
+        let source = """
+            func main() {
+                let e = Enemy(stats: Stats(hp: 1))
+                let s = consume e.stats
+                print(s.hp)
+                print(e.stats.hp)
+            }
+            struct Enemy(var stats: Stats)
+            struct Stats(var hp: Int)
+            """
+        let found = diagnostics(source)
+        #expect(found.map(\.description) == ["5:11: error[E0302]: 'e.stats' was moved"])
+        #expect(found.flatMap(\.notes) == ["3:13: note: moved here"])
+    }
+
+    // A `consume` moves as any other move does, so it can't take what a borrowed parameter or an array holds.
+    @Test func `'consume' of a borrowed parameter or of an element is reported as any such move is`() {
+        let source = "func main() {}\nfunc f(n: Int, a: [2 of Int]) -> Int {\n    consume n + consume a[0]\n}"
+        #expect(diagnostics(source).map(\.description) == [
+            "3:5: error[E0301]: can't move the borrowed parameter 'n'; write 'copy' before it to take a copy",
+            "3:17: error[E0315]: can't move an element out of 'a'; write 'copy' before it to take a copy",
+        ])
+    }
+
     // A `copy` is a value, not a place. As with any temporary, its elements can't be moved out of it; `copy a[0]`
     // copies the element instead. The source gives the copy no name, so the error names it as an array.
     @Test func `an element taken from a copy can't be moved out of the copy`() {

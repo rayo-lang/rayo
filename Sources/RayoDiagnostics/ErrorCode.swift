@@ -115,6 +115,9 @@ public enum ErrorCode: Sendable, Hashable {
     @Code(132, error: "expected ']' to close the index, found {found}")
     case unclosedIndex(found: FoundToken)
 
+    @Code(133, error: "expected a name after 'consume', found {found}")
+    case missingConsumedName(found: FoundToken)
+
     // MARK: Checking
 
     @Code(201, error: "the file has no 'main' function, so it can't be built into an executable or run")
@@ -338,6 +341,13 @@ public enum ErrorCode: Sendable, Hashable {
 
     @Code(276, error: "{type.withArticle} is too large to hold on the stack")
     case tooLargeForStack(type: TypeName)
+
+    @Code(277, error: "a 'var' can't borrow '{place}'; write 'copy' before it to take a copy, or 'consume' to move it")
+    case varBorrowsPlace(place: String)
+
+    @Code(278, error:
+        "an assignment can't borrow '{place}'; write 'copy' before it to take a copy, or 'consume' to move it")
+    case assignmentBorrowsPlace(place: String)
 
     // MARK: Ownership
 

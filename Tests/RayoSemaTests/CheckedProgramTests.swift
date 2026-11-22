@@ -93,7 +93,7 @@ struct CheckedProgramTests {
             func main() {
                 let x = 1
                 var y: Int
-                y = x
+                y = copy x
                 y += 2
                 y -= 1
                 y *= 3

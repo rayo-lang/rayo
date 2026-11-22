@@ -25,7 +25,7 @@ struct ExpressionLoweringTests {
         let body = """
             let a = 1
             var b = 2
-            b = a
+            b = consume a
             _ = b
             let t = true
             let d = 3
