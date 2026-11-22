@@ -36,6 +36,7 @@ struct DeclarationTests {
         }
         #expect(function.parameters.map(\.convention) == [.borrowed, .mutable, nil])
         #expect(function.parameters.map(\.type.spelling) == ["Int", "[2 of Int]", "Bool"])
+        #expect(function.parameters.map(\.spelledType) == ["&Int", "mutable &[2 of Int]", "Bool"])
     }
 
     @Test(arguments: [

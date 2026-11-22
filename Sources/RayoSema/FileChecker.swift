@@ -172,12 +172,7 @@ final class FileChecker {
             type = nil
         }
         return Parameter(label: parameter.label, convention: convention, type: type,
-                         spelledType: spelling(of: parameter))
-    }
-
-    /// The type of `parameter` as the source writes it, after its reference where it has one, such as `&Enemy`.
-    private func spelling(of parameter: Param) -> String {
-        (parameter.convention.map { $0.rawValue } ?? "") + parameter.type.spelling
+                         spelledType: parameter.spelledType)
     }
 
     /// The result type that `function`, which is `id`, declares, or `.givenByBody` where its body gives it.

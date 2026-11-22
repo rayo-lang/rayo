@@ -14,4 +14,9 @@ public struct Param: Sendable {
     /// The value a call that leaves the argument out passes.
     public var defaultValue: Expr?
     public var range: SourceRange
+
+    /// The parameter's type as the source writes it, after its reference where it has one, such as `&Enemy`.
+    public var spelledType: String {
+        (convention?.rawValue ?? "") + type.spelling
+    }
 }
