@@ -11,7 +11,7 @@ func main() {
     // The goblin sizes the troll up on copies, which leave the troll as it is: the troll's health after one blow,
     // how many such blows it can take, and how many once its armor is cracked.
     let blow = hit(from: goblin, on: troll, in: 1)
-    var left = copy troll.stats.hp
+    var left = troll.stats.hp
     left -= blow
     print(left)
     print(hitsToFell(troll.stats.hp, by: blow))
@@ -66,7 +66,7 @@ func fight(between goblin: Enemy, and troll: Enemy) -> Int {
         // The goblin is enraged on the round its health falls below half, and its fury cracks the troll's armor.
         let raging = g.stats.hp * 2 < g.stats.maxHp
         if raging != g.enraged {
-            g.enraged = copy raging
+            g.enraged = raging
             t.stats.armor /= 2
             print(g.enraged)
         }
@@ -75,7 +75,7 @@ func fight(between goblin: Enemy, and troll: Enemy) -> Int {
     // Whether the goblin stands, the winner's health, and the winner's boast of a fight twice as long as it was.
     print(g.stats.hp > 0)
     if g.stats.hp > 0 { print(g.stats.hp) } else { print(t.stats.hp) }
-    var boast = copy round
+    var boast = round
     boast *= 2
     print(boast)
     return round
@@ -84,7 +84,7 @@ func fight(between goblin: Enemy, and troll: Enemy) -> Int {
 // Gives the damage that `attacker`'s hit in `round` deals `defender`.
 func hit(from attacker: Enemy, on defender: Enemy, in round: Int) -> Int {
     // The hit lands twice as hard on every third round, and on every round once the attacker is enraged.
-    var damage = copy attacker.strength
+    var damage = attacker.strength
     if round % 3 == 0 || attacker.enraged { damage *= 2 }
 
     // Armor at least as strong as the hit leaves it a scratch, and weaker armor takes off half its own strength.

@@ -33,4 +33,39 @@ struct ImplicitCopyTests {
             exitCode: 0, output: "6\n3\nfalse\n15\n2\ntrue\n5\n", errors: "",
         ))
     }
+
+    // A `let`, a `var` and an assignment take an Int, a UInt or a Bool from a place that is used, and changed, after
+    // them, and from a borrowed parameter's field.
+    @Test(arguments: [["--debug"], ["--release"]])
+    func `an Int, UInt or Bool place given to a 'let', a 'var' or an assignment is copied`(mode: [String]) {
+        let source = """
+            func main() {
+                var p = 5
+                let q = p
+                var r: UInt = 2
+                var s = r
+                var alive = true
+                var t = false
+                print(t)
+                t = alive
+                p = p + 1
+                r = r + 1
+                alive = false
+                s = s + 10
+                print(p + q)
+                print(r + s)
+                print(t)
+                print(alive)
+                print(hpOf(Stats(hp: 7)))
+            }
+            func hpOf(_ s: Stats) -> Int {
+                let hp = s.hp
+                return hp
+            }
+            struct Stats(var hp: Int)
+            """
+        #expect(run(source, options: mode) == CommandResult(
+            exitCode: 0, output: "false\n11\n15\ntrue\nfalse\n7\n", errors: "",
+        ))
+    }
 }

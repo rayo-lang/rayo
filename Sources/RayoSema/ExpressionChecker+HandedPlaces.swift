@@ -4,8 +4,10 @@ import RayoDiagnostics
 extension ExpressionChecker {
     /// Reports each place rooted in a local that `value` hands its position to, with the error `code` gives for the
     /// place's name. A position that takes its value but can't borrow it, such as a `let`'s or `var`'s declaration or
-    /// an assignment, has its places reported so, since nothing written says whether to copy the value or move it.
+    /// an assignment, has its places reported so, since nothing written says whether to copy the value or move it. A
+    /// value of an implicitly copyable type is copied there, so it has none reported.
     func reportHandedPlaces(of value: CheckedExpr, as code: (String) -> ErrorCode) {
+        guard !value.type.isImplicitlyCopyable else { return }
         for handed in value.handedPlaces {
             file.errors.report(code(sourceName(of: handed)), at: handed.place.range)
         }
