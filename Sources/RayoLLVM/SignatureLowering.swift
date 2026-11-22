@@ -41,9 +41,8 @@ struct SignatureLowering {
         // A large borrowed argument is read in the caller's place, which nothing else changes while the call runs,
         // unless the value changes through its own synchronization.
         case .borrowed: .callerPlace(pointerAttributes(to: type, access: borrowedAccess(to: type)))
-        // A large owned argument is copied to a slot that the callee owns. Passing the place it moves from wants the
-        // call's arguments checked against each other first, since one place could be lent to one and moved into
-        // another.
+        // A large owned argument is copied to a slot that the callee owns, which no other argument of the call
+        // reaches.
         case .owned: .filledSlot(pointerAttributes(to: type, access: [.noAlias]))
         // A mutable argument is passed in the caller's place above.
         case .mutable: preconditionFailure("a mutable argument is passed in the caller's place above")
