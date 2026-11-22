@@ -57,7 +57,7 @@ task-decl     = 'task' 'func' identifier generic-params? param-clause
 param-clause  = '(' (param (',' param)* ','?)? ')' ;
 param         = (arg-label | '_')? identifier ':' param-convention? type ('=' expression)? ;
 arg-label     = identifier | keyword ;                            (* func index(of x: T, in s: Span<T>) *)
-param-convention = 'mutable' | 'owned' ;                           (* none: borrowed, or owned for the parameters 01 receives owned *)
+param-convention = 'mutable' | 'owned' ;                           (* none: borrowed, or owned for the parameters received owned with nothing written (01) *)
 result-type   = type | result-base '!' ;                           (* a bare '!' infers the failure type: only on a non-public function with a body (10) *)
 init-result   = '->' 'Self' '!' failure-type? ;                    (* an initializer that can fail: init(mass: Float) -> Self!PhysicsError; bare only on a non-public one (10) *)
 
