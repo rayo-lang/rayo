@@ -157,7 +157,7 @@ Each `heal(hp: &hp)` lends `heal` the variable that `healTwice` borrowed from it
 
 ## Borrowing in a declaration
 
-A declaration borrows too, the way a plain parameter does. You've seen `let same = hits`, which borrows a list to read it ([Moves and copies](02-moves-and-copies.md#declaring-assigning-and-returning)).
+A declaration borrows too, the way a plain parameter borrows its argument. You've seen `let same = hits`, which borrows a list to read it ([Moves and copies](02-moves-and-copies.md#declaring-assigning-and-returning)).
 
 To borrow something to change it, write `&` before it, as in a call. Declare the name with `var`, since you'll change the value through it. Here `first` borrows `hits[0]`, which is the list's first element:
 

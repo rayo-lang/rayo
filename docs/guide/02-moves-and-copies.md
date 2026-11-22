@@ -150,7 +150,7 @@ let finished = consume hits
 log("\(hits.count)")            // error: 'hits' was moved
 ```
 
-A `var` can change what it holds, and a borrow can't. So a `var` declared from another variable says what it wants: `copy`, `consume`, or `&` to borrow the value and change it, which chapter 3 shows. Leaving all three out is an error that names them. Assigning to a variable that already exists works the same way, with `copy` or `consume`:
+A `var` can change what it holds, and a borrow can't. So a `var` declared from another variable says what it wants: `copy`, `consume`, or `&` to borrow the value and change it, which [chapter 3](03-borrowing.md#borrowing-in-a-declaration) shows. Leaving all three out is an error that names them. Assigning to a variable that already exists works the same way, with `copy` or `consume`:
 
 ```swift
 alloc func newRound() -> List<Int> {

@@ -63,10 +63,10 @@ p.step(dt)
 - **Bitfields.** Imported bitfields that form one C **memory location** ([08](../08-c-interop/imports-and-inline-c.md#structs-unions-and-enums)). Bitfields in different memory locations, or a bitfield and a neighboring field, are separate places, which two threads may write at once, as C11 allows.
 
 ```swift
-g(&e.f, &e.u)                            // error when 'f' and 'u' are members of one union
-join({ e.f = 1 }, { use(e.u) })          // error: the same
-join({ v.x = copy x }, { v.y = copy y }) // error for a Simd 'v': each closure accesses the whole vector
-if var (first, second) = &pair { ... }   // fine for an optional tuple 'pair': two disjoint borrows
+g(&e.f, &e.u)                              // error when 'f' and 'u' are members of one union
+join({ e.f = 1 }, { use(e.u) })            // error: the same
+join({ v.x = copy x }, { v.y = copy y })   // error for a Simd 'v': each closure accesses the whole vector
+if var (first, second) = &pair { ... }     // fine for an optional tuple 'pair': two disjoint borrows
 ```
 
 ```c

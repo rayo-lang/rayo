@@ -2,7 +2,7 @@
 
 [01 · Values and ownership](../01-values-and-ownership.md)
 
-A move hands a value to a new owner and leaves its old place without that value. `consume place` writes one, wherever a value goes. A few constructs also take a value with no `consume` written, since what they hand it to keeps it ([Moves](moves-copies-destruction.md#moves)):
+A move hands a value to a new owner and leaves its old place without that value. `consume place` writes one, wherever a value goes. A few constructs also take a value with no `consume` written ([Moves](moves-copies-destruction.md#moves)):
 
 - `return`, `throw` and `await`;
 - `try`, `try?` and `try!`, and `_ = x` ([10](../10-errors-and-safety/typed-errors.md#propagating-errors-with-try));
@@ -11,9 +11,9 @@ A move hands a value to a new owner and leaves its old place without that value.
 - a global's initializer;
 - the elements of a tuple or array literal, and an enum case's payload.
 
-A copyable `const` is the exception: taking one makes a new value ([below](#constants)). A declaration, a condition and a pattern borrow a place instead, and a `var` or an assignment given a place writes `consume` or `copy` ([Bindings](bindings.md#bindings)).
+A copyable `const` is the exception: taking one makes a new value ([below](#constants)). A declaration, a condition and a pattern borrow a place instead ([Bindings](bindings.md#bindings)), and an assignment of one needs `copy` or `consume` ([Moves](moves-copies-destruction.md#moves)).
 
-**`consume place` writes a move as an expression.** Moving a place's value out, implicitly or this way, is **consuming** the place. `consume` also moves where the code would otherwise borrow: in `let x = consume y`, `x` owns the value, and in `f(consume x)` for a borrowed parameter, the moved value is a temporary, destroyed at the end of the statement.
+**`consume place` writes a move as an expression.** Moving a place's value out, implicitly or this way, is **consuming** the place. `consume` also moves where the code would otherwise borrow, as `kept` and `show` do below. A binding of it owns the value, and for a borrowed parameter, the moved value is a temporary, destroyed at the end of the statement.
 
 ```swift
 var loot = alloc List<Item>()

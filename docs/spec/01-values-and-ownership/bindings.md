@@ -23,15 +23,13 @@ let all = consume enemies          // a move: 'enemies' can't be used until it g
 | `let x = consume place`, `var x = consume place` | `_ x: owned T` | A **move** from a place the code owns ([What can be moved from](moving-values-out.md#what-can-be-moved-from)): `place` can't be used until it gets a new value | A `memcpy` at most |
 | `let x = copy place`, `var x = copy place` | | An independent **copy** of a copyable value; a move-only one is copied with `alloc place.clone()` | A `memcpy` |
 | `let x = f()`, `var x = f()` | | The binding owns the value, even a move-only scoped value such as a `MutableSpan` or a lock guard ([02](../02-views-and-dependencies/scoped-values.md#scoped-values)); `_ = x` ends it early | None |
-| `var x = place` | | A compile error that names `copy`, `consume` and `&`, since a `var` may change what it holds, and a shared borrow can't | |
+| `var x = place` | | A compile error that names `copy`, `consume` and `&`, since a `var` may change what it holds, and a shared borrow can't. A copyable `const`, and a conversion that makes a value of its own from the place, are the exceptions (below) | |
 
 - **A binding that names a place it borrows is a borrowing binding**, and can't be consumed. A declaration makes one from a place, with nothing written or with `&`, unless the initializer makes a value of its own from the place, such as a view ([below](#lending-a-place-for-change)). A condition or pattern makes one by binding a place ([below](#conditions-and-patterns)).
-- **A binding of anything that isn't a place owns it**, as a binding of a call's result does: a literal, an operator's result, `copy place` or `consume place`. A binding that owns its value can move it on, and a `let` still can't change it.
-- **A `let` of a value binds the value itself**, which the binding owns, since there is no place to borrow. A value property, whose accessor is a `get`, gives such a value ([below](#what-a-borrowing-let-sees)).
-- **A `var` given a place writes `copy`, `consume` or `&` before it**, and leaving all three out is a compile error that names them, since a `var` may change what it holds and a shared borrow can't. That holds as well for an expression the initializer hands its position to:
-    - the last expression of an `if` or `when` arm, or of an `unsafe` block ([below](#if-and-when-as-values));
-    - an operand of `??` ([04](../04-types/enums.md#optionals)).
-- **An assignment from a place writes `copy` or `consume`**, as a `var` does ([Moves](moves-copies-destruction.md#moves)), and `rebind` points a `var` at another place ([02](../02-views-and-dependencies/dependency-lifetimes.md#pointing-a-name-at-another-place-rebind)).
+- **A binding of anything that isn't a place owns it**, as a binding of a call's result does: a literal, an operator's result, `copy place`, `consume place`, or what a value property's `get` returns, since there is no place to borrow ([below](#what-a-borrowing-let-sees)). A binding that owns its value can move it on, and a `let` still can't change it.
+- **A `var` given a place writes `copy`, `consume` or `&` before it**, and leaving all three out is a compile error that names them, since a `var` may change what it holds and a shared borrow can't. That holds as well for an expression the initializer hands its position to, the last expression of an `if` or `when` arm or of an `unsafe` block ([below](#if-and-when-as-values)), or an operand of `??` ([04](../04-types/enums.md#optionals)).
+- **A `var` needs none of the three where it gets a value of its own from the place.** A copyable `const` gives a new value ([Constants](moving-values-out.md#constants)). So does a conversion that makes a value from the place, such as a view of it, a numeric widening, or a copyable value's conversion to or from its static type ([below](#conversions)).
+- **An assignment from a place writes `copy` or `consume` too**, as [Moves](moves-copies-destruction.md#moves) says.
 - **Views taken from a borrowing `let` depend on the place itself** ([02](../02-views-and-dependencies/dependency-projection-and-results.md#rule-1-projection)).
 - **A place in a temporary's own storage dies with its statement**, such as `makeEnemy().pos`. So a `let` of one owns that value instead, moving it out as [What can be moved from](moving-values-out.md#what-can-be-moved-from) allows. Where that can't move it, the binding is a compile error unless it is written with `copy`, or with `alloc` and `.clone()`.
 - **A place that a `where return outlives self` place property hands out from a temporary lies outside the temporary**, such as `makeSpan()[0]`. So a `let` of one borrows it, depending on what the temporary carries ([02](../02-views-and-dependencies/dependency-projection-and-results.md#temporaries)).
@@ -148,7 +146,7 @@ if let e = consume spare { ... }           // moves the optional out of 'spare':
 
 - **A `let` looks at the place, and a `var` changes it in place**, with the place marked `&`.
 - **A value, such as a call's result, is owned by the binding**, as in a declaration. `consume place` is such a value: it takes the value out of a place the code owns ([What can be moved from](moving-values-out.md#what-can-be-moved-from)), and `copy place` makes one.
-- **A `var` given a place takes `copy`, `consume` or `&` before it**, as in a declaration ([above](#bindings)).
+- **A `var` given a place follows the rule for a `var` declaration** ([above](#bindings)).
 
 **A condition may also unwrap an optional under the name it already has**, as `if let x` does ([below](#unwrapping-under-the-same-name-if-let-x)). Narrowing unwraps a local, a parameter or a stored field of one in place, with no binding at all ([04](../04-types/enums.md#narrowing)).
 
@@ -316,7 +314,7 @@ The hidden local is declared where the binding is, and destroyed with it if its 
 **A converted value is a new value.** When a binding's declared type differs from its initializer's, the conversion says what it does with a place ([05](../05-protocols-generics-and-closures/implicit-conversions.md#implicit-conversions)):
 
 - **A numeric widening, and a copyable value's conversion to or from its [static type](../02-views-and-dependencies/scoped-values.md#converting-to-and-from-a-static-type), read the place** and make a new value, which the binding owns. A move-only value's conversion to or from its static type takes it, as the conversions below do.
-- **These conversions take the value**, so a place takes `consume` or `copy` before it, as a `var` does, and leaving both out is a compile error that names them:
+- **These conversions take the value**, so in a binding a place takes `consume` or `copy` before it, and leaving both out is a compile error that names them:
     - wrapping it in an optional or an error union, or as a `Result`'s `.success`;
     - making a `Box<T>` or an object pointer into one of an existential;
     - moving a closure into a `Closure`.
