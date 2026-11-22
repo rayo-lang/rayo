@@ -107,7 +107,7 @@ spawn(.grunt)                                           // leaves out 'at:', so 
 
 **Which arguments are the caller's place follows from the signature alone**: the function called, its result type, its `where` clause, and each parameter's type.
 
-- **Adding `keep` to a `&T` parameter makes its argument the caller's place** (above). A conversion that adds `keep` to a function type stays sound, since the caller's place is always a valid argument. A copy of its bits is only an option the compiler takes when nothing views the argument after the call ([05](../05-protocols-generics-and-closures/implicit-conversions.md#implicit-conversions)).
+- **Adding `keep` to a `&T` parameter makes its argument the caller's place** (above). A conversion that adds `keep` to a function type stays sound, since the caller's place is always a valid argument. A copy of its bits is only an option the compiler takes when nothing views the argument after the call ([above](#borrowed-arguments)).
 - **A call through a function value passes its arguments as a direct call to a function of its type would.** Every function-type conversion keeps the parameter types, or adds `keep`, which only makes more arguments the caller's place ([05](../05-protocols-generics-and-closures/implicit-conversions.md#implicit-conversions)). `ptr(to:)` is never a function value ([10](../10-errors-and-safety/unsafe-code.md#taking-an-address)).
 
 ## Evaluation order, and when a call's borrows begin
