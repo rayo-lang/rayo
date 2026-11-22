@@ -168,7 +168,7 @@ forEachLine(src.view) { line in lines.append(copy line) }
 
 **A scoped value that only holds shared views is no mutable view**, as `List<StringView>` isn't. Neither is a function value made from a named function, or from a literal that captures nothing, since it views no storage.
 
-**A function that returns a mutable view must take a `mutable` argument or an `owned` mutable view.** A parameter of an exclusive view's type is one of the parameters that [01](../01-values-and-ownership/parameters.md#parameters) receives owned. A borrowed parameter that holds a `MutableSpan` doesn't qualify, since a second view could then write what the first still reads. An `unsafe` function is exempt (next).
+**A function that returns a mutable view must take a `mutable` argument or an `owned` mutable view.** A parameter of an exclusive view's type is received `owned` with no `owned` written, unless it is declared `mutable` ([01](../01-values-and-ownership/parameters.md#parameters)). A borrowed parameter that holds a `MutableSpan` doesn't qualify, since a second view could then write what the first still reads. An `unsafe` function is exempt (next).
 
 ```swift
 struct Halves<T>(let low: MutableSpan<T>, let high: MutableSpan<T>): Scoped
