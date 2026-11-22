@@ -2,15 +2,24 @@
 
 [01 · Values and ownership](../01-values-and-ownership.md)
 
-**A declaration borrows a place read-only, as an argument and a condition do, unless it says otherwise.** `let` and `var` say only whether the binding may change what it holds. So a name bound to a place reads the place where it lies, whatever its type. Each other operation has one spelling, the same in every position: `&` lends the place for change, `copy` makes a second value, and `consume` moves the value out ([Moving values out](moving-values-out.md#moving-values-out)).
+**A declaration says two things about the binding it makes, with one word for each: whether the binding owns a value or refers to a place, and whether it may change.** A parameter's convention says the same where the parameter is declared ([Parameters](parameters.md#parameters)). So the declaration tells a reader what the source may do while the name lives, whether the name can be consumed, and who destroys the value.
+
+| | Can't change | May change |
+| --- | --- | --- |
+| Owns a value | `let x = v` | `var x = v` |
+| Refers to a place | `ref let x = p` | `ref var x = &p` |
+
+**`ref` marks a binding that refers to a place.** `ref let` borrows the place read-only, and `ref var` borrows it for change. A `let` or `var` without `ref` owns what it binds. Each other operation has one spelling, the same in every position: `&` lends a place for change, `copy` makes a second value, and `consume` moves the value out ([Moving values out](moving-values-out.md#moving-values-out)).
 
 ```swift
 var enemies = loadEnemies()
 
-let seen = enemies[0]              // looks: a read-only name for the enemy, nothing copied
-var boss = &enemies[0]             // changes it in place: boss.hp = 0 changes enemies[0]
+ref let seen = enemies[0]          // refers to the enemy, read-only: nothing copied
+ref var boss = &enemies[0]         // refers to it for change: boss.hp = 0 changes enemies[0]
 var spare = copy enemies[0]        // a second enemy of its own
-var last = enemies[1]              // error: a var takes 'copy', 'consume' or '&' before a place
+let last = enemies[1]              // error: write 'copy' or 'consume' before 'enemies[1]', or declare 'ref let'
+ref var next = enemies[1]          // error: write '&enemies[1]'
+ref let other = &enemies[1]        // error: '&' lends for change; declare 'ref var'
 let first = consume enemies[0]     // error: an element can't move out of its list
 let mesh = loadMesh()              // a value, not a place: the binding owns it
 let all = consume enemies          // a move: 'enemies' can't be used until it gets a new value
@@ -18,43 +27,66 @@ let all = consume enemies          // a move: 'enemies' can't be used until it g
 
 | Form | Like the parameter | Meaning | Cost |
 | --- | --- | --- | --- |
-| `let x = place` | `_ x: T` | A shared **borrow** of `place`, of any type: `place` can't be changed, moved or destroyed while `x` is live. A copyable `const` gives a new value instead ([Constants](moving-values-out.md#constants)) | None |
-| `var x = &place` | `_ x: mutable T` | A mutable **borrow** of a [changeable place](#changeable-places): `place` is reachable only through `x` while `x` is live | None |
+| `ref let x = place` | `_ x: T` | A shared **borrow** of `place`, of any type: `place` can't be changed, moved or destroyed while `x` is live | None |
+| `ref var x = &place` | `_ x: mutable T` | A mutable **borrow** of a [changeable place](#changeable-places): `place` is reachable only through `x` while `x` is live | None |
 | `let x = consume place`, `var x = consume place` | `_ x: owned T` | A **move** from a place the code owns ([What can be moved from](moving-values-out.md#what-can-be-moved-from)): `place` can't be used until it gets a new value | A `memcpy` at most |
 | `let x = copy place`, `var x = copy place` | | An independent **copy** of a copyable value; a move-only one is copied with `alloc place.clone()` | A `memcpy` |
 | `let x = f()`, `var x = f()` | | The binding owns the value, even a move-only scoped value such as a `MutableSpan` or a lock guard ([02](../02-views-and-dependencies/scoped-values.md#scoped-values)); `_ = x` ends it early | None |
-| `var x = place` | | A compile error that names `copy`, `consume` and `&`, since a `var` may change what it holds, and a shared borrow can't. A copyable `const`, and a conversion that makes a value of its own from the place, are the exceptions (below) | |
+| `let x = place`, `var x = place` | | A compile error that names `copy`, `consume` and `ref let`, with the exceptions below | |
 
-- **A binding that names a place it borrows is a borrowing binding**, and can't be consumed. A declaration makes one from a place, with nothing written or with `&`, unless the initializer makes a value of its own from the place, such as a view ([below](#lending-a-place-for-change)). A condition or pattern makes one by binding a place ([below](#conditions-and-patterns)).
-- **A binding of anything that isn't a place owns it**, as a binding of a call's result does: a literal, an operator's result, `copy place`, `consume place`, or what a value property's `get` returns, since there is no place to borrow ([below](#what-a-borrowing-let-sees)). A binding that owns its value can move it on, and a `let` still can't change it.
-- **A `var` given a place writes `copy`, `consume` or `&` before it**, and leaving all three out is a compile error that names them, since a `var` may change what it holds and a shared borrow can't. That holds as well for an expression the initializer hands its position to, the last expression of an `if` or `when` arm or of an `unsafe` block ([below](#if-and-when-as-values)), or an operand of `??` ([04](../04-types/enums.md#optionals)).
-- **A `var` needs none of the three where it gets a value of its own from the place.** A copyable `const` gives a new value ([Constants](moving-values-out.md#constants)). So does a conversion that makes a value from the place, such as a view of it, a numeric widening, or a copyable value's conversion to or from its static type ([below](#conversions)).
-- **An assignment from a place writes `copy` or `consume` too**, as [Moves](moves-copies-destruction.md#moves) says.
-- **Views taken from a borrowing `let` depend on the place itself** ([02](../02-views-and-dependencies/dependency-projection-and-results.md#rule-1-projection)).
-- **A place in a temporary's own storage dies with its statement**, such as `makeEnemy().pos`. So a `let` of one owns that value instead, moving it out as [What can be moved from](moving-values-out.md#what-can-be-moved-from) allows. Where that can't move it, the binding is a compile error unless it is written with `copy`, or with `alloc` and `.clone()`.
-- **A place that a `where return outlives self` place property hands out from a temporary lies outside the temporary**, such as `makeSpan()[0]`. So a `let` of one borrows it, depending on what the temporary carries ([02](../02-views-and-dependencies/dependency-projection-and-results.md#temporaries)).
+## Bindings that refer to a place
+
+**A binding that refers to a place it borrows is a borrowing binding**, and can't be consumed, since the place's value has another owner. A declaration makes one only with `ref`. A condition or a pattern makes one by binding a place ([below](#conditions-and-patterns)).
+
+- **`ref let` and `ref var` declare locals**, so they appear only in a function or closure body. A borrow lasts no longer than the body that makes it ([How long a borrow lasts](#how-long-a-borrow-lasts)).
+- **`&` marks every mutable reference made to a place, in a declaration as at a call** ([Lending a place for change](#lending-a-place-for-change)). So `ref var x = p` is a compile error that says to write `&p`. `ref let x = &p` is one that says to write `ref var`, since `&` lends the place for change and a `ref let` changes nothing.
+- **`var` on a reference means the place may change through it**, never that the name may point elsewhere. So `x = q` on a `ref var` writes `q` into the place `x` refers to. Pointing the name at another place is a `rebind` ([02](../02-views-and-dependencies/dependency-lifetimes.md#pointing-a-name-at-another-place-rebind)).
+- **A `ref let` or `ref var` given a value, with no place to refer to, is a compile error** that says to write `let` or `var`, which own it. A call's result, a literal, an operator's result, `copy place`, `consume place` and what a value property's `get` returns are values. So is a place in a temporary's own storage, such as `makeEnemy().hp`, which dies with its statement. An `if`, `when` or `??` whose arms mix places and values is the exception: each value is kept in a hidden local ([below](#if-and-when-as-values)).
+- **Views taken from a `ref let` depend on the place itself** ([02](../02-views-and-dependencies/dependency-projection-and-results.md#rule-1-projection)).
+- **A place that a `where return outlives self` place property hands out from a temporary lies outside the temporary**, such as `makeSpan()[0]`. So a `ref let` can refer to it, depending on what the temporary carries ([02](../02-views-and-dependencies/dependency-projection-and-results.md#temporaries)).
 - **No borrowing binding may bind an under-aligned place**: that is a compile error, since a load or store of its type at that address may be invalid, and fault on some targets ([04](../04-types/structs.md#packed-structs-and-under-aligned-places)).
 
-## What a borrowing `let` sees
+```swift
+ref var lead = &enemies[0]
+lead = makeEnemy()                 // writes the new enemy into enemies[0]; 'lead' still refers to it
+ref let hp = makeEnemy().hp        // error: the enemy dies with the statement; write 'let'
+```
 
-**Changing a place while a `let` that borrows it is used is a compile error**, since the `let` is a shared borrow ([The law of exclusivity](exclusivity.md#the-law-of-exclusivity)). For a place reached through an object or a thread-local, it is a panic instead ([below](#how-long-a-borrow-lasts)). A `Synchronized` value still changes through its own synchronization ([07](../07-concurrency/synchronization.md#the-synchronized-contract)).
+## Bindings that own a value
+
+**A `let` or `var` owns what it binds**, as a binding of a call's result does. So it can move its value on, and a `let` still can't change it.
+
+- **A `let` or `var` given a place writes `copy` or `consume` before it, or is declared `ref let`.** Leaving all three out is a compile error that names them, since the place's value already has an owner. That holds as well for an expression the initializer hands its position to: the last expression of an `if` or `when` arm or of an `unsafe` block ([below](#if-and-when-as-values)), or an operand of `??` ([04](../04-types/enums.md#optionals)).
+- **A `let` or `var` given `&place` is a compile error that says to write `ref var`**, since `&` lends the place, and a binding without `ref` refers to no place. Where `&place` makes a view of a type of its own, such as the mutable form of a `get`, the binding owns that view instead ([Lending a place for change](#lending-a-place-for-change)).
+- **An assignment from a place writes `copy` or `consume`**, and leaving both out is a compile error that names them, as [Moves](moves-copies-destruction.md#moves) says.
+
+**Three exceptions need none of `copy`, `consume` and `ref let`, since each gives the binding a value of its own to own:**
+
+- **A copyable `const`** gives a new value each time ([Constants](moving-values-out.md#constants)).
+- **A conversion that makes a value from the place**, such as a view of it, a numeric widening, or a copyable value's conversion to or from its static type, gives a new value ([below](#conversions)).
+- **A place in a temporary's own storage dies with its statement**, such as `makeEnemy().pos`. So a `let` or `var` of one owns that value, moving it out as [What can be moved from](moving-values-out.md#what-can-be-moved-from) allows. Where that can't move it, the binding is a compile error unless it is written with `copy`, or with `alloc` and `.clone()`.
+
+## What a `ref let` sees
+
+**Changing a place while a `ref let` that refers to it is used is a compile error**, since the `ref let` is a shared borrow ([The law of exclusivity](exclusivity.md#the-law-of-exclusivity)). For a place reached through an object or a thread-local, it is a panic instead ([below](#how-long-a-borrow-lasts)). A `Synchronized` value still changes through its own synchronization ([07](../07-concurrency/synchronization.md#the-synchronized-contract)).
 
 **Making a field computed, or stored, never silently changes what a binding of it gets.** What a binding of `e.f` gets follows from how `f` is declared:
 
-- **A stored field** gives another name for the field, and `consume` moves it out of `e`, as [What can be moved from](moving-values-out.md#what-can-be-moved-from) allows.
-- **A value property** gives the value its `get` returns, which the binding owns ([02](../02-views-and-dependencies/place-and-value-properties.md#value-properties-get-and-set)).
+- **A stored field** is a place: a `ref let` refers to it, and `consume` moves it out of `e`, as [What can be moved from](moving-values-out.md#what-can-be-moved-from) allows.
+- **A value property** gives the value its `get` returns, which a `let` owns ([02](../02-views-and-dependencies/place-and-value-properties.md#value-properties-get-and-set)).
 - **A place property** lends its place, as a stored field does, and can't be moved from ([02](../02-views-and-dependencies/place-and-value-properties.md#place-properties-borrow-and-mutate)).
 
-Where the stored and the computed forms would differ, the stored form is a compile error:
+So a binding that fits one form is a compile error under the other. A `let` of a stored field takes `copy`, `consume` or `ref let`, and a `ref let` of a value property has no place to refer to:
 
 ```swift
 extension Enemy { var isDead: Bool { hp <= 0 } }   // computed
 
 func hit(_ e: mutable Enemy, _ d: Float) {
-    let before = e.hp
-    e.hp -= d                      // error: 'before' still names e.hp
+    ref let before = e.hp
+    e.hp -= d                      // error: 'before' still refers to e.hp
     log(before)
     let dead = e.isDead            // computed: the Bool it returned, which 'dead' owns
+    ref let gone = e.isDead        // error: 'isDead' is computed, so there is no place to refer to; write 'let'
     save(dead)                     // fine: save takes an owned parameter
     let hp = consume e.hp          // error: 'e' is a mutable parameter, so e.hp can't move out of it
 }
@@ -65,6 +97,8 @@ func hit(_ e: mutable Enemy, _ d: Float) {
 **A borrow lasts until its last use, not to the end of the scope.** Once `boss` above is last used, `enemies` is free again. Where destroying the value that holds the borrow is a use ([02](../02-views-and-dependencies/dependency-lifetimes.md#when-destroying-a-value-counts-as-using-it)), that destruction is its last use.
 
 **A borrowing binding of a dynamic place holds its access until its last use.** A dynamic place is one reached through a thread-bound object's owner or weak pointer, or a thread-local, and the binding holds that dynamic access (rule 6 in [02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-6-dynamic-accesses)). So a call in between that changes the object panics. When a panic unwinds through the binding's scope, the access is released once the unwind has destroyed the last value that depends on it ([Destruction by unwinding](moves-copies-destruction.md#destruction-by-unwinding)).
+
+**A `let` or `var` never holds a dynamic access itself**, since it refers to no place. Only a view it owns can depend on one, as any view taken through the access does ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-6-dynamic-accesses)). So a change to an object between a `let`'s uses panics only where the `let` holds such a view.
 
 ## Names in scope
 
@@ -97,7 +131,7 @@ func clamp(_ n: Int) -> Int {
 
 **A parameter is in scope through the whole body of the function or closure that takes it.** A `task func`'s resume parameter, which its `with (...)` clause declares, is a parameter of its body too ([07](../07-concurrency/tasks.md#semantics)).
 
-**A `let`, `var` or `const` in a body declares a local, and so does each name these constructs bind**, in scope where the construct uses it:
+**A `let`, `var`, `ref let`, `ref var` or `const` in a body declares a local, and so does each name these constructs bind**, in scope where the construct uses it:
 
 - an `if`'s or a `while`'s condition names, in each later condition of its list and in its block;
 - a `guard`'s condition names, in each later condition of its list and after the `guard` to the end of the enclosing block, but not in its `else` block;
@@ -115,7 +149,7 @@ func clamp(_ n: Int) -> Int {
 
 ```swift
 func pair(_ a: Int, _ a: Bool) { … }                              // error: 'a' is already declared, as a parameter
-let (lo, lo) = bounds                                             // error: 'lo' is already declared, in this pattern
+ref let (lo, lo) = bounds                                         // error: 'lo' is already declared, in this pattern
 
 alloc func names(_ entries: Span<Entry>) -> List<StringView> {
     alloc entries.map { entries in entries.name.view }            // error: 'entries' is already declared, as a parameter
@@ -131,11 +165,11 @@ func report(_ count: UInt) {
 
 **`if let x` is the one binding that takes the name of a local or a parameter in scope**: it unwraps the optional `x` under its own name ([below](#unwrapping-under-the-same-name-if-let-x)).
 
-**So a `let` or a `var` always gives the reader a name to follow.** It binds at least one name ([below](#bindings-with-no-name)), and apart from `if let x`, no name it binds is one a local or a parameter in scope already has.
+**So a `let`, a `var` or a `ref` binding always gives the reader a name to follow.** It binds at least one name ([below](#bindings-with-no-name)), and apart from `if let x`, no name it binds is one a local or a parameter in scope already has.
 
 ## Conditions and patterns
 
-**A condition or a pattern borrows a place it binds, as a declaration does.** It looks inside a value, at an optional's payload or an enum case's, where the value lies. `guard` and `while` work the same way as `if`:
+**A condition or a pattern borrows a place it binds, as a `ref let` or `ref var` declaration does, though it writes no `ref`.** It looks inside a value, at an optional's payload or an enum case's, where the value lies. `guard` and `while` work the same way as `if`:
 
 ```swift
 if let e = world.enemies[h] { ... }        // looks at the enemy in place
@@ -146,7 +180,7 @@ if let e = consume spare { ... }           // moves the optional out of 'spare':
 
 - **A `let` looks at the place, and a `var` changes it in place**, with the place marked `&`.
 - **A value, such as a call's result, is owned by the binding**, as in a declaration. `consume place` is such a value: it takes the value out of a place the code owns ([What can be moved from](moving-values-out.md#what-can-be-moved-from)), and `copy place` makes one.
-- **A `var` given a place follows the rule for a `var` declaration** ([above](#bindings)).
+- **A `var` given a place writes `copy`, `consume` or `&` before it**, and leaving all three out is a compile error that names them, since a `var` may change what it holds, and a shared borrow can't.
 
 **A condition may also unwrap an optional under the name it already has**, as `if let x` does ([below](#unwrapping-under-the-same-name-if-let-x)). Narrowing unwraps a local, a parameter or a stored field of one in place, with no binding at all ([04](../04-types/enums.md#narrowing)).
 
@@ -176,19 +210,19 @@ when consume event {
 
 ## Bindings with no name
 
-**Every binding that a `let` or `var` makes binds at least one name, or it is a compile error.** The keyword says how its names hold what they bind: whether they may change it, and in a condition or a pattern whether they look at it or change it in place ([above](#conditions-and-patterns)). With no name, it says nothing. Each of these is one binding:
+**Every binding that a `let`, `var`, `ref let` or `ref var` makes binds at least one name, or it is a compile error.** The keywords say how its names hold what they bind: whether they own it or refer to it, and whether they may change it. In a condition or a pattern, they say whether the names look at it or change it in place ([above](#conditions-and-patterns)). With no name, they say nothing. Each of these is one binding:
 
 - **Each binding of a declaration**, so `let lo = 0, _ = f()` is an error, though `lo` is bound.
 - **The pattern after `let` or `var` in a condition.**
 - **Each `let` or `var` part of a pattern**, so `.pair(let a, let _)` is an error, though `a` is bound. A type pattern under `let` is such a part, so `let _ as E` is an error.
 
-A `_` is fine inside a pattern whose `let` or `var` binds another name, as in `let (a, _) = pair`.
+A `_` is fine inside a pattern whose keyword binds another name, as in `ref let (a, _) = pair`.
 
 ```swift
-let (a, _) = pair                         // fine: binds 'a'
+ref let (a, _) = pair                     // fine: binds 'a'
 let _ = save(level)                       // error: binds no name
 let lo = 0, _ = f()                       // error: the second binding binds no name
-let (_, _) = pair                         // error: binds no name
+ref let (_, _) = pair                     // error: binds no name
 if let _ = target { ... }                 // error: binds no name
 if case .pair(let a, _) = p { ... }       // fine: the 'let' binds 'a'
 if case .pair(let a, let _) = p { ... }   // error: the second 'let' binds no name
@@ -227,7 +261,7 @@ if case .some(var reply) = &reply { … }        // error: write 'if var reply'
 **The short form binds what the long form would** ([above](#conditions-and-patterns)):
 
 - **A `let` looks at the payload in place**, when `x` names a place.
-- **A `var` changes the payload in place.** So `x` names a [changeable place](#changeable-places), as `&x` requires. `if var x` is a compile error where `x` is read-only: a `let`, owning or borrowing, a borrowed parameter, a global `let` or a `const`, or a property of `self` in a plain method, one neither `mutating` nor `consuming`. Its `var` marks the lend, which `&` marks elsewhere ([Lending a place for change](#lending-a-place-for-change)).
+- **A `var` changes the payload in place.** So `x` names a [changeable place](#changeable-places), as `&x` requires. `if var x` is a compile error where `x` is read-only: a `let` or a `ref let`, a borrowed parameter, a global `let` or a `const`, or a property of `self` in a plain method, one neither `mutating` nor `consuming`. Its `var` marks the lend, which `&` marks elsewhere ([Lending a place for change](#lending-a-place-for-change)).
 - **A value is owned by the binding**, as when `x` names a value property of `self`, whose `get` returns a new optional at each use. `if var x` is a compile error there, since `&` on a value lends nothing ([Lending a place for change](#lending-a-place-for-change)). A `var` with a name of its own, such as `v` in `if var v = x`, owns the value and may change it.
 
 **`x` is a bare name, which lookup resolves as it resolves any use** ([05](../05-protocols-generics-and-closures/functions-and-closures.md#static-and-instance-members)). It may name whatever lookup finds that holds an optional:
@@ -294,17 +328,18 @@ func report() {
 **An `if` or `when` expression hands its position to the arm that runs.** Whatever the position does with a value, it does with the arm's last expression, as if that expression stood there: borrows it, lends it for change, moves it or returns it. An `unsafe` block used as an expression hands its position to its last expression the same way ([10](../10-errors-and-safety/unsafe-code.md#unsafe-code)).
 
 ```swift
-let e = if first { enemies[0] } else { enemies[1] }                 // borrows one of the two
-var t = if left { &a } else { &b }                                  // lends one for change
+ref let e = if first { enemies[0] } else { enemies[1] }             // refers to one of the two
+ref var t = if left { &a } else { &b }                              // refers to one for change
 let v = if c { consume p } else { consume q }                       // moves from the one chosen
+let w = if c { p } else { q }                                       // error: a let from a place; write 'copy', 'consume' or 'ref let'
 ```
 
 What depends on `e` depends on both places ([02](../02-views-and-dependencies.md#dependencies)). `v` moves from the one chosen, so each of `p` and `q` is moved only on its own path ([Moving values out](moving-values-out.md#moving-values-out)).
 
-**When some arms borrow places and others give values, each value is kept in a hidden local:**
+**When some arms give places to a `ref let` or `ref var` and others give values, each value is kept in a hidden local:**
 
 ```swift
-let e = if c { enemies[0] } else { makeEnemy() }             // the new enemy is kept in a hidden local
+ref let e = if c { enemies[0] } else { makeEnemy() }         // the new enemy is kept in a hidden local
 ```
 
 The hidden local is declared where the binding is, and destroyed with it if its arm ran. The binding is then a borrowing binding, which can't be consumed. What depends on it depends on every arm's place, and on those hidden locals.
@@ -335,16 +370,16 @@ var d: any Drawable = sprite                // borrows 'sprite'; 'd' owns the vi
 
 - a `var` that owns its value;
 - a temporary, which its statement owns ([02](../02-views-and-dependencies/dependency-projection-and-results.md#temporaries));
-- the place that a `var` given `&place` names, through that binding;
+- the place that a `ref var` refers to, through that binding;
 - a `mutable` or `owned` parameter, or `self` in a `mutating` or `consuming` method, a `deinit` or an initializer;
 - an owned capture of a `mutating` or `consuming` closure;
 - a `var` field, an element, or a property with a `mutate` or a `set` ([02](../02-views-and-dependencies/place-and-value-properties.md#place-and-value-properties)), of a changeable place.
 
-**Everything else is read-only, and so is whatever is reached through it**: a `let`, owning or borrowing, a borrowed parameter, `self` in a plain method, a `let` field, a `const` and a global `let`.
+**Everything else is read-only, and so is whatever is reached through it**: a `let`, a `ref let`, a borrowed parameter, `self` in a plain method, a `let` field, a `const` and a global `let`.
 
 ```swift
 let x = makeEnemy()
-var y = &x                         // error: a let is read-only, even one that owns its value
+ref var y = &x                     // error: a let is read-only, even one that owns its value
 heal(&x)                           // error: the same
 ```
 
@@ -365,8 +400,8 @@ _ = r.value?.submit(mesh)          // fine: an object's value is changeable thro
 **`&` marks every place lent for change, in a binding as in a call.** The receiver of a `mutating` method call is the exception, since the call's form shows it. These places take `&`, each lent to code that may change it:
 
 - a `mutable` argument;
-- the place a `var` borrows, in a declaration or in an `if var`, `guard var` or `while var`, and a place that a pattern's `var` part binds;
-- the target of a `rebind` of a `var` ([02](../02-views-and-dependencies/dependency-lifetimes.md#pointing-a-name-at-another-place-rebind));
+- the place a `ref var` declaration refers to, the place an `if var`, `guard var` or `while var` borrows, and a place that a pattern's `var` part binds;
+- the target of a `rebind` of a `ref var` or a `var` ([02](../02-views-and-dependencies/dependency-lifetimes.md#pointing-a-name-at-another-place-rebind));
 - a loop's sequence whose elements the loop changes, which may be a temporary the loop keeps in a hidden local ([04](../04-types/collections.md#iteration));
 - a `when` subject that is a place, or a `case` condition's value that is one, with a `var` part;
 - the last expression of an `if` or `when` arm whose position lends a place for change;
@@ -376,7 +411,7 @@ _ = r.value?.submit(mesh)          // fine: an object's value is changeable thro
 
 ```swift
 for (i, e) in &makeEnemies().enumerated() { ... }       // the loop keeps the new list in a hidden local, and changes it
-var t = if left { &a } else { &b }                       // the arm's place is lent for change
+ref var t = if left { &a } else { &b }                   // the arm's place is lent for change
 var v: mutable any Damageable = &boss                    // a mutable any P made from 'boss'
 ```
 

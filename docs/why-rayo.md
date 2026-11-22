@@ -46,7 +46,7 @@ Six principles decide Rayo's trade-offs.
 | The allocator API for std collections is unstable | Allocators are stable values that every owning collection records, every construction that allocates says `alloc`, and arena resets are memory-safe. | [06](spec/06-memory-and-allocators.md) |
 | A hash map built at compile time needs an external crate, such as `phf` | A `const` `Map` that names `FixedHashing` is built by ordinary code in the compiler and frozen into read-only data. The default hashing is still seeded for each map, as `RandomState` is. | [04](spec/04-types/collections.md#hash-maps-and-sets) |
 | Portable SIMD is unstable | SIMD vectors of up to 64 lanes are built in, with shuffles, swizzles, masks and reductions. | [04](spec/04-types/numbers-and-math.md#simd-and-math), [08](spec/08-c-interop.md) |
-| Steep learning curve for large, mixed teams | Swift-shaped syntax and three tiers instead of lifetimes, variance and pinned self-references, with one derived `Sendable` marker where Rust has `Send` and `Sync`. The binding says whether it borrows, copies or moves, whatever the type, in the words an argument uses: `let b = a`, `let b = copy a`, `let b = consume a`. | [01](spec/01-values-and-ownership.md) |
+| Steep learning curve for large, mixed teams | Swift-shaped syntax and three tiers instead of lifetimes, variance and pinned self-references, with one derived `Sendable` marker where Rust has `Send` and `Sync`. A binding says what it is where it is declared, as a parameter's convention does, whatever the type: `ref let b = a` borrows, `let b = copy a` copies, and `let b = consume a` moves. C# marks such a borrow with `ref` too. | [01](spec/01-values-and-ownership.md) |
 
 ### Swift's problems
 

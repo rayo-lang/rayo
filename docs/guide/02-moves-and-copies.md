@@ -122,26 +122,32 @@ A clone is meant to be fully independent of the original: changing or destroying
 
 ## Declaring, assigning and returning
 
-Declaring a `let` from another variable moves nothing. The new name borrows the value, the same way a plain parameter borrows its argument ([01](../spec/01-values-and-ownership/bindings.md#bindings)):
+A `let` or a `var` owns the value it holds, as `hits` owns its list. So a variable declared from another one has to say how it gets that value, and leaving that out is an error:
 
 ```swift
 var hits = alloc List<Int>()
 hits.append(12)
-let same = hits
+let same = hits                 // error: write 'copy' or 'consume' before 'hits', or declare 'ref let'
+```
+
+The error names three ways out. `copy` makes a value of its own, and `consume` moves the value over, as the rest of this section shows. `ref let` declares a name that owns nothing: it refers to the value where it lies, the same way a plain parameter borrows its argument ([01](../spec/01-values-and-ownership/bindings.md#bindings)):
+
+```swift
+ref let same = hits
 log("\(same.count)")            // 1
 ```
 
-`same` is another name for the list in `hits`. Nothing moved and nothing was copied. `hits` still owns the list, and `same` only borrows it.
+`same` is another name for the list in `hits`. Nothing moved and nothing was copied. `hits` still owns the list, and `same` only borrows it. The `ref` says so where `same` is declared, so a reader knows at once that `same` has nothing of its own.
 
-A borrow comes with one restriction. `same` is a `let`, and a `let` keeps the value it started with. So the list can't change while you still use `same`:
+A borrow comes with one restriction. `same` can't change the list, and the list can't change while you still use `same` either:
 
 ```swift
-let same = hits
+ref let same = hits
 hits.append(5)                  // error: 'hits' is borrowed by 'same' (used below)
 log("\(same.count)")
 ```
 
-Once `same` isn't used any more, `hits` can change the list again. Chapter 3 shows the rest of borrowing, including how to borrow a value to change it ([Borrowing](03-borrowing.md)).
+Once `same` isn't used any more, `hits` can change the list again. Chapter 3 shows the rest of borrowing, including `ref var`, which borrows a value to change it ([Borrowing](03-borrowing.md)).
 
 To move the list into the new variable instead, write `consume` before it. It makes the same move an `owned` parameter makes, written out where nothing else would make it ([01](../spec/01-values-and-ownership/moving-values-out.md#moving-values-out)):
 
@@ -150,7 +156,7 @@ let finished = consume hits
 log("\(hits.count)")            // error: 'hits' was moved
 ```
 
-A `var` can change what it holds, and a borrow can't. So a `var` declared from another variable says what it wants: `copy`, `consume`, or `&` to borrow the value and change it, which [chapter 3](03-borrowing.md#borrowing-in-a-declaration) shows. Leaving all three out is an error that names them. Assigning to a variable that already exists works the same way, with `copy` or `consume`:
+Assigning to a variable that already exists works the same way, with `copy` or `consume`:
 
 ```swift
 alloc func newRound() -> List<Int> {
@@ -167,7 +173,7 @@ older = consume current         // older's first list is destroyed, and 'current
 
 `return` needs no `consume`: it moves a local's value out to the caller, since the local goes out of scope as the function returns. `newRound` builds the list it hands back, so it is declared `alloc func`, and a call to it takes `alloc`, as making a list does. Chapter 6 shows what that gives the function ([Memory and allocators](06-memory-and-allocators.md#the-ambient-allocator)).
 
-Since a `let` borrows, a variable's old value has to be copied to outlive a change:
+To outlive a change, a variable's old value has to be copied into a `let` of its own:
 
 ```swift
 var hp = 100
@@ -176,7 +182,7 @@ hp -= 10
 log("lost \(before - hp)")      // lost 10
 ```
 
-Without `copy`, `before` would borrow `hp`. Then `-=` would be an error, since `hp` can't change while `before` is still used.
+A `ref let before = hp` would borrow `hp` instead. Then `-=` would be an error, since `hp` can't change while `before` is still used.
 
 ## A value that may have moved
 
@@ -210,7 +216,7 @@ If `hits` isn't used again, there's nothing to fix. The compiler still places th
 - [01 Moving values out](../spec/01-values-and-ownership/moving-values-out.md#moving-values-out): every construct that moves a value, and what can be moved from.
 - [01 Parameters](../spec/01-values-and-ownership/parameters.md#parameters): `owned` and the other parameter conventions.
 - [01 Copies](../spec/01-values-and-ownership/moves-copies-destruction.md#copies): `copy` and `clone()`, and which types are copyable.
-- [01 Bindings](../spec/01-values-and-ownership/bindings.md#bindings): what each form of `let` and `var` does with what it's given.
+- [01 Bindings](../spec/01-values-and-ownership/bindings.md#bindings): what `let`, `var`, `ref let` and `ref var` each do with what they're given.
 - [01 Destruction](../spec/01-values-and-ownership/moves-copies-destruction.md#destruction): when a value is destroyed, and in what order.
 - [01 Places that hold no value](../spec/01-values-and-ownership/moving-values-out.md#places-that-hold-no-value): how the compiler tracks what each variable holds on every path.
 - [04 Collections and strings](../spec/04-types/collections.md#collections-and-strings): `List` and the other collections.

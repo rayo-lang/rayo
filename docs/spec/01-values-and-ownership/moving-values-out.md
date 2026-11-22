@@ -11,9 +11,9 @@ A move hands a value to a new owner and leaves its old place without that value.
 - a global's initializer;
 - the elements of a tuple or array literal, and an enum case's payload.
 
-A copyable `const` is the exception: taking one makes a new value ([below](#constants)). A declaration, a condition and a pattern borrow a place instead ([Bindings](bindings.md#bindings)), and an assignment of one needs `copy` or `consume` ([Moves](moves-copies-destruction.md#moves)).
+A copyable `const` is the exception: taking one makes a new value ([below](#constants)). A `ref let` or `ref var`, a condition and a pattern borrow a place instead, and a `let` or `var` of one needs `copy`, `consume` or `ref let` ([Bindings](bindings.md#bindings)). An assignment of a place needs `copy` or `consume` ([Moves](moves-copies-destruction.md#moves)).
 
-**`consume place` writes a move as an expression.** Moving a place's value out, implicitly or this way, is **consuming** the place. `consume` also moves where the code would otherwise borrow, as `kept` and `show` do below. A binding of it owns the value, and for a borrowed parameter, the moved value is a temporary, destroyed at the end of the statement.
+**`consume place` writes a move as an expression.** Moving a place's value out, implicitly or this way, is **consuming** the place. `consume` also moves where the code would otherwise borrow, as `show` does below, and gives a `let` or `var` a place's value to own, as `kept` does. For a borrowed parameter, the moved value is a temporary, destroyed at the end of the statement.
 
 ```swift
 var loot = alloc List<Item>()
@@ -30,7 +30,7 @@ let old = replace(&player.inventory, with: alloc List())    // the way to take i
 
 **Only code that owns a place may move from it**, implicitly or with `consume`. No borrow of that place may be live, and no scoped value may depend on it: a move is a mutable access ([The law of exclusivity](exclusivity.md#the-law-of-exclusivity)). These places can be moved from:
 
-- a local that owns its value: a `let` or `var` that doesn't borrow, including an owned exclusive view such as an `SoA` column bound with `&` ([Lending a place for change](bindings.md#lending-a-place-for-change));
+- a local that owns its value: a `let` or `var`, including an owned exclusive view such as an `SoA` column bound with `&` ([Lending a place for change](bindings.md#lending-a-place-for-change)), but not one a `rebind` has pointed at a place ([02](../02-views-and-dependencies/dependency-lifetimes.md#pointing-a-name-at-another-place-rebind));
 - an `owned` parameter, including a function-typed one received owned, and an owned capture inside a `consuming` closure;
 - a temporary, such as a call result passed to an `owned` parameter;
 - a field of one of those, through stored fields only, named or reached by reflection ([09](../09-compile-time/reflection.md#what-reflection-can-read)), when no type along the path declares a `deinit`, since a `deinit` takes the whole value;
@@ -72,7 +72,7 @@ slots[0] = 1                       // fine: 'slots' holds all four elements
 **Nothing else can be consumed.** So none of these can:
 
 - a global, `const`s included;
-- a borrowing binding;
+- a borrowing binding, such as a `ref let` or a `ref var`;
 - a borrowed or `mutable` parameter;
 - an owned capture outside a `consuming` closure, since only a `consuming` closure runs at most once ([05](../05-protocols-generics-and-closures/functions-and-closures.md#closure-kinds));
 - an inline array's element, at any index, whether or not the index is known when the program is checked ([04](../04-types/collections.md#inline-array-elements));
@@ -89,7 +89,7 @@ So such a place always holds a value, across a `throw`, an early return, an `awa
 
 **A `const` that reaches run time is a place in read-only data that lives as long as the program** ([09](../09-compile-time/constants-and-conditions.md#consts-that-reach-run-time)). A view of it is static storage, which any function may return.
 
-**A `const` of a copyable type is taken without `copy`**, as a new value each time. So a `let` or `var` declared from one gets a new value, which it owns. A `const` of a move-only type can only be borrowed or cloned, so a `let` of one borrows the const itself.
+**A `const` of a copyable type is taken without `copy`**, as a new value each time. So a `let` or `var` declared from one gets a new value, which it owns. A `const` of a move-only type can only be borrowed or cloned, so a `ref let` borrows the const itself, and a `let` of one takes `alloc` and `.clone()`.
 
 ```swift
 const maxLives = 3

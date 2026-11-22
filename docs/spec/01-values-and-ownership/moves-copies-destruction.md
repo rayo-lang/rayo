@@ -18,10 +18,11 @@ cmds = queued                     // error: assigning a place takes 'copy' or 'c
 
 **`consume x`, returning a local, and passing a place to a function that keeps it move the value.** The new owner takes it over, and the place it came from can't be used until it gets a new value, so the value's bytes stand for it in one place only.
 
-**An assignment or a declaration takes a place's value only where it writes `consume`.** A `let` given a place borrows it read-only, as an argument does, and a `var` given one writes `copy`, `consume` or `&` ([Bindings](bindings.md#bindings)). An assignment given a place writes `copy` or `consume`, and leaving both out is a compile error that names them, since the place it assigns stores a value of its own, which a borrow isn't. These need neither:
+**An assignment or a declaration takes a place's value only where it writes `consume`.** A `let` or `var` given a place writes `copy` or `consume` before it, or is declared `ref let` to borrow the place read-only, as an argument does ([Bindings](bindings.md#bindings-that-own-a-value)). An assignment given a place writes `copy` or `consume`, and leaving both out is a compile error that names them, since the place it assigns stores a value of its own, which a borrow isn't. These need neither:
 
 - one from a copyable `const`, which gives a new value ([Constants](moving-values-out.md#constants));
 - one whose conversion makes a value of its own from the place, such as a view or a numeric widening ([Conversions](bindings.md#conversions));
+- a declaration from a place in a temporary's own storage, which the binding owns ([Bindings](bindings.md#bindings-that-own-a-value));
 - `_ = x`, which takes what `x` holds and drops it on purpose, as [Moving values out](moving-values-out.md#moving-values-out) lists ([05](../05-protocols-generics-and-closures/functions-and-closures.md#unused-values)).
 
 **Only a place the code owns can be moved from.** Moving out of a value the code only borrows is a compile error, since the caller, an alias or a later `deinit` that reaches that place must still find a value in it ([What can be moved from](moving-values-out.md#what-can-be-moved-from)).

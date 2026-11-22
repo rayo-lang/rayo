@@ -9,7 +9,7 @@ Rayo has several ways to group values. Tuples and fixed-size arrays hold their e
 ```swift
 let pair: (UInt, Float) = (3, 0.5)
 let stats: (hp: Float, armor: Float) = (hp: 100, armor: 20)
-let (count, weight) = pair                   // destructuring
+let (count, weight) = copy pair              // destructuring a copy
 for i in 0..<count { … }                     // a counted loop
 let w: [4 of Float] = [0.1, 0.2, 0.3, 0.4]   // an Array<Float, 4>: four Floats, stored inline
 var grid: [64 of Int] = .init(repeating: 0)  // every element is given
@@ -46,7 +46,7 @@ let w: [4 of Float] = [0.1, 0.2, 0.3]   // error: a [4 of Float] literal needs 4
 
 - two elements at indices known to differ where the borrows are checked are disjoint, as two stored fields are ([01](../01-values-and-ownership/exclusivity.md#which-places-overlap));
 - a closure that names `a[2]` captures that element alone ([05](../05-protocols-generics-and-closures/functions-and-closures.md#capturing-places));
-- a `let` of `a[i]`, and `&a[i]`, borrow the element where it lies ([01](../01-values-and-ownership/bindings.md#bindings)).
+- a `ref let` of `a[i]`, and `&a[i]`, borrow the element where it lies ([01](../01-values-and-ownership/bindings.md#bindings)).
 
 An inline array that holds a value holds all `N` of its elements, since no element is moved out and none is assigned before the array holds a value ([01](../01-values-and-ownership/moving-values-out.md#what-can-be-moved-from)).
 

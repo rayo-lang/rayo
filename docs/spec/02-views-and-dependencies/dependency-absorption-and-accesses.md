@@ -25,7 +25,7 @@ func chunks(_ data: mutable List<Float>, into work: mutable List<MutableSpan<Flo
 **Where the place assigned is known, assigning a variable that owns its value, or a stored field, replaces that place's set** ([Naming a field](dependency-lifetimes.md#naming-a-field)). The old value is destroyed, so nothing it reached is reachable through the place. Through a binding that may name one of several places, the assignment adds to each place's set instead, since the others may still hold their old views. That happens after a `rebind` on one path, or after this:
 
 ```swift
-var r = if flip { &d1 } else { &d2 }    // an assignment through 'r' adds to the sets of both
+ref var r = if flip { &d1 } else { &d2 }    // an assignment through 'r' adds to the sets of both
 ```
 
 **Any other change to part of a value, such as to an element, adds to the value's set.**

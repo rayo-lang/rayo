@@ -18,7 +18,7 @@ do {
     log("bad value for \(field)")
 }
 
-let pos = enemies[target]!.pos            // a stale handle here is a bug: '!' panics
+ref let pos = enemies[target]!.pos        // a stale handle here is a bug: '!' panics
 ```
 
 `loadConfig`'s result type, a `Result`, tells the caller which failures it may catch. The `catch` arms handle them as values; the `!` on the last line takes the panic path if the handle has gone stale.

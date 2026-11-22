@@ -38,7 +38,7 @@ let banner = """
 
 **After `.` in a member access, an integer literal ends before the next `.`**, so `t.0.1` is two element accesses, not one with the float literal `0.1`.
 
-**The keywords are these:** `let var const func task struct enum protocol extension typealias import public private
+**The keywords are these:** `let var ref const func task struct enum protocol extension typealias import public private
 init deinit self Self if else guard when case for in while repeat break continue return
 throw try catch do defer static mutable owned consuming copy consume borrow mutating any some
 where with await unsafe unchecked alloc extern as is nil true false

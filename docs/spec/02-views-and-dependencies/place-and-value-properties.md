@@ -60,7 +60,7 @@ struct Pool<T>(…) {
 
 world.enemies[h]?.hp -= 10                   // the mutate accessor, with optional chaining
 if var e = &world.enemies[h] { e.hp = 0 }
-let pos = world.enemies[h]!.pos              // the borrow accessor; '!' panics on a stale handle
+ref let pos = world.enemies[h]!.pos          // the borrow accessor; '!' panics on a stale handle
 ```
 
 **A `borrow` lends a place for reading, and a `mutate` lends it for change.** Each body hands out its place as a `get` body returns a value: as its single expression, or with `return`. A `mutate` body marks its place with `&`, as every place lent for change is marked ([01](../01-values-and-ownership/bindings.md#lending-a-place-for-change)). Nothing is copied or moved, so the caller reaches the place itself.
@@ -184,18 +184,18 @@ A place property whose declared type is written `T?` is an **optional place prop
 var a = Angle(radians: 0)
 a.degrees = 90                               // calls set
 a.degrees += 45                              // calls get, then set with the sum
-var d = &a.degrees                           // calls get, lends the copy, then calls set once the access ends
+ref var d = &a.degrees                       // calls get, lends the copy, then calls set once the access ends
 
 struct Flags(var bits: UInt32) {
     var low: UInt16 { UInt16(truncating: bits) }      // a get: these 16 bits lie in no place of their own
 }
 ```
 
-**A `get` returns a value, and a `set` takes one.** A `set` receives the assigned value as an `owned` parameter named `newValue`. A binding of what a `get` returns owns it ([01](../01-values-and-ownership/bindings.md#what-a-borrowing-let-sees)). Of the four accessors, only a `get` can fail, when the property's type is a `Result` ([10](../10-errors-and-safety/typed-errors.md#propagating-errors-with-try)).
+**A `get` returns a value, and a `set` takes one.** A `set` receives the assigned value as an `owned` parameter named `newValue`. A `let` or `var` of what a `get` returns owns it, and a `ref let` of it is a compile error, since there is no place to refer to ([01](../01-values-and-ownership/bindings.md#what-a-ref-let-sees)). A `ref var` of `&a.p` refers to the copy a change lends, as the next paragraphs say. Of the four accessors, only a `get` can fail, when the property's type is a `Result` ([10](../10-errors-and-safety/typed-errors.md#propagating-errors-with-try)).
 
 **Assignment calls `set`.** So does a compound assignment, since `a ⊕= b` is `a = a ⊕ b` ([05](../05-protocols-generics-and-closures/operators.md#operators)).
 
-**Any other change calls `get`, lends the copy it returns, and calls `set` with that copy once the access ends.** Such changes include binding the property with `&`, passing it as a `mutable` argument, and calling a `mutating` method on it. Until then, the copy lives in a hidden local of the caller.
+**Any other change calls `get`, lends the copy it returns, and calls `set` with that copy once the access ends.** Such changes include binding the property to a `ref var` with `&`, passing it as a `mutable` argument, and calling a `mutating` method on it. Until then, the copy lives in a hidden local of the caller.
 
 **The access is held until the last use of every value that depends on it**, as a dynamic access is ([Rule 6: Dynamic accesses](dependency-absorption-and-accesses.md#rule-6-dynamic-accesses)). So a view of the copy depends on the access, and `set` runs only once nothing uses the copy. **Such a view works like any view within the function, but can't leave it** ([Rule 5: The callee side](dependency-absorption-and-accesses.md#rule-5-the-callee-side)), since the access began in that function.
 
