@@ -42,7 +42,7 @@ struct ParserErrorTests {
         #expect(errors("func f() {\n    print(\"}\")\n    print(1)\n}") == [.unexpectedCharacter(character: "\"")])
     }
 
-    @Test(arguments: ["self", "mutable", "owned", "mutating"])
+    @Test(arguments: ["self", "mutable", "owned", "mutating", "ref"])
     func `a reserved word names nothing`(word: String) {
         let found = FoundToken.token(word)
         #expect(errors("func f() { let \(word) = 1 }") == [.missingBindingName(found: found)])
@@ -248,6 +248,33 @@ struct ParserErrorTests {
         ("func f() { print(consume (e).hp) }", .missingConsumedName(found: .token("("))),
     ])
     func `'consume' needs a name first`(source: String, expected: ErrorCode) {
+        #expect(errors(source) == [expected])
+    }
+
+    @Test(arguments: [
+        ("func f() { ref let a = e.hp }", DeclarationKind.refLet), ("func f() { ref var a: Int = b, c = d }", .refVar),
+        ("func f() { let a = 1 }", .let), ("func f() { var a: Int }", .var),
+    ])
+    func `a declaration's words say whether its bindings refer to a place, and whether they may change`(
+        source: String, kind: DeclarationKind,
+    ) {
+        let (file, errors) = Parser.parse(source)
+        guard case .function(let function)? = file.declarations.first,
+              case .declaration(let declared, _)? = function.body.statements.first?.kind else {
+            Issue.record("expected a function whose body starts with a declaration")
+            return
+        }
+        #expect(errors == [])
+        #expect(declared == kind)
+    }
+
+    @Test(arguments: [
+        ("func f() { ref a = b }", ErrorCode.missingReferenceKind(found: .token("a"))),
+        ("func f() { ref let a }", .missingReferencedPlace(found: .token("}"))),
+        ("func f() { ref let a: Int }", .missingReferencedPlace(found: .token("}"))),
+        ("func f() { ref var a = b, c }", .missingReferencedPlace(found: .token("}"))),
+    ])
+    func `a 'ref' takes 'let' or 'var', and each of its bindings a place`(source: String, expected: ErrorCode) {
         #expect(errors(source) == [expected])
     }
 

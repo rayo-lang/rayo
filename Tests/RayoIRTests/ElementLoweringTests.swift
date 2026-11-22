@@ -47,7 +47,7 @@ struct ElementLoweringTests {
     }
 
     @Test func `an element in a position that takes its value is moved out of its array, as a bare local is`() throws {
-        try expectLowering(ofMain: "let a = [1, 2]\nlet b = a[0]", toMatch: "element-move")
+        try expectLowering(ofMain: "let a = [1, 2]\nlet b = consume a[0]", toMatch: "element-move")
     }
 
     @Test func `a field of an element, or an element of an element, that a statement takes is moved where it lies`()
@@ -56,7 +56,7 @@ struct ElementLoweringTests {
             func main() {
                 let a = [Stats(hp: 1)]
                 let i: UInt = 0
-                let x = a[i].hp
+                let x = consume a[i].hp
                 let grid = [[1, 2]]
                 _ = grid[0][1]
             }

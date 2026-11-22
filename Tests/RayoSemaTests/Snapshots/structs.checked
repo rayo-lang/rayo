@@ -16,7 +16,7 @@ init "Hit(damage: Int)"(damage: owned Int) -> Hit
 func "main()"() -> Void {
   let %0 damage: Int @4:9-4:15
   var %1 s: Shot @5:9-5:10
-  let %2 h: Hit @8:9-8:10
+  ref %2 h: Hit @8:13-8:14
   bind %0 @4:9-4:15
     integer 7: Int @4:18-4:19
   bind %1 @5:9-5:10
@@ -35,9 +35,9 @@ func "main()"() -> Void {
     call builtin "print(_: Int)": Void @7:5-7:19
       value: Int @7:11-7:18
         place %1 @7:11-7:12 .0 @7:11-7:18
-  bind %2 @8:9-8:10
-    value: Hit @8:13-8:18
-      place %1 @8:13-8:14 .1 @8:13-8:18
+  bind %2 @8:13-8:14
+    value: Hit @8:17-8:22
+      place %1 @8:17-8:18 .1 @8:17-8:22
   expression
     call builtin "print(_: Int)": Void @9:5-9:20
       value: Int @9:11-9:19

@@ -12,6 +12,11 @@ public struct CheckedPlace: Sendable {
         self.steps = steps
     }
 
+    /// The local that holds the place, or nil where a temporary holds it, which dies with its statement.
+    public var local: LocalID? {
+        if case .local(let local, _) = root { local } else { nil }
+    }
+
     /// Where the source names the whole place.
     public var range: SourceRange {
         switch steps.last {

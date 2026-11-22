@@ -145,6 +145,7 @@ private func effectText(_ effect: Effect) -> String {
     case .begin(let id, let access): "begin a\(id.index) \(access.kind.rawValue) \(placeText(access.place))"
     case .use(let id): "use a\(id.index)"
     case .end(let id): "end a\(id.index)"
+    case .depend(let place, let id): "depend \(placeText(place)) on a\(id.index)"
     case .declare(let local): "declare %\(local.index)"
     case .retire(let local): "retire %\(local.index)"
     case .exit: "exit"

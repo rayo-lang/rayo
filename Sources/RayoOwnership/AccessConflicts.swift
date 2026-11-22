@@ -71,16 +71,18 @@ struct AccessConflicts {
             let reach: Reach = access.kind == .read ? .read : .change
             check(reach, of: access.place, at: access.range, against: live.subtracting([id]))
 
-        // Using or ending an access, starting or ending a local's life, and leaving the function reach no place
-        // anew.
-        case .use, .end, .declare, .retire, .exit:
+        // Using or ending an access, making a value depend on one, starting or ending a local's life, and leaving the
+        // function reach no place anew.
+        case .use, .end, .depend, .declare, .retire, .exit:
             break
         }
     }
 
     /// Reports each access in `live` that conflicts with a use that `reach`es `place`, which the source names at
-    /// `range`: each that overlaps `place`, where it or the use may change its place.
+    /// `range`: each that overlaps `place`, where it or the use may change its place. Accesses that the use conflicts
+    /// with in the same way, such as the borrows of one place on two paths, are one error, with a note for each.
     private mutating func check(_ reach: Reach, of place: Place, at range: SourceRange, against live: Set<AccessID>) {
+        var conflicts: [(code: ErrorCode, borrows: [SourceRange])] = []
         for id in live.sorted() {
             guard let held = accesses[id] else { preconditionFailure("a\(id.index) is live, but nothing begins it") }
             guard held.place.mayOverlap(place), reach.kind == .modify || held.kind == .modify else { continue }
@@ -92,7 +94,17 @@ struct AccessConflicts {
             case (.read, .move): .movedWhileBorrowed(name: name, borrowed: borrowed)
             case (.read, _): .changedWhileBorrowed(name: name, borrowed: borrowed)
             }
-            errors.append(Diagnostic(code, at: range, labeling: [.init(.borrowed, at: held.range)]))
+
+            if let same = conflicts.firstIndex(where: { $0.code == code }) {
+                conflicts[same].borrows.append(held.range)
+            } else {
+                conflicts.append((code, [held.range]))
+            }
+        }
+
+        for conflict in conflicts {
+            let labels = conflict.borrows.map { Diagnostic.LabeledRange(.borrowed, at: $0) }
+            errors.append(Diagnostic(conflict.code, at: range, labeling: labels))
         }
     }
 

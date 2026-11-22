@@ -2,13 +2,13 @@ import Testing
 import RayoDriver
 
 struct MoveTests {
-    @Test("a declaration, an assignment and a 'return' move a local's value, in debug and in release",
+    @Test("a 'consume', an assignment and a 'return' move a local's value, in debug and in release",
           arguments: [["--debug"], ["--release"]])
     func moves(mode: [String]) {
         let source = """
             func main() {
                 var a = 1
-                let b = a
+                let b = consume a
                 a = 2
                 var c: Int
                 c = consume b

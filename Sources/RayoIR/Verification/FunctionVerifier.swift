@@ -72,10 +72,14 @@ struct FunctionVerifier {
                 throw violation("the IR retires the parameter %\(local.index) in its function's body")
             }
 
-        // An access reaches a place of the body, and an end names an access that the body begins.
+        // An access reaches a place of the body, an end names an access that the body begins, and a dependence
+        // does both.
         case .begin(_, let access):
             _ = try type(of: access.place)
         case .end(let id):
+            _ = try access(id)
+        case .depend(let place, let id):
+            _ = try type(of: place)
             _ = try access(id)
         }
     }

@@ -66,6 +66,11 @@ struct AccessScopeVerifier {
             case .compute(_, let value, _):
                 for id in value.accesses where !held.contains(id) { throw unheld(id, at: label) }
 
+            // A dependence keeps its access live from where a value comes to depend on it, so the access must be held
+            // there.
+            case .depend(_, let id):
+                guard held.contains(id) else { throw unheld(id, at: label) }
+
             case .declare, .retire:
                 break
             }

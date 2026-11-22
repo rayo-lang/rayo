@@ -3,7 +3,7 @@ import RayoDiagnostics
 
 struct MoveTests {
     @Test func `a move out of a borrowed parameter waits to be reported until the program checks`() {
-        let source = "func main() {}\nfunc f(x: Int) {\n    let y = x\n    let z: Bool = 1\n}"
+        let source = "func main() {}\nfunc f(x: Int) {\n    let y = consume x\n    let z: Bool = 1\n}"
         #expect(diagnostics(source).map(\.code) == [.typeMismatch(expected: "Bool", found: "Int")])
     }
 
@@ -11,8 +11,8 @@ struct MoveTests {
         let source = """
             func main() {}
             func f(n: Int, s: Stats) {
-                let m = n
-                let hp = s.hp
+                let m = consume n
+                let hp = consume s.hp
                 print(m + hp)
             }
             struct Stats(var hp: Int)
@@ -37,15 +37,15 @@ struct MoveTests {
     // An index a local holds is known only when the program runs, so the error names an element by its array, as it
     // does an element at an index the source writes.
     @Test(arguments: [
-        ("let before = wave.enemies[i]\n    print(before.stats.hp)",
+        ("let before = consume wave.enemies[i]\n    print(before.stats.hp)",
          "4:18: error[E0315]: can't move an element out of 'wave.enemies'; write 'copy' before it to take a copy"),
-        ("let stats = wave.enemies[i].stats\n    print(stats.hp)",
+        ("let stats = consume wave.enemies[i].stats\n    print(stats.hp)",
          "4:17: error[E0315]: can't move 'stats' out of an element of 'wave.enemies'; write 'copy' before it to take "
             + "a copy"),
-        ("let hp = wave.enemies[i].stats.hp\n    print(hp)",
+        ("let hp = consume wave.enemies[i].stats.hp\n    print(hp)",
          "4:14: error[E0315]: can't move 'stats.hp' out of an element of 'wave.enemies'; write 'copy' before it to "
             + "take a copy"),
-        ("let first = wave.enemies[0]\n    print(first.stats.hp)",
+        ("let first = consume wave.enemies[0]\n    print(first.stats.hp)",
          "4:17: error[E0315]: can't move an element out of 'wave.enemies'; write 'copy' before it to take a copy"),
     ])
     func `a move out of an element names the array it lies in, and the part of the element it takes`(
@@ -68,14 +68,14 @@ struct MoveTests {
     // local holds. A part inside that element that the source can't write from it, such as an element of it or a part
     // a later such index leads to, is called a part.
     @Test(arguments: [
-        ("let x = w.items[i].inner[j].n", "a part out of an element of 'w.items'"),
-        ("let x = w.items[i].inner[0].n", "'inner[0].n' out of an element of 'w.items'"),
-        ("let c = w.items[i].inner[0]\n    let x = c.n", "'inner[0]' out of an element of 'w.items'"),
-        ("let x = w.items[0].inner[i].n", "'n' out of an element of 'w.items[0].inner'"),
-        ("let x = g[i][j]", "a part out of an element of 'g'"),
-        ("let x = g[i][0]", "a part out of an element of 'g'"),
-        ("let x = g[0][i]", "an element out of 'g[0]'"),
-        ("let x = g[0][1]", "an element out of 'g[0]'"),
+        ("let x = consume w.items[i].inner[j].n", "a part out of an element of 'w.items'"),
+        ("let x = consume w.items[i].inner[0].n", "'inner[0].n' out of an element of 'w.items'"),
+        ("let c = consume w.items[i].inner[0]\n    let x = consume c.n", "'inner[0]' out of an element of 'w.items'"),
+        ("let x = consume w.items[0].inner[i].n", "'n' out of an element of 'w.items[0].inner'"),
+        ("let x = consume g[i][j]", "a part out of an element of 'g'"),
+        ("let x = consume g[i][0]", "a part out of an element of 'g'"),
+        ("let x = consume g[0][i]", "an element out of 'g[0]'"),
+        ("let x = consume g[0][1]", "an element out of 'g[0]'"),
     ])
     func `a move out of an element inside another names the innermost array the source names`(
         statements: String, part: String,

@@ -6,8 +6,8 @@ public struct Stmt: Sendable {
 }
 
 public indirect enum StmtKind: Sendable {
-    /// `let` or `var` and its bindings, separated by commas.
-    case declaration(BindingKind, [Binding])
+    /// `let`, `var`, `ref let` or `ref var`, and its bindings, separated by commas.
+    case declaration(DeclarationKind, [Binding])
     case assign(target: Expr, op: AssignOperator, value: Expr)
     /// `_ = value`, which drops a value on purpose.
     case drop(Expr)

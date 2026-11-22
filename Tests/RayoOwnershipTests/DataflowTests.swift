@@ -165,7 +165,7 @@ private struct EvaluatedOperands: DataflowState {
         // Only a read or a move evaluates an operand.
         switch effect {
         case .read(_, let range), .move(_, let range): columns.insert(range.start.column)
-        case .store, .begin, .use, .end, .declare, .retire, .exit: break
+        case .store, .begin, .use, .end, .depend, .declare, .retire, .exit: break
         }
     }
 }

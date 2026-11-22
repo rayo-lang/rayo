@@ -118,6 +118,12 @@ public enum ErrorCode: Sendable, Hashable {
     @Code(133, error: "expected a name after 'consume', found {found}")
     case missingConsumedName(found: FoundToken)
 
+    @Code(134, error: "expected 'let' or 'var' after 'ref', found {found}")
+    case missingReferenceKind(found: FoundToken)
+
+    @Code(135, error: "expected '=' and the place a 'ref' binding refers to, found {found}")
+    case missingReferencedPlace(found: FoundToken)
+
     // MARK: Checking
 
     @Code(201, error: "the file has no 'main' function, so it can't be built into an executable or run")
@@ -342,12 +348,22 @@ public enum ErrorCode: Sendable, Hashable {
     @Code(276, error: "{type.withArticle} is too large to hold on the stack")
     case tooLargeForStack(type: TypeName)
 
-    @Code(277, error: "a 'var' can't borrow '{place}'; write 'copy' before it to take a copy, or 'consume' to move it")
-    case varBorrowsPlace(place: String)
+    @Code(277, error: "a '{keyword}' can't borrow '{place}'; write 'copy' or 'consume' before it, or declare 'ref let'")
+    case ownerBorrowsPlace(keyword: String, place: String)
 
     @Code(278, error:
         "an assignment can't borrow '{place}'; write 'copy' before it to take a copy, or 'consume' to move it")
     case assignmentBorrowsPlace(place: String)
+
+    @Code(279, error:
+        "'{place}' ends with its block before '{binding}' does; declare 'let' and write 'copy' or 'consume' before it")
+    case referenceOutlivesPlace(binding: String, place: String)
+
+    @Code(280, error: "'{binding}' has no place to refer to; declare it 'let' or 'var' to own its value")
+    case referenceToValue(binding: String)
+
+    @Code(281, error: "'ref var' isn't supported")
+    case unsupportedReferenceVar
 
     // MARK: Ownership
 
@@ -399,6 +415,13 @@ public enum ErrorCode: Sendable, Hashable {
 
     @Code(315, error: "can't move {part}; write 'copy' before it to take a copy")
     case moveFromElement(part: ElementPart)
+
+    @Code(316, error: "can't move '{name}', which refers to a place; write 'copy' before it to take a copy")
+    case moveFromReference(name: String)
+
+    @Code(317, error:
+        "can't move '{field}' out of '{local}', which refers to a place; write 'copy' before it to take a copy")
+    case moveFieldFromReference(field: String, local: String)
 }
 
 extension ErrorCode {

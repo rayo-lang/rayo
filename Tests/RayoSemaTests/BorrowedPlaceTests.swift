@@ -26,19 +26,26 @@ private func messages(of statement: String) -> [String] {
     }
 }
 
-/// The fix that every error for a place given to a position that can't borrow it ends with.
-private let fix = "write 'copy' before it to take a copy, or 'consume' to move it"
+/// The fix that the error for a place given to a `let` or `var` ends with.
+private let declarationFix = "write 'copy' or 'consume' before it, or declare 'ref let'"
+
+/// The fix that the error for a place given to an assignment ends with.
+private let ownedFix = "write 'copy' before it to take a copy, or 'consume' to move it"
 
 struct BorrowedPlaceTests {
-    // A `var` that borrowed its place could never change, so it takes a copy or the value itself, written out.
+    // A `let` or `var` owns its value, and the place's value has an owner already, so the declaration writes how it
+    // takes the value, or says that it refers to the place.
     @Test(arguments: [
-        ("var x = a", "a"), ("var x = e.stats.hp", "e.stats.hp"), ("var x = e.slots[1]", "e.slots[1]"),
-        ("var x = g[i][0]", "g[i][0]"), ("var x = g[i + 1][0]", "g[…][0]"),
+        ("var x = a", "var", "a"), ("var x = e.stats.hp", "var", "e.stats.hp"),
+        ("let x = e.slots[1]", "let", "e.slots[1]"), ("let x = g[i][0]", "let", "g[i][0]"),
+        ("var x = g[i + 1][0]", "var", "g[…][0]"),
     ])
-    func `a 'var' given a place names the place, and says to write 'copy' or 'consume'`(
-        statement: String, place: String,
+    func `a 'let' or 'var' given a place names the place, and says to write 'copy', 'consume' or 'ref let'`(
+        statement: String, keyword: String, place: String,
     ) {
-        #expect(messages(of: statement) == ["13: error[E0277]: a 'var' can't borrow '\(place)'; \(fix)"])
+        #expect(messages(of: statement) == [
+            "13: error[E0277]: a '\(keyword)' can't borrow '\(place)'; \(declarationFix)",
+        ])
     }
 
     // An assignment that borrowed its place would leave its target naming a value it doesn't own.
@@ -46,26 +53,61 @@ struct BorrowedPlaceTests {
     func `an assignment of a place names the place, and says to write 'copy' or 'consume'`(
         statement: String, column: Int, place: String,
     ) {
-        #expect(messages(of: statement) == ["\(column): error[E0278]: an assignment can't borrow '\(place)'; \(fix)"])
+        #expect(messages(of: statement) == [
+            "\(column): error[E0278]: an assignment can't borrow '\(place)'; \(ownedFix)",
+        ])
     }
 
     // An `if` hands its position to the branch that runs, so each branch that ends in a place is reported there.
-    @Test func `each branch of an 'if' that gives a 'var' or an assignment a place is reported`() {
+    @Test func `each branch of an 'if' that gives a 'let', a 'var' or an assignment a place is reported`() {
         #expect(messages(of: "var x = if c { a } else if !c { b } else { copy a }").map { $0.prefix(16) } == [
             "20: error[E0277]", "37: error[E0277]",
         ])
+        #expect(messages(of: "let x = if c { 1 } else { e.stats.hp }").map { $0.prefix(16) } == ["31: error[E0277]"])
         #expect(messages(of: "b = if c { 1 } else { a }").map { $0.prefix(16) } == ["27: error[E0278]"])
     }
 
     // A value that no place holds is owned by what receives it, and so is a place in a temporary, which dies with its
-    // statement. A compound assignment reads its value, as its operator's operand.
+    // statement. A compound assignment reads its value, as its operator's operand, and a `ref let` refers to a place.
     @Test(arguments: [
-        "var x = copy a", "var x = consume a", "var x = a + 1", "var x = makeEnemy().stats.hp", "var x = e.slots.count",
+        "var x = copy a", "let x = consume a", "var x = a + 1", "let x = makeEnemy().stats.hp", "var x = e.slots.count",
         "var x = if c { copy a } else { 1 }", "b = copy a", "b = consume a", "b = makeEnemy().stats.hp", "b += a",
-        "let x = a\n    print(x)", "e.stats = consume e.stats",
+        "ref let x = a\n    print(x)", "ref let x = if c { e.stats.hp } else { 1 }\n    print(x)",
+        "e.stats = consume e.stats",
     ])
-    func `a value, a copy, a consume or a place in a temporary needs nothing written`(statement: String) {
+    func `a value, a copy, a consume, a place in a temporary or a 'ref let' needs nothing written`(statement: String) {
         #expect(messages(of: statement) == [])
+    }
+
+    // A `ref let` refers to a place, so a value that no place holds, a place in a temporary among them, gives it
+    // nothing to refer to.
+    @Test(arguments: ["ref let x = 1", "ref let x = copy a", "ref let x = makeEnemy().stats", "ref let x = a + b"])
+    func `a 'ref let' given a value names the binding, and says to declare 'let' or 'var'`(statement: String) {
+        #expect(messages(of: statement) == [
+            "13: error[E0280]: 'x' has no place to refer to; declare it 'let' or 'var' to own its value",
+        ])
+    }
+
+    // A local that a branch declares ends with the branch, while a `ref let` outside it lives on, so the `ref let`
+    // can't refer to it, whether the branch ends in the local or in a part of it.
+    @Test(arguments: [
+        ("ref let x = if c {\n        let t = a + 1\n        t\n    } else { b }\n    print(x)", "x", "t"),
+        (
+            "ref let s = if c {\n        let f = makeEnemy()\n        f.stats\n    } else { e.stats }\n    print(s.hp)",
+            "s", "f.stats",
+        ),
+    ])
+    func `a 'ref let' of a place in a local that ends with its branch says to declare 'let'`(
+        statement: String, binding: String, place: String,
+    ) {
+        #expect(messages(of: statement) == [
+            "9: error[E0279]: '\(place)' ends with its block before '\(binding)' does; declare 'let' and write "
+                + "'copy' or 'consume' before it",
+        ])
+    }
+
+    @Test func `a 'ref var' is reported as unsupported`() {
+        #expect(messages(of: "ref var x = a\n    print(x)") == ["13: error[E0281]: 'ref var' isn't supported"])
     }
 
     @Test func `a 'var' of '_' is reported for its name alone, whatever its value`() {

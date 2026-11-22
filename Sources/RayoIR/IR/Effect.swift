@@ -18,6 +18,9 @@ public enum Effect: Equatable, Sendable {
     case use(AccessID)
     /// Ends the access, after which nothing reaches its place through it.
     case end(AccessID)
+    /// Makes the value at the place depend on the access, which stays live from here for as long as code uses the
+    /// value. The value stays where it is, and nothing reads it.
+    case depend(Place, on: AccessID)
     /// Starts the life of the local, which holds no value until a store gives it one.
     case declare(LocalID)
     /// Ends the life of the local, which holds no value from here until a declaration starts its life again.

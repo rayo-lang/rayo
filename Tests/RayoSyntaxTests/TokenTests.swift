@@ -26,10 +26,10 @@ struct TokenTests {
     }
 
     @Test func `keywords and identifiers`() {
-        let (lexed, _) = Lexer.tokenize("let keep copy consume struct self mutable owned mutating")
+        let (lexed, _) = Lexer.tokenize("let keep copy consume struct self mutable owned mutating ref")
         #expect(lexed.map(\.kind) == [
             .keyword(.let), .identifier("keep"), .keyword(.copy), .keyword(.consume), .keyword(.struct),
-            .keyword(.`self`), .keyword(.mutable), .keyword(.owned), .keyword(.mutating), .eof,
+            .keyword(.`self`), .keyword(.mutable), .keyword(.owned), .keyword(.mutating), .keyword(.ref), .eof,
         ])
     }
 

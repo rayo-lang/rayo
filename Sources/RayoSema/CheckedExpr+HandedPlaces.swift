@@ -8,7 +8,7 @@ extension CheckedExpr {
     var handedPlaces: [HandedPlace] {
         switch kind {
         case .place(let place):
-            if case .local(let local, _) = place.root { [HandedPlace(local: local, place: place)] } else { [] }
+            place.local.map { [HandedPlace(local: $0, place: place)] } ?? []
         case .if(_, let then, let otherwise):
             [then, otherwise].flatMap { $0.value?.handedPlaces ?? [] }
         case .integerLiteral, .boolLiteral, .copy, .consume, .arrayCount, .unary, .binary, .call, .arrayLiteral,

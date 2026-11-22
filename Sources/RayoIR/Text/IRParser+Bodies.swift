@@ -38,7 +38,7 @@ extension IRParser {
     private mutating func local() throws(IRTextError) -> IRLocal? {
         guard case .word(let keyword) = current.kind else { return nil }
         // A parameter's convention follows its name, so its keyword stands for a parameter of any convention.
-        let kind = [LocalKind.let, .var, .parameter(.borrowed)].first { $0.keyword == keyword }
+        let kind = [LocalKind.let, .refLet, .var, .parameter(.borrowed)].first { $0.keyword == keyword }
         guard kind != nil || keyword == "temp" else { return nil }
         advance()
 
@@ -80,14 +80,15 @@ extension IRParser {
         return BasicBlock(statements: statements, terminator: try terminator())
     }
 
-    /// Reads `declare %N`, `retire %N`, `destination = value @range`, `begin aN access` or `end aN`; or nil where the
-    /// current token starts no statement.
+    /// Reads `declare %N`, `retire %N`, `destination = value @range`, `begin aN access`, `end aN` or `depend place on
+    /// aN`; or nil where the current token starts no statement.
     private mutating func statement() throws(IRTextError) -> Statement? {
         switch current.kind {
         case .word("declare"): try declaration()
         case .word("retire"): try retirement()
         case .word("begin"): try accessBeginning()
         case .word("end"): try accessEnd()
+        case .word("depend"): try dependence()
         // A computation stores its value in a place, or drops it where the text writes `_`.
         case .word("_"), .symbol("%"): try computation()
         default: nil
@@ -130,6 +131,14 @@ extension IRParser {
     private mutating func accessEnd() throws(IRTextError) -> Statement {
         try expect(word: "end")
         return .end(try accessReference())
+    }
+
+    /// Reads `depend place on aN`.
+    private mutating func dependence() throws(IRTextError) -> Statement {
+        try expect(word: "depend")
+        let place = try place()
+        try expect(word: "on")
+        return .depend(place, on: try accessReference())
     }
 
     /// Reads `aN`, an access that a statement of the function must begin.

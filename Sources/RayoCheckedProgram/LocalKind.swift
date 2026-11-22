@@ -2,6 +2,9 @@
 public enum LocalKind: Equatable, Sendable {
     /// A local assigned at most once on each path, its declaration's value included.
     case `let`
+    /// A `ref let`, which borrows a place read-only: it sees the place's value without owning it, so it gives up no
+    /// value, and the place can't change or move while the local is used.
+    case refLet
     /// A local assigned any number of times.
     case `var`
     /// A parameter, which holds the caller's argument as its convention takes it.
@@ -11,6 +14,7 @@ public enum LocalKind: Equatable, Sendable {
     package var keyword: String {
         switch self {
         case .let: "let"
+        case .refLet: "ref"
         case .var: "var"
         case .parameter: "param"
         }

@@ -30,7 +30,7 @@ struct StructLoweringTests {
     }
 
     @Test func `a field that a statement takes is moved out of where it lies, in its local or in a temporary`() throws {
-        let body = "let e = Enemy(hp: 1, armor: 2)\nlet a = e.armor\n_ = Enemy(hp: 3, armor: 4).hp"
+        let body = "let e = Enemy(hp: 1, armor: 2)\nlet a = consume e.armor\n_ = Enemy(hp: 3, armor: 4).hp"
         try expectLowering(withEnemy: body, toMatch: "field-move")
     }
 

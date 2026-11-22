@@ -96,6 +96,8 @@ public enum IRPrinter {
             "begin \(text(of: id)) \(text(of: access))"
         case .end(let id):
             "end \(text(of: id))"
+        case .depend(let place, let id):
+            "depend \(text(of: place)) on \(text(of: id))"
         }
     }
 

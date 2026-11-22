@@ -59,9 +59,11 @@ extension FunctionLowering {
     private mutating func lowerDeclaration(of local: LocalID, at range: SourceRange, givenBy value: CheckedExpr?) {
         builder.emit(.declare(local))
 
-        // A local declared without a value holds none until it is assigned.
+        // A local declared without a value holds none until it is assigned. A `ref let` borrows the place its
+        // value names, and any other local takes its value.
         guard let value else { return }
-        compute(value, into: Destination(Place(root: local), at: range), as: .take)
+        let use: ValueUse = builder.isBorrowing(local) ? .borrow : .take
+        compute(value, into: Destination(Place(root: local), at: range), as: use)
     }
 
     /// Leaves the function with `value`.

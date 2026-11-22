@@ -40,7 +40,7 @@ func main() {
             if wave.enemies[i].stats.hp > 0 {
                 let taken = damage(from: strengths[round % 4] + Int(round), on: wave.enemies[i])
                 wave.enemies[i].stats.hp -= taken
-                let row = if wave.enemies[i].stats.hp > 0 { copy wounding } else { copy felling }
+                ref let row = if wave.enemies[i].stats.hp > 0 { wounding } else { felling }
                 ledger[row][blows] += 1
                 ledger[row][dealt] += taken
             }

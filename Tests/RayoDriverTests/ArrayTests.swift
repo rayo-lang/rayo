@@ -19,7 +19,7 @@ struct ArrayTests {
                 let hits = [Hit(damage: 3), Hit(damage: 4)]
                 let grid = [[1, 2, 3], [4, 5, 6]]
                 var board = Board(grid: grid, hits: hits, flags: copied)
-                let moved = board.grid
+                let moved = consume board.grid
                 board.grid = relayGrid(moved)
                 let none: [0 of Int] = []
                 _ = relayNone(none)

@@ -23,8 +23,8 @@ bb0:
   %1 @3:9-3:10 = operand UInt 0 @3:19-3:20
   declare %2
   declare %5
-  %5 @4:15-4:16 = index read %1 @4:15-4:16 below 1 @4:15-4:16
-  %2 @4:9-4:10 = operand move %0[%5].0 @4:13-4:20 @4:13-4:20
+  %5 @4:23-4:24 = index read %1 @4:23-4:24 below 1 @4:23-4:24
+  %2 @4:9-4:10 = operand move %0[%5].0 @4:13-4:28 @4:13-4:28
   declare %3
   declare %6
   %6 @5:17-5:23 = array of Int(1, 2) @5:17-5:23
