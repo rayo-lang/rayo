@@ -58,7 +58,7 @@ associatedtype subscript`.
 
 ```swift
 func index<T: Equatable>(of x: &T, in s: &[T]) -> UInt?    // 'of' and 'in' as the parameters' labels
-let i = index(of: &h, in: &handles)                         // and before the arguments
+let i = index(of: h, in: handles)                           // and before the arguments
 ```
 
 **A keyword label is never ambiguous.** A label before an argument is always followed by `:`, and a label in a parameter by the parameter's name and then `:`, with the type after the `:`.

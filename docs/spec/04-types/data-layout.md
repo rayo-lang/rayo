@@ -106,7 +106,7 @@ Each is `Pod` only through `@pod`, which states that every bit pattern is valid.
 ```swift
 var msg = alloc TrailingArray<PacketHeader, UInt8>(header: h, count: n, repeating: 0)
 msg.header.kind = .snapshot
-msg.elements[0..<4].copy(from: &payload[0..<4]) // a '[UInt8]' place in the trailing storage; lengths checked
+msg.elements[0..<4].copy(from: payload[0..<4])  // a '[UInt8]' place in the trailing storage; lengths checked
 ```
 
 It is move-only, and owns its allocation, whose element count is fixed when it is made. `msg.elements` is the elements as a `[Element]` place, with a `borrow` and a `mutate` ([Runs of elements](collections.md#runs-of-elements)). **`Header` must be copyable**, since the header is read and written as a value (below). It has a C representation when its header and element types both have one ([08](../08-c-interop/calling-rayo-from-c.md#c-representations)).

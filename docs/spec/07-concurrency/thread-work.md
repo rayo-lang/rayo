@@ -20,7 +20,7 @@ particles.forEachInParallel { p in                          // @sendable (mutabl
     - a non-`mutating` one by any number of threads at once, since it only reads its captures;
     - a `mutating` one by one thread at a time, each call happening before the next, since calling it changes the closure itself;
     - a `consuming` one once, since the call consumes it.
-- **Exclusivity holds across a call's arguments**, closures included, since a closure literal borrows what it captures for as long as the call has it. So the second `join` at the top of this chapter is rejected, as `f(mutable &x, &x)` is.
+- **Exclusivity holds across a call's arguments**, closures included, since a closure literal borrows what it captures for as long as the call has it. So the second `join` at the top of this chapter is rejected, as `f(mutable &x, x)` is.
 - **What a call begins ends with it**, since rule 5 lets no function return or store a view of what it owns or began ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-5-the-callee-side)). A lock guard is released on the thread that took it ([Locks: `Mutex` and `RwLock`](synchronization.md#locks-mutex-and-rwlock)). So nothing a closure began on one thread is left for another.
 
 **Writing a shared place from a parallel loop's body is a type error:**
@@ -158,7 +158,7 @@ let table = catchPanic {                          // a global's initializer, run
 func startRenderer() -> (Thread<Void>, Sender<Shared<Snapshot>>) {           // called from main, after startup
     let (tx, rx) = alloc Channel<Shared<Snapshot>>.make(capacity: 3)
     let render: Thread<Void> = Thread.start(name: "render") { [move rx] in   // the thread owns the receiver
-        for snapshot in mutable &rx { draw(&snapshot) }                     // parks between snapshots; ends once every sender is gone
+        for snapshot in mutable &rx { draw(snapshot) }                      // parks between snapshots; ends once every sender is gone
     }
     return (consume render, consume tx)                                      // the simulation keeps the sender
 }
@@ -180,7 +180,7 @@ let snapshots = alloc SpscQueue<Shared<Snapshot>>(capacity: 3)               // 
 
 func startRendererOnGlobal() -> Thread<Void> {
     Thread.start(name: "render") {
-        while true { draw(&snapshots.waitPop()) }                            // parks until the simulation pushes one; a queue never disconnects
+        while true { draw(snapshots.waitPop()) }                             // parks until the simulation pushes one; a queue never disconnects
     }
 }
 ```
@@ -209,10 +209,10 @@ static func start(name: static &Text = "", _ body: Closure<consuming @sendable (
 var level = loadLevel()                                      // move-only: owns its lists
 let bounces = 3
 _ = Thread.start(name: "bake") {
-    bakeLighting(&level, bounces: bounces)                       // error: unlisted captures; a thread body can't borrow them
+    bakeLighting(level, bounces: bounces)                        // error: unlisted captures; a thread body can't borrow them
 }
 _ = Thread.start(name: "bake") { [move level, copy bounces] in   // fine: owns 'level' and a copy of 'bounces'; '_ =' detaches it
-    bakeLighting(&level, bounces: bounces)
+    bakeLighting(level, bounces: bounces)
 }
 ```
 
@@ -220,10 +220,10 @@ _ = Thread.start(name: "bake") { [move level, copy bounces] in   // fine: owns '
 
 ```swift
 let checksum = Thread.start(name: "checksum") { [move path] in   // a Thread<UInt32!IoError>
-    let bytes = try readFile(&path)
-    return crc32(&bytes)
+    let bytes = try readFile(path)
+    return crc32(bytes)
 }
-indexFolder(&dir)                                               // runs on this thread meanwhile
+indexFolder(dir)                                                // runs on this thread meanwhile
 let sum = try checksum.join()                                   // waits for the thread, then takes its result or propagates its error
 ```
 

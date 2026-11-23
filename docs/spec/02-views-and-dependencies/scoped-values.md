@@ -5,7 +5,7 @@
 A **view** is a value that borrows memory something else owns, so code can read or change data where it lies, without copying it. A reference is the plainest one ([01](../01-values-and-ownership/references.md#references)):
 
 ```swift
-let text: &Text = &source                     // refers to source's text: no copy
+let text: &Text = source                      // refers to source's text: no copy
 let body = &mesh.vertices.span                // a '&[Vertex]': refers to the list's elements, read-only
 var hot = mutable &heat.span                  // a 'mutable &[Float]': refers to them for change
 ```
@@ -133,7 +133,7 @@ struct Hint(let text: static &Text, let delay: Float)         // a plain struct 
 
 let fileLog = FileLogger(path: "game.log")                    // a global let of a Logger, with a Mutex inside
 struct AudioLog(let log: static &any Logger)                  // a reference to a logger that lives as long as the program
-let audioLog = AudioLog(log: &fileLog)
+let audioLog = AudioLog(log: fileLog)
 
 func show(_ hint: &Hint, _ token: &Token) {
     let shown: &Text = hint.text                              // fine: a static value converts to its plain type

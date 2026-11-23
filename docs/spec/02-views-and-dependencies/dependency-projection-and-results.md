@@ -14,8 +14,8 @@ Dependencies begin where code makes a view of a place. They follow values derive
 
 ```swift
 let b = &rest[0]                         // in an iterator over a '&[T]': 'b' depends on what 'rest' refers to
-rest = &rest[1...]                       // fine while 'b' is live: 'b' doesn't depend on 'rest'
-let t = Token(text: &src[start..<pos])   // in a lexer: depends on the text, not on the lexer's field
+rest = rest[1...]                        // fine while 'b' is live: 'b' doesn't depend on 'rest'
+let t = Token(text: src[start..<pos])    // in a lexer: depends on the text, not on the lexer's field
 ```
 
 **A `get` or a place property declared `where return outlives self` drops `self` the same way**, so what it gives depends only on what `self` carries ([Staying valid after a parameter moves on: `outlives`](dependency-lifetimes.md#staying-valid-after-a-parameter-moves-on-outlives)). The compiler verifies the two facts that make this safe: nothing `self` carries can be changed through it, or end with it. Verification rejects an `outlives` clause for a view of data the type holds inline, such as a `[4 of Int]` field, which depends on `self` itself.
@@ -35,7 +35,7 @@ let t = Token(text: &src[start..<pos])   // in a lexer: depends on the text, not
 - on every argument given to a `&T` or `mutable &T` parameter, `self` included: both **the argument place and its dependency set**;
 - on the sets of scoped arguments that the callee owns.
 
-**The argument place of a `&T` or `mutable &T` parameter is the place the parameter names**, whether the argument is `&p`, a reborrow or a reference value ([01](../01-values-and-ownership/parameters.md#parameters)). Its set is what that reference carries, so a reborrow brings in the place it was made through only when that place holds a mutable reference ([01](../01-values-and-ownership/references.md#reborrowing)).
+**The argument place of a `&T` or `mutable &T` parameter is the place the parameter names**, whether the argument is a place lent to it, a reborrow or a reference value ([01](../01-values-and-ownership/parameters.md#parameters)). Its set is what that reference carries, so a reborrow brings in the place it was made through only when that place holds a mutable reference ([01](../01-values-and-ownership/references.md#reborrowing)).
 
 **An owned argument contributes only its set**, since its own storage belongs to the callee, which can't return a view of it (rule 5).
 
@@ -75,7 +75,7 @@ alloc func names(_ t: &[Token]) -> List<&Text> {
 **A place captured exclusively ties the result to the closure**, since besides the result, only the closure reaches that place, and its next call may change or free it. Take a call that doesn't consume the closure, and returns a result depending on a place the closure captures exclusively: the place itself, not what it carries. The result then also depends, exclusively, on the function value and the storage it views, whatever the result's type, as a `mutating` method's result depends on `self`. So the next call conflicts while the result lives. The exemption for sealed types never removes this tie.
 
 ```swift
-var grow = { () -> &[Int] in buf.append(0); return &buf.span }
+var grow = { () -> &[Int] in buf.append(0); return buf.span }
 let a = grow()
 _ = grow()                       // error: 'grow' is borrowed by 'a' (used below)
 print("\(a.count)")
@@ -136,14 +136,14 @@ A copyable type that holds no inline array, at any depth, is **shallow**, scoped
 struct Key(let text: &Text, let hash: UInt64)              // shallow: a reference and an integer
 extension SymbolTable { func find(_ key: &Key) -> (&[Symbol])? }
 
-let syms = symbols.find(&Key(text: &name, hash: h))        // the key dies with the statement; 'syms' depends on 'symbols' and 'name'
+let syms = symbols.find(Key(text: name, hash: h))          // the key dies with the statement; 'syms' depends on 'symbols' and 'name'
 ```
 
 **A result that holds a reference to a sized type keeps depending on the argument place**, since it may refer into the argument's own bytes:
 
 ```swift
-func hpOf(_ e: &Enemy) -> &Float { &e.hp }    // refers into the enemy it is given
-let hp = hpOf(&makeEnemy())                   // an error if 'hp' is used later: it refers into a temporary
+func hpOf(_ e: &Enemy) -> &Float { e.hp }     // refers into the enemy it is given
+let hp = hpOf(makeEnemy())                    // an error if 'hp' is used later: it refers into a temporary
 ```
 
 **A value that holds an inline array, such as a matrix of four `Vec4` columns, can lend its elements.** So a result keeps depending on the argument place, as every result of an unsealed type does.
@@ -209,12 +209,12 @@ func lockRegistry(_ s: &Services) -> MutexGuard<Registry> { s.registry.lock() } 
 
 ### Temporaries
 
-**An argument that isn't a place is a temporary**, like `makeArray()` in `first(&makeArray())`. A parameter that owns a temporary takes it over, so only its set flows.
+**An argument that isn't a place is a temporary**, like `makeArray()` in `first(makeArray())`. A parameter that owns a temporary takes it over, so only its set flows.
 
-**A temporary lent with `&` or `mutable &`, `self` included, lives to the end of its full statement**, and a value depending on it can't outlive that:
+**A temporary lent shared or for change, `self` included, lives to the end of its full statement**, and a value depending on it can't outlive that:
 
 ```swift
-let x = first(&makeArray())     // an error if 'x' is used later
+let x = first(makeArray())      // an error if 'x' is used later
 ```
 
 A **full statement** is a statement, except that each of these is a full statement of its own:
@@ -227,7 +227,7 @@ A **full statement** is a statement, except that each of these is a full stateme
 So the temporaries of each of these die before the body runs, unless a `when` subject is kept in a hidden local ([01](../01-values-and-ownership/bindings.md#for-and-when-names)). That makes this an error too:
 
 ```swift
-if let x = first(&makeArray()) { print("\(x)") }   // error: the array dies before the body runs
+if let x = first(makeArray()) { print("\(x)") }    // error: the array dies before the body runs
 ```
 
 **A scoped temporary gets no exemption**, since it may hold data inline that a borrowed callee lends out. Only its set flows in three cases:
@@ -240,7 +240,7 @@ So these leave only `table` and `symbols` borrowed:
 
 ```swift
 let row = &table.rows()[0]                        // 'rows()' returns a '&[Row]': 'row' depends on what it carries
-let syms = symbols.find(&Key(text: "if", hash: h))   // a shallow key, and a sealed result
+let syms = symbols.find(Key(text: "if", hash: h))    // a shallow key, and a sealed result
 ```
 
 **An unscoped shallow temporary contributes nothing.**

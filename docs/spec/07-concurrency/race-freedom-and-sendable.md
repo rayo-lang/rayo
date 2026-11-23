@@ -37,7 +37,7 @@ struct GLTexture(let id: UInt32): ~Sendable              // opts out: must stay 
 struct AudioDevice(unsafe let device: *audio.AudioDev): unsafe Sendable   // a promise: the C audio API is thread-safe
 
 _ = Thread.start { [move enemies] in simulate(mutable &enemies) }   // fine: List<Enemy> is Sendable; '_ =' detaches the thread
-_ = Thread.start { [move hud] in draw(&hud) }                        // error: 'Hud' isn't Sendable
+_ = Thread.start { [move hud] in draw(hud) }                         // error: 'Hud' isn't Sendable
 ```
 
 **A value of a `Sendable` type may be used from another thread**: moved there, or borrowed there until the lending call returns. The compiler derives this marker protocol from what a type holds, as it derives `Copyable`, so a value's type says whether it reaches anything bound to one thread:

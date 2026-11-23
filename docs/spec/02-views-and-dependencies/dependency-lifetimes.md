@@ -42,7 +42,7 @@ A field `*T` holds a `T` here, as it does for [scopedness](scoped-values.md#whic
 ```swift
 struct Doc(var text: String, var first: (&Text)?): Scoped
 
-doc.first = &doc.text                         // 'doc' depends on its own field 'text' from here on
+doc.first = doc.text                          // 'doc' depends on its own field 'text' from here on
 ```
 
 - That assignment is fine.
@@ -87,7 +87,7 @@ func builtinName(_ key: &Text) -> &Text
     where return borrows static                  // only static storage: the key doesn't stay borrowed
 
 let tok = lexer.peek()                           // shared on lexer
-let syms = symbols.find(&tok.text)               // shared on symbols only
+let syms = symbols.find(tok.text)                // shared on symbols only
 lexer.advance()                                  // OK: tok's last use is above
 print("\(syms?.count ?? 0) symbols")
 ```
@@ -126,8 +126,8 @@ struct ElementIterator<T>(var rest: &[T]): SharedIterator, Scoped {
 }
 
 var names = alloc List<&Text>()
-for s in &table.entries { names.append(&s.name) }   // names depends on 'table', shared
-print("\(names.count) names")                       // fine; changing 'table' here would be the error
+for s in &table.entries { names.append(s.name) }    // names depends on 'table', shared
+print("\(names.count) names")                      // fine; changing 'table' here would be the error
 ```
 
 Without the clause, each element would depend exclusively on the iterator, and the next `next()` would conflict with `names`.
@@ -149,7 +149,7 @@ func copyAll(from src: &List<&Text>, into dst: mutable &List<&Text>)
 
 ```swift
 let b = &rest[0]
-rest = &rest[1...]
+rest = rest[1...]
 return b
 ```
 
@@ -192,7 +192,7 @@ func makeQuery(_ text: &Text, _ t: &[Entry]) -> Query
     where return.name borrows text, return.table borrows t
 
 var request = readRequest()
-let e = lookup(Query(name: &request, table: &symbols))
+let e = lookup(Query(name: request, table: symbols))
 request = readRequest()                          // fine: 'e' borrows symbols, not the request
 print("\(e?.id ?? 0)")
 ```
@@ -210,7 +210,7 @@ print("\(e?.id ?? 0)")
 struct Pair(var a: &Text, var b: &Text): Scoped {
     mutating func flip() { let t = a; a = b; b = t }
 }
-var pair = Pair(a: &s1, b: &s2)
+var pair = Pair(a: s1, b: s2)
 pair.flip()                                      // both fields depend on 's1' and 's2' from here on
 ```
 
@@ -238,7 +238,7 @@ tree.root.value = 1                              // error if placed before the l
 - **A step through a place property also takes on its other sources.** One whose sources go beyond `self` may reach a place in another argument, as `mutable &cur[graft: mutable &spare]` does. So the `var`'s set also takes on every other dependency of the new place ([Place and value properties](place-and-value-properties.md#the-place-lies-in-its-sources)).
 - **Any other place starts a new borrow.** The `var`'s set becomes the new reference's, as every assignment to a variable that owns its value replaces its set (rule 4 in [Absorption](dependency-absorption-and-accesses.md#rule-4-absorption)).
 
-**The `var` is a local declared in the same function or closure body**, not a parameter, a capture or a field, so the body sees every use of it. A mutable reference reached through any other place keeps that place borrowed, as a reborrow does, so assigning it back there conflicts with that borrow. Through a shared reference the place drops out anyway ([Rule 1: Projection](dependency-projection-and-results.md#rule-1-projection)), so `rest = &rest[1...]` above works in a field too.
+**The `var` is a local declared in the same function or closure body**, not a parameter, a capture or a field, so the body sees every use of it. A mutable reference reached through any other place keeps that place borrowed, as a reborrow does, so assigning it back there conflicts with that borrow. Through a shared reference the place drops out anyway ([Rule 1: Projection](dependency-projection-and-results.md#rule-1-projection)), so `rest = rest[1...]` above works in a field too.
 
 **A cursor over a value that a call returns keeps the value in a local of its own**, since a `var` that owns a value can't be assigned a reference:
 

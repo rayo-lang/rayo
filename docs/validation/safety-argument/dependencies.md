@@ -25,7 +25,7 @@
 **Rules 1 and 2 cover a view taken from a place, and a value derived from another** ([02](../../spec/02-views-and-dependencies/dependency-projection-and-results.md#rule-1-projection)):
 
 - **Projection.** A view taken from a place reaches only that place's storage and what it owns, so it depends on the place.
-- **Reference conversions are projections.** A `&String` converted to a `&Text`, or a `&List<T>` to a `&[T]`, where one is expected, is still a shared borrow of the place it was made from, as `&list.span` is ([05](../../spec/05-protocols-generics-and-closures/implicit-conversions.md#implicit-conversions)). So the converted reference depends on that place.
+- **Reference conversions are projections.** A `&String` converted to a `&Text`, or a `&List<T>` to a `&[T]`, where one is expected, is still a shared borrow of the place it was made from, as `&list.span` is ([05](../../spec/05-protocols-generics-and-closures/implicit-conversions.md#implicit-conversions)). So the converted reference depends on that place. A bare place lent where a `&T` is expected makes the borrow `&p` makes, so the same holds for it ([05](../../spec/05-protocols-generics-and-closures/implicit-conversions.md#places-lent-where-a-reference-is-expected)).
 - **Sub-views of a shared view**, from a `get` or a place property declared `where return outlives self`, depend only on what the view carries. Verification checks the two facts that make this safe ([02](../../spec/02-views-and-dependencies/dependency-lifetimes.md#staying-valid-after-a-parameter-moves-on-outlives)):
     - nothing the view carries can be changed through it, since its type holds no mutable view;
     - nothing it carries ends with it, since destroying it is no use.
@@ -59,7 +59,7 @@
 **A place a closure captures exclusively ties the result to the closure.** Besides the result, only the closure reaches that place, and its next call may change or free it. So the result depends on the closure exclusively, and the next call conflicts while it lives ([02](../../spec/02-views-and-dependencies/dependency-projection-and-results.md#closure-calls)):
 
 ```swift
-var grow = { () -> &[Int] in buf.append(0); return &buf.span }   // captures 'buf' exclusively
+var grow = { () -> &[Int] in buf.append(0); return buf.span }    // captures 'buf' exclusively
 let a = grow()                   // 'a' views buf's elements, and depends on 'grow' exclusively
 grow()                           // error: 'grow' is borrowed by 'a' (used below); this call may move buf's elements
 use(a)                           // 'a' is still live here
@@ -103,7 +103,7 @@ use(a)                           // 'a' is still live here
 **A set names an access by the site that began it, so a site in a loop holds one access at a time.** Each time the site begins an access, no value that depends on the access it began the last time may be used from then on:
 
 ```swift
-for w in &nodes { names.append(&w.value!.name) }   // error: the second pass's append uses 'names', which depends on the first pass's access
+for w in &nodes { names.append(w.value!.name) }    // error: the second pass's append uses 'names', which depends on the first pass's access
 ```
 
 ## Mutable views

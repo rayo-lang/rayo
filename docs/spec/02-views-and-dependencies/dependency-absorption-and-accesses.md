@@ -11,7 +11,7 @@ Across a call, the caller and callee have different parts of the dependency chec
 **An owned argument that is a mutable view absorbs too** (below). Each absorbing argument takes on the places and sets of the `&` arguments, and the sets of the `mutable &` and scoped owned ones, with the kinds of rule 3:
 
 ```swift
-tokens.append(Token(text: &src))       // 'tokens' depends on 'src' from here on
+tokens.append(Token(text: src))        // 'tokens' depends on 'src' from here on
 lexer.lex(into: mutable &tokens)       // 'lexer' and 'tokens' stay free of each other
 ```
 
@@ -33,8 +33,8 @@ ref var r = if flip { mutable &d1 } else { mutable &d2 }    // an assignment thr
 **Stores through an exclusive view reach what it views.** Such a store lands in memory that the view's exclusive dependencies own, so those places can then reach what was stored. So a dependency added to an exclusive view, or to a place reached through one, is also added to **every place the view depends on exclusively**, transitively. That holds however the dependency is added, and each time, the collection the view came from then depends on `tmp` or `crate`:
 
 ```swift
-for v in mutable &views { v = &tmp }                        // by assignment through the view
-fill(mutable &left, &tmp)                                   // by absorption into it, here a 'mutableSplit' half
+for v in mutable &views { v = tmp }                         // by assignment through the view
+fill(mutable &left, tmp)                                    // by absorption into it, here a 'mutableSplit' half
 for d in mutable &targets { d = mutable &crate; break }     // by storing a borrow into a list of mutable references, once
 ```
 
@@ -46,7 +46,7 @@ for d in mutable &targets { d = mutable &crate; break }     // by storing a borr
 
 ```swift
 let (low, high) = views.span.mutableSplit(at: 2)
-poison(Halves(low: consume low, high: consume high), &tmp)   // 'views' depends on 'tmp' from here on
+poison(Halves(low: consume low, high: consume high), tmp)    // 'views' depends on 'tmp' from here on
 ```
 
 **An owned function value is no absorbing argument, even a `mutating` one, which is a mutable view**, since nothing a call of it stores into its captures may depend on its arguments ([05](../05-protocols-generics-and-closures/functions-and-closures.md#what-a-closure-may-keep-from-its-parameters)). The same holds for a closure of concrete type owned through a `some F` parameter, or through a type parameter constrained to a function type. So the temporary key below leaves nothing borrowed:
@@ -55,7 +55,7 @@ poison(Halves(low: consume low, high: consume high), &tmp)   // 'views' depends 
 func forEachMatch(_ key: &Key, _ body: mutating (&Symbol) -> Void) { … }
 
 var hits = alloc List<&Text>()
-forEachMatch(&Key(text: "if", hash: h)) { _ in hits.append(&name) }   // 'hits' takes on 'name', never the temporary key
+forEachMatch(Key(text: "if", hash: h)) { _ in hits.append(name) }     // 'hits' takes on 'name', never the temporary key
 print("\(hits.count) matches")
 ```
 
@@ -74,7 +74,7 @@ A function value or a closure given to a `mutable &` parameter absorbs as any `m
 So `names` depends on `tmp` from the closure's creation, whether or not the closure is called:
 
 ```swift
-var add = { names.append(&tmp) }    // 'names' depends on 'tmp' from here on
+var add = { names.append(tmp) }     // 'names' depends on 'tmp' from here on
 ```
 
 **A `consuming` closure's exclusive captures also take on each other's places**, since its one call may store a view of one into another (rule 5).
@@ -82,7 +82,7 @@ var add = { names.append(&tmp) }    // 'names' depends on 'tmp' from here on
 **When a closure is called, its `mutable &` arguments absorb the closure's dependency set**, as its `self` ([Closure calls](dependency-projection-and-results.md#closure-calls)):
 
 ```swift
-let put: (mutable &List<&Text>) -> Void = { o in o.append(&src) }
+let put: (mutable &List<&Text>) -> Void = { o in o.append(src) }
 put(mutable &out)                       // 'out' depends on 'src' from here on
 ```
 
@@ -107,7 +107,7 @@ put(mutable &out)                       // 'out' depends on 'src' from here on
 ```swift
 func name() -> &Text {
     let s = alloc "temp"
-    return &s                          // error: the returned reference depends on local 's', which is destroyed on return
+    return s                           // error: the returned reference depends on local 's', which is destroyed on return
 }
 ```
 
@@ -123,13 +123,13 @@ For example, with a `Doc` that keeps a reference to its own text, and a struct t
 struct Doc(var text: String, var first: (&Text)?): Scoped
 
 func index(_ d: mutable &Doc) {
-    d.first = &d.text                  // error: a store into 'd' that depends on a part of 'd'
+    d.first = d.text                   // error: a store into 'd' that depends on a part of 'd'
 }
-doc.first = &doc.text                  // fine in the caller's own body: 'doc' then depends on 'doc.text'
+doc.first = doc.text                   // fine in the caller's own body: 'doc' then depends on 'doc.text'
 
 struct Lines(var out: mutable &[&Text], var s: String, var view: &Text): Scoped {
     mutating func fill() {
-        out[0] = &s                    // error: a store through 'out' that depends on self's own storage
+        out[0] = s                     // error: a store through 'out' that depends on self's own storage
         out[0] = view                  // fine: a copy, which depends only on what the field 'view' carries
     }
 }
@@ -163,7 +163,7 @@ log("\(names.count) names")
 **A store into a capture may not depend on a place the closure captures exclusively**, unless the closure is `consuming`, since the next call may change or free it:
 
 ```swift
-var fill = { buf.append(1); views.append(&buf) }   // error: the next call changes 'buf'
+var fill = { buf.append(1); views.append(buf) }    // error: the next call changes 'buf'
 ```
 
 ## Rule 6: Dynamic accesses
@@ -178,7 +178,7 @@ var fill = { buf.append(1); views.append(&buf) }   // error: the next call chang
 
 ```swift
 let items = &r.value!.items       // derived from the access to the object 'r' points at
-let e = first(&r.value!)          // passed through a call
+let e = first(r.value!)           // passed through a call
 ```
 
 **The access is held until the last use of every value that depends on it**, so the run-time mark covers the view for its whole life. When the access ends, the language releases its mark itself. When a panic unwinds instead, the mark is released once the unwind has destroyed the last value that depends on the access ([10](../10-errors-and-safety/panics.md#unwinding)). A value property's change is held the same way, with `set` called once it ends, and never on an unwind ([Value properties: `get` and `set`](place-and-value-properties.md#value-properties-get-and-set)).
@@ -186,7 +186,7 @@ let e = first(&r.value!)          // passed through a call
 **A site in a loop's body or `while` condition holds one access at a time**, since a set names an access by the site that began it. Each time the site begins a dynamic access, or a value property's change, no value that depends on the access it began the last time may be used from then on:
 
 ```swift
-for w in &nodes { names.append(&w.value!.name) }   // error
+for w in &nodes { names.append(w.value!.name) }    // error
 ```
 
 That loop is an error, since every pass would keep its own access: the second pass's `append` uses `names`, which depends on the first pass's.

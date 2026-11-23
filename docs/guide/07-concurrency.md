@@ -35,7 +35,7 @@ join({ integrate(mutable &world.enemies, dt: dt) },     // may run both closures
      { mix(mutable &world.audio) })                     // fine: each closure writes a different field
 
 join({ integrate(mutable &world.enemies, dt: dt) },
-     { drawRadar(&world.enemies) })                     // error: one closure reads 'world.enemies' while the other writes it
+     { drawRadar(world.enemies) })                      // error: one closure reads 'world.enemies' while the other writes it
 ```
 
 `std.jobs` is a **job system**: it runs closures on a pool of threads. The closures in `join` borrow parts of `world` for the length of the call, and `join` finishes them before it returns. This is **lent work** ([07](../spec/07-concurrency/thread-work.md#lending-work-to-other-threads)).
@@ -100,7 +100,7 @@ The compiler works out `Sendable` from what a type holds, as it does for `Copyab
 ```swift
 func drawMarkers(_ enemies: mutable &List<Enemy>, _ hud: &Hud) {
     enemies.forEachInParallel { e in
-        mark(&hud, at: e.pos)       // error: 'Hud' isn't Sendable, so lent work can't capture it
+        mark(hud, at: e.pos)        // error: 'Hud' isn't Sendable, so lent work can't capture it
     }
 }
 ```
@@ -132,7 +132,7 @@ deaths.lock { _ in
 }
 
 let nav = RwLock(NavGrid())
-let route = nav.read { grid in findPath(&grid, from: start, to: goal) }  // many readers at once
+let route = nav.read { grid in findPath(grid, from: start, to: goal) }   // many readers at once
 nav.write { grid in grid.block(cellOf(crate.pos)) }                       // one writer, and no readers meanwhile
 ```
 
@@ -199,10 +199,10 @@ func countCrowds(_ enemies: mutable &List<Enemy>, into cells: &AtomicArray<Int32
 var level = loadLevel()
 let bounces = 3
 _ = Thread.start(name: "bake") {
-    bakeLighting(&level, bounces: bounces)                              // error: unlisted captures; a thread body can't borrow them
+    bakeLighting(level, bounces: bounces)                               // error: unlisted captures; a thread body can't borrow them
 }
 let bake = Thread.start(name: "bake") { [move level, copy bounces] in   // fine: the thread owns 'level', and a copy of 'bounces'
-    bakeLighting(&level, bounces: bounces)
+    bakeLighting(level, bounces: bounces)
 }
 loadAudio()                                                             // runs on this thread meanwhile
 bake.join()                                                             // waits until the bake has finished
@@ -217,7 +217,7 @@ bake.join()                                                             // waits
 **`Thread.start` returns a `Thread<R>`, where `R` is what the body returns, and `join()` waits for the thread to end and returns that value** ([07](../spec/07-concurrency/thread-work.md#joining-a-thread)). The bake returns nothing, so `bake` is a `Thread<Void>`. A thread that computes something hands it back through `join()`, as this one does with a checksum of some bytes it owns:
 
 ```swift
-let hashing = Thread.start { [move bytes] in crc32(&bytes) }  // a Thread<UInt32>
+let hashing = Thread.start { [move bytes] in crc32(bytes) }   // a Thread<UInt32>
 let crc = hashing.join()                                      // waits, then returns the body's UInt32
 ```
 
@@ -231,7 +231,7 @@ let crc = hashing.join()                                      // waits, then ret
 let mixer = alloc Shared(Mutex(AudioMixer()))
 let m = mixer.weak()                                              // a WeakShared<Mutex<AudioMixer>>
 _ = Thread.start { [copy m, copy clip] in                         // '_ =' detaches the thread: nothing joins it
-    if let mx = m.upgrade() { mx.value.lock { $0.play(&clip) } }  // one more owner while 'mx' lives
+    if let mx = m.upgrade() { mx.value.lock { $0.play(clip) } }   // one more owner while 'mx' lives
 }
 ```
 
@@ -243,7 +243,7 @@ _ = Thread.start { [copy m, copy clip] in                         // '_ =' detac
 func startRenderer() -> (Thread<Void>, Sender<Shared<Snapshot>>) {
     let (tx, rx) = alloc Channel<Shared<Snapshot>>.make(capacity: 3)
     let render: Thread<Void> = Thread.start(name: "render") { [move rx] in   // the thread owns the receiver
-        for snapshot in mutable &rx { draw(&snapshot) }                     // waits for each snapshot in turn
+        for snapshot in mutable &rx { draw(snapshot) }                      // waits for each snapshot in turn
     }
     return (consume render, consume tx)                                      // the simulation keeps the sender
 }
@@ -251,7 +251,7 @@ func startRenderer() -> (Thread<Void>, Sender<Shared<Snapshot>>) {
 
 **A `Channel` hands items from one thread to another through two owned ends, a `Sender` and a `Receiver`** ([07](../spec/07-concurrency/synchronization.md#queues-and-channels)).
 
-**The render thread owns the `Receiver`, and takes one item at a time from it in a loop.** Each pass calls `receive()`, which **parks** the thread between items: it sleeps until the next item comes. The loop lends `rx` with `mutable &` because receiving changes the `Receiver`, and each snapshot it hands out is the loop's own, which `draw(&snapshot)` lends to the drawing code.
+**The render thread owns the `Receiver`, and takes one item at a time from it in a loop.** Each pass calls `receive()`, which **parks** the thread between items: it sleeps until the next item comes. The loop lends `rx` with `mutable &` because receiving changes the `Receiver`, and each snapshot it hands out is the loop's own, which `draw(snapshot)` lends to the drawing code.
 
 **The loop ends once every `Sender` is gone**, after the render thread has drawn every snapshot sent before. The channel is then **disconnected**, and `receive()` returns `nil` instead of parking for ever ([07](../spec/07-concurrency/synchronization.md#disconnected-channels)). So the simulation stops the render thread by dropping its sender, and then joins it:
 

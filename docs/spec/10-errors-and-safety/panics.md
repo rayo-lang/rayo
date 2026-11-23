@@ -14,7 +14,7 @@ let share = total / players                      // panics if players is 0, in e
 
 ```swift
 catchPanic {
-    handle(&request)
+    handle(request)
 } recover: { p in
     log("request failed: \(p.message)")      // the server goes on to the next request
 }
@@ -201,7 +201,7 @@ let frame = catchPanic {
     return world.snapshot()
 } recover: { p in
     log("step failed: \(p.message)")
-    world = loadWorld(&level)                 // 'world' may be half-changed: this program rebuilds it
+    world = loadWorld(level)                  // 'world' may be half-changed: this program rebuilds it
     return alloc lastGoodFrame.clone()
 }
 ```
@@ -222,7 +222,7 @@ let frame = catchPanic {
 
 ```swift
 catchPanic {
-    views.append(&name)              // creating this closure makes 'views' depend on 'name'
+    views.append(name)               // creating this closure makes 'views' depend on 'name'
 } recover: { _ in
     name = alloc "b"                 // error: 'views' depends on 'name', and is used below
 }

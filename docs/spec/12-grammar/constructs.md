@@ -116,7 +116,7 @@ postfix       = '.' (identifier generic-args? | keyword | int-literal)  (* keywo
 call-suffix   = '(' argument-list? ')' trailing-closures? | trailing-closures ;
 trailing-closures = trailing-closure (identifier ':' trailing-closure)* ;   (* catchPanic { … } recover: { … }; labels are identifiers *)
 argument-list = argument (',' argument)* ','? ;
-argument      = (arg-label ':')? (expression | operator) ;         (* show(&boss), heal(mutable &boss); combine: + passes the operator as a function value *)
+argument      = (arg-label ':')? (expression | operator) ;         (* show(boss), heal(mutable &boss); combine: + passes the operator as a function value *)
 primary       = identifier generic-args? | literal | 'self' | 'Self' | 'nil'
               | '(' operator ')'                                    (* operator as a function value: (+), (<) *)
               | '.' (identifier | keyword)                          (* implicit member: .zero, .opening, .init *)

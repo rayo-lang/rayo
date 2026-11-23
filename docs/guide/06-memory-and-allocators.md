@@ -9,8 +9,8 @@ let frameArena = Allocator.register(Arena(size: 64.mb))          // scratch data
 while running {
     do {
         var visible = frameArena.alloc List<Handle<Mesh>>()      // the list's storage comes from the arena
-        cull(&world, into: mutable &visible)
-        submit(&visible)
+        cull(world, into: mutable &visible)
+        submit(visible)
     }                                                            // 'visible' is destroyed: freeing into an arena does nothing
     frameArena.reset()                                           // the frame's scratch memory is freed at once
 }
@@ -137,7 +137,7 @@ Each open checks whether the allocator has reset since the value obtained its st
 
 ```swift
 do {
-    let names = frameArena.alloc collectNames(&world)  // an alloc func: the list and its strings come from the arena
+    let names = frameArena.alloc collectNames(world)   // an alloc func: the list and its strings come from the arena
     world.results = alloc names.clone()                // the clone and its strings come from .heap
 }
 frameArena.reset()
@@ -174,7 +174,7 @@ enum Tree {
 
 **An existential, `any P`, is a value of some type that conforms to the protocol `P`** ([05](../spec/05-protocols-generics-and-closures/protocols-and-generics.md#any-p-explicit-dynamic-dispatch)). It calls `P`'s requirements through a table, so the value's type can be one you know only at run time.
 
-**Its size depends on the type inside, so, like a run of elements, an `any P` sits behind a reference or a box** ([01](../spec/01-values-and-ownership/references.md#unsized-types)). A `&any P` borrows its value, as `&boss` borrows an enemy, and is a pointer and a table. To own a value whose type you know only at run time, put it in a box: a `Box<any P>`.
+**Its size depends on the type inside, so, like a run of elements, an `any P` sits behind a reference or a box** ([01](../spec/01-values-and-ownership/references.md#unsized-types)). A `&any P` borrows its value, as a `&Enemy` borrows an enemy, and is a pointer and a table. To own a value whose type you know only at run time, put it in a box: a `Box<any P>`.
 
 The game already has enemies that take damage. To put them in one list with breakable crates, give both types the same `Damageable` behavior:
 
@@ -234,7 +234,7 @@ print(wet.value.roughness)                                               // 'val
 ```swift
 let grass = alloc Shared(Texture(pixels: alloc loadPixels("grass.tex"), width: 256))
 let cached = grass.weak()                            // WeakShared<Texture>: owns nothing
-if let tex = cached.upgrade() { draw(&tex.value) }   // an owner while 'tex' lives, or nil if the texture is gone
+if let tex = cached.upgrade() { draw(tex.value) }    // an owner while 'tex' lives, or nil if the texture is gone
 ```
 
 **A weak link names a shared value without keeping it alive.** `s.weak()` returns one, a `WeakShared<T>`: 8 bytes, and copyable ([06](../spec/06-memory-and-allocators/owning-values.md#sharedt-data-with-many-owners)).

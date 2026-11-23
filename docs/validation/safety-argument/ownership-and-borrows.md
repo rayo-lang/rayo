@@ -50,7 +50,7 @@
 
 ```swift
 items.append(items.count)     // fine: items.count is read, and done, before append borrows items
-f(mutable &x, &x)             // error: two borrows of x overlap for the whole call
+f(mutable &x, x)              // error: two borrows of x overlap for the whole call
 ```
 
 **An optional chain or `!` reads the optional, so its borrow begins there.** An assignment through an optional chain works out the rest of its place after its right side, whose accesses have then ended.

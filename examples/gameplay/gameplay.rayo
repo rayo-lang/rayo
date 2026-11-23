@@ -84,7 +84,7 @@ func contact(_ world: mutable &World) {
         guard e.target != nil, ref let p = &world.players[e.target] else { continue }
         if distanceSquared(p.pos, e.pos) < 1 {
             // A handle is implicitly copyable, so the command gets a copy of the borrowed enemy's target.
-            world.commands.append(.damagePlayer(e.target, amount: damage(for: &e.kind)))
+            world.commands.append(.damagePlayer(e.target, amount: damage(for: e.kind)))
             world.commands.append(.despawn(h))
         }
     }

@@ -75,7 +75,7 @@ hits = alloc List<Int>()
 hits.append(5)                  // fine
 ```
 
-A function that only needs to read the list doesn't have to take it over. A parameter written `&List<Int>` **borrows** its argument: it reads the value without owning it, and the call writes `&hits` to lend it ([Borrowing](03-borrowing.md)). Passing a list that way moves nothing, so the caller still owns the list afterwards. Operators such as `-` only read their values too, and so does `\(…)` inside quotes, so neither needs a mark.
+A function that only needs to read the list doesn't have to take it over. A parameter written `&List<Int>` **borrows** its argument: it reads the value without owning it, and the call passes `hits` with no mark, which lends it ([Borrowing](03-borrowing.md)). Passing a list that way moves nothing, so the caller still owns the list afterwards. Operators such as `-` only read their values too, and so does `\(…)` inside quotes, so neither needs a mark.
 
 ## Adding to a list
 
@@ -142,7 +142,7 @@ A clone is meant to be fully independent of the original: changing or destroying
 
 ## Declaring, assigning and returning
 
-A `let` or a `var` owns the value it holds, as `hits` owns its list. So a variable declared from another one has to say how it gets that value, as a call does, and leaving that out is an error:
+A `let` or a `var` owns the value it holds, as `hits` owns its list. So a variable declared from another one has to say how it gets that value, as a call that takes the value over does, and leaving that out is an error:
 
 ```swift
 var hits = alloc List<Int>()

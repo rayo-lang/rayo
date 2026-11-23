@@ -13,7 +13,7 @@ func dump<T>(_ value: &T) {
     }
 }
 
-dump(&Stats(hp: 100, armor: 5))                         // compiles to two log calls, for hp and armor
+dump(Stats(hp: 100, armor: 5))                          // compiles to two log calls, for hp and armor
 ```
 
 **Every type has compile-time metadata**, which reflection reads ([below](#what-reflection-can-read)).
@@ -25,16 +25,16 @@ A complete serializer dispatches on the kind of type it gets, walking a struct's
 ```swift
 func serialize<T>(_ value: &T, into w: mutable &Writer) {
     static if T.conforms(Pod.self) && T.isPaddingFree {
-        w.bytes(of: &value)                                   // Vec3, Color, …: raw bytes
+        w.bytes(of: value)                                    // Vec3, Color, …: raw bytes
     } else static if T.conforms(Serializable.self) {          // List, String, Map, Handle… conform in std
         value.serialize(into: mutable &w)
     } else static if T.isEnum {
-        serializeEnum(&value, into: mutable &w)
+        serializeEnum(value, into: mutable &w)
     } else static if T.isConstructible {                      // every field visible here, so none is skipped silently
         w.beginObject(T.name)
         static for field in T.fields where !field.has(Transient.self) {
             w.key(field.name)
-            serialize(&value[field], into: mutable &w)
+            serialize(value[field], into: mutable &w)
         }
         w.endObject()
     } else {
@@ -46,7 +46,7 @@ func serializeEnum<T>(_ value: &T, into w: mutable &Writer) {
     static for c in T.cases {
         if ref let payload = &value[case: c] {                // nil unless value holds case c
             w.tag(c.name)
-            static for field in c.payload { serialize(&payload[field], into: mutable &w) }
+            static for field in c.payload { serialize(payload[field], into: mutable &w) }
         }
     }
 }
@@ -263,7 +263,7 @@ func calibrate<Row>(_ table: mutable &Columns<Row>) {
     const cal = Row.field(ofType: Calibration.self)
     const out = Row.field(ofType: Calibrated.self)
     var (rs, cs, os) = table.rows[mutableFields: (raw, cal, out)]   // a 'mutable &[…]' of each column
-    for (o, (r, c)) in os.mutableZip(&rs.zip(&cs)) { o.value = r.value * c.gain + c.offset }
+    for (o, (r, c)) in os.mutableZip(rs.zip(cs)) { o.value = r.value * c.gain + c.offset }
 }
 
 struct Telemetry(                                         // one table per kind of sensor
@@ -293,7 +293,7 @@ func integrate<Row>(_ table: mutable &Archetype<Row>, dt: Float) {
     const tf = Row.field(ofType: Transform.self)          // per instantiation; a compile error if absent
     const vf = Row.field(ofType: Velocity.self)
     var (ts, vs) = table.rows[mutableFields: (tf, vf)]  // a 'mutable &[Transform]' and a 'mutable &[Velocity]'
-    for (t, v) in ts.mutableZip(&vs) { t.position += v.linear * dt }
+    for (t, v) in ts.mutableZip(vs) { t.position += v.linear * dt }
 }
 
 struct World(                                             // one table per archetype the game declares

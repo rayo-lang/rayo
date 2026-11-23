@@ -126,7 +126,7 @@ let req = try await read(sock, timeout: .seconds(30))              // fails with
 await sleep(for: .milliseconds(200))                               // a retry's backoff, on MonotonicClock
 let digest = await consume hashed                                  // a Future<Digest> that a worker thread fulfills: nil if its Promise is gone
 var body = lease.arena.alloc List<UInt8>()                         // lease: the handler's own value naming its request's arena; 'body' lives across awaits
-let host = &req.host; try await write(sock, &page); log(host)      // error: the reference 'host' is live across the await
+let host = &req.host; try await write(sock, page); log(host)       // error: the reference 'host' is live across the await
 
 guard let h = try? conns.start(serve(sock)) else { continue }      // nil when the set is full: the task, handed back, is dropped
 conns.cancel(h)                                                    // the client is gone: its handler is destroyed where it waits

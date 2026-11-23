@@ -48,8 +48,8 @@ func step(_ sim: mutable &Sim, dt: Float) {
     //
     // error: 'sim.wind' is written by the second argument while the first reads it
 
-    relaxCloth(mutable &sim.cloth, &sim.clothConstraints, iterations: 4)
-    sim.stats = gatherStats(&sim.particles)
+    relaxCloth(mutable &sim.cloth, sim.clothConstraints, iterations: 4)
+    sim.stats = gatherStats(sim.particles)
 }
 
 func integrateParticles(_ ps: mutable &SoA<Particle>, gravity: Vec3, wind: Vec3, dt: Float) {
@@ -107,5 +107,5 @@ func debugDraw(_ sim: &Sim, _ draw: mutable &DebugDraw) {
     for c in &sim.clothConstraints {                    // 'sim' is borrowed; each Vec3 is copied with nothing written
         lines.append((sim.cloth[c.a].pos, sim.cloth[c.b].pos))
     }
-    draw.lines(&lines, color: .yellow)
+    draw.lines(lines, color: .yellow)
 }

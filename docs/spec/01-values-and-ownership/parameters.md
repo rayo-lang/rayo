@@ -107,9 +107,10 @@ spawn(.grunt)                                           // leaves out 'at:', so 
 ## Evaluation order, and when a call's borrows begin
 
 ```swift
+func f(_ a: mutable &Int, _ b: &Int) { … }
 items.append(items.count)                // fine: items.count is read, and done, before append borrows items
 upload(builder.finish(builder.count))    // fine: count is read before finish takes builder
-f(mutable &x, &x)                        // error: two borrows of x overlap for the whole call
+f(mutable &x, x)                         // error: two borrows of x overlap for the whole call
 ```
 
 **Evaluation is left to right, and a call's borrows begin with the call.** So a value read for an argument is done before the call lends or takes its place, and every borrow and take of one call is checked against the others. The order is fixed, so two implementations never disagree about it ([11](../11-compilation-model.md#what-the-language-leaves-open)). The one exception is the message of `fatalError`, `precondition` or `assert`, evaluated only when the call panics ([10](../10-errors-and-safety/panics.md#messages)). A call runs in this order:

@@ -22,10 +22,14 @@ func total(list: &List<Int>) -> Int {
 var hits = alloc List<Int>()
 hits.append(12)
 hits.append(30)
-let damage = total(list: &hits)         // 42
+let damage = total(list: hits)          // 42
 ```
 
-`list`'s type is `&List<Int>`, a reference to a list, so `total` borrows the list to read it, and the call writes `&hits` to lend it. This is a **shared borrow**, since any number of borrows can read the same value at once. The loop lends the list on to read its elements the same way, as [Loops](#loops) below shows.
+`list`'s type is `&List<Int>`, a reference to a list, so `total` borrows the list to read it. This is a **shared borrow**, since any number of borrows can read the same value at once.
+
+The call writes `hits` with no mark, and still lends the list rather than giving it away. The parameter's type says that `total` only borrows, and a borrow costs the caller nothing: the caller keeps owning the list throughout. A name with no mark never moves a list either, since a move always writes `consume`. So a `&` before `hits` would tell a reader nothing new ([05](../spec/05-protocols-generics-and-closures/implicit-conversions.md#places-lent-where-a-reference-is-expected)). Writing `total(list: &hits)` means the same thing.
+
+The loop is different. A loop has no parameter type to say how it takes the list, so `for h in &list` writes `&` to lend the list on and read its elements, as [Loops](#loops) below shows.
 
 Inside `total`, `list` is another name for the caller's list, as `same` referred to `hits` in chapter 2. `total` can read the list through it, but it can't change the list, move it or keep it ([01](../spec/01-values-and-ownership/references.md#references)).
 
@@ -44,7 +48,7 @@ func longer(a: &List<Int>, b: &List<Int>) -> List<Int> {
 
 `return` hands the caller a value that the function owns ([Moves and copies](02-moves-and-copies.md#declaring-assigning-and-returning)). A `&` parameter owns nothing. Like `same` in chapter 2, it refers to a list someone else owns, and has nothing of its own to hand over.
 
-`longer`'s parameters are references, so its declaration tells every caller that both lists stay theirs. Returning one would break that promise. After `longer(a: &hits, b: &misses)`, the caller would still use `hits` and `misses`, but one of them would hold nothing.
+`longer`'s parameters are references, so its declaration tells every caller that both lists stay theirs. Returning one would break that promise. After `longer(a: hits, b: misses)`, the caller would still use `hits` and `misses`, but one of them would hold nothing.
 
 To return a list, `longer` has to build one that it owns, with `clone()` ([Moves and copies](02-moves-and-copies.md#copies)). That makes it an `alloc func`, as `newRound` is:
 
@@ -116,7 +120,7 @@ With `mutable &`, you lend `enemyHp` to `heal`, and leaving it out is an error:
 heal(hp: enemyHp)               // error: 'heal' takes 'mutable &Int'; write 'mutable &enemyHp'
 ```
 
-The marks are there so that you can see what a call does with each variable: `consume` moves it, `&` lends it to read, and `mutable &` lends it to change. A change gives no warning later. `enemyHp` would just hold a different number, with nothing in the call to say why. So among the arguments in a call's parentheses, the ones marked `mutable &` are the ones it may change ([01](../spec/01-values-and-ownership/references.md#places-given-to-a-position)).
+The marks are there so that you can see what a call does with each variable: `consume` moves it, and `mutable &` lends it to change. A variable with no mark is only lent to read or copied, so it comes back from the call as it went in. A change gives no warning later. `enemyHp` would just hold a different number, with nothing in the call to say why. So among the arguments in a call's parentheses, the ones marked `mutable &` are the ones it may change ([01](../spec/01-values-and-ownership/references.md#places-given-to-a-position)).
 
 The value before the dot needs no mark, even when the method changes it, as `hits.append(5)` changes `hits`. The call names that value as the one it acts on. So you know which value might change, though not whether it does. The method's declaration says whether it changes the value. `append`'s does, and `clone()`'s doesn't ([01](../spec/01-values-and-ownership/references.md#unmarked-places)).
 
@@ -165,13 +169,13 @@ ref var first = &hits[0]            // error: write 'mutable &hits[0]'
 ref let first = mutable &hits[0]    // error: 'mutable &' lends for change; declare 'ref var'
 ```
 
-Every borrow that changes a value says so with `mutable &`, in a declaration as at a call. A `ref let` changes nothing, so it takes `&`.
+Every borrow that changes a value says so with `mutable &`, in a declaration as at a call. A `ref let` changes nothing, so it takes `&`. A declaration has no parameter type to say that it borrows, so the `&` is written there, and `ref let first = hits[0]` is an error that asks for it.
 
 A `var` that holds a reference is different from a `ref var`: it is a variable of its own, so assigning it a new reference points it somewhere else ([01](../spec/01-values-and-ownership/bindings.md#bindings-that-own-a-value)):
 
 ```swift
 var pick = &hits[0]
-pick = &hits[1]                 // 'pick' now refers to the second hit
+pick = hits[1]                  // 'pick' holds a '&Int', so 'hits[1]' is lent: 'pick' refers to the second hit
 ```
 
 A `ref let` of an element borrows it to read, as `same` borrows the whole list. Moving the element out, though, is an error:
@@ -192,7 +196,7 @@ In a list of lists, though, each element is a whole list. `copy` is an error the
 var rounds = alloc List<List<Int>>()
 rounds.append(alloc hits.clone())
 ref let latest = &rounds[rounds.count - 1]
-log("\(latest.count) hits, \(total(list: &latest)) damage")
+log("\(latest.count) hits, \(total(list: latest)) damage")
 ```
 
 `latest` names the last round, so the `log` call doesn't have to repeat `rounds[rounds.count - 1]`.
@@ -229,7 +233,7 @@ log("\(same.count)")
 
 ## Loops
 
-A `for` loop takes its list the way a call takes an argument. `&hits` lends the list to read, `mutable &hits` lends it to change its elements, and `consume hits` hands the elements over. A loop over `&hits` borrows the list for its whole run, and on each pass, `h` names one element where it sits, read-only:
+A `for` loop writes how it takes its list, since no parameter type says it. `&hits` lends the list to read, `mutable &hits` lends it to change its elements, and `consume hits` hands the elements over. A loop over `&hits` borrows the list for its whole run, and on each pass, `h` names one element where it sits, read-only:
 
 ```swift
 for h in &hits {
@@ -283,7 +287,7 @@ Reads can happen together. A read changes nothing, so it can't spoil another rea
 
 ```swift
 for h in &hits {
-    log("\(h) of \(total(list: &hits))")
+    log("\(h) of \(total(list: hits))")
 }
 ```
 
@@ -321,7 +325,7 @@ func addAll(target: mutable &List<Int>, source: &List<Int>) {
     }
 }
 
-addAll(target: mutable &hits, source: &hits)    // error: two borrows of 'hits' overlap for the whole call
+addAll(target: mutable &hits, source: hits)     // error: two borrows of 'hits' overlap for the whole call
 ```
 
 The compiler doesn't look inside `addAll` to find this. Its declaration alone says that `target` may change a list while `source` reads one. Here both are `hits`, so the loop over `source` would read the list while `append` changes it. If `append` transferred the values to a bigger block, the loop would go on reading the old block, which has been freed.
@@ -329,12 +333,12 @@ The compiler doesn't look inside `addAll` to find this. Its declaration alone sa
 The fix is to give `addAll` a second list to read. A clone is worth its cost here, since `addAll` needs the values as they were before it started appending:
 
 ```swift
-addAll(target: mutable &hits, source: &alloc hits.clone())
+addAll(target: mutable &hits, source: alloc hits.clone())
 ```
 
 A call works in two steps. First, it works out its arguments, left to right. Here, `alloc hits.clone()` reads `hits`, builds a new list, and is done with `hits`. Working out `mutable &hits` only finds the place to lend. The lending starts when the call begins, after the clone is made ([01](../spec/01-values-and-ownership/parameters.md#evaluation-order-and-when-a-calls-borrows-begin)). The clone's read of `hits` ends before the call's change begins. During the call, `addAll` reads one list and changes another.
 
-A value that a call makes and nothing names, such as this clone, is a **temporary**. It lives only until the end of the statement that made it, unless a parameter that owns its argument takes it ([02](../spec/02-views-and-dependencies/dependency-projection-and-results.md#temporaries)). `&` lends the clone to `addAll`, so the clone is destroyed at the end of this statement. In `rounds.append(alloc hits.clone())`, `append` took its clone, and `rounds` owns it.
+A value that a call makes and nothing names, such as this clone, is a **temporary**. It lives only until the end of the statement that made it, unless a parameter that owns its argument takes it ([02](../spec/02-views-and-dependencies/dependency-projection-and-results.md#temporaries)). `source` only borrows the clone, so the clone is destroyed at the end of this statement. In `rounds.append(alloc hits.clone())`, `append` took its clone, and `rounds` owns it.
 
 The compiler checks the law when it compiles, in every build. So for the values in this chapter, the check costs nothing while the program runs.
 
@@ -353,3 +357,4 @@ Some values bend this chapter's rules. A value that several pointers can reach c
 - [01 The law of exclusivity](../spec/01-values-and-ownership/exclusivity.md#the-law-of-exclusivity): which places overlap, two elements of one list at once, and the values checked while the program runs.
 - [02 Temporaries](../spec/02-views-and-dependencies/dependency-projection-and-results.md#temporaries): how long a value that nothing names lives.
 - [04 Iteration](../spec/04-types/collections.md#iteration): how a `for` loop borrows the list it runs over.
+- [05 Places lent where a reference is expected](../spec/05-protocols-generics-and-closures/implicit-conversions.md#places-lent-where-a-reference-is-expected): where a place with no mark is lent, and where code writes `&`.

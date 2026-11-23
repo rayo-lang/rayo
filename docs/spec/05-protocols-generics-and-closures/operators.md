@@ -100,7 +100,7 @@ let half = catchPanic { 1 } recover: { _ in 2.5 }    // both results are literal
 
 ```swift
 let caught: Panic? = catchPanic { piece(); return nil } recover: { p in copy p }         // R is Panic?; neither closure fails, so EB and ER are Never
-let level: Level = catchPanic { try loadLevel(&path) } recover: { _ in alloc Level() }   // error: the call is a Level!(IoError | ParseError); write 'try'
+let level: Level = catchPanic { try loadLevel(path) } recover: { _ in alloc Level() }    // error: the call is a Level!(IoError | ParseError); write 'try'
 ```
 
 **Each untyped argument then takes its parameter's type.** The first four calls below bind `T` or `C` in the first, second and fourth of those ways. The third then gives its untyped `.seconds(0.5)` the type `Duration`, and the last call gives its untyped `0` the type `Float`:
@@ -154,8 +154,8 @@ a != b     // default: !(a == b)
 a > b      // default: b < a
 a <= b     // default: a < b || a == b
 a >= b     // default: b < a || a == b
-a.min(&b)  // default: a copy of b when b < a, else of a
-a.max(&b)  // default: a copy of a when b < a, else of b
+a.min(b)   // default: a copy of b when b < a, else of a
+a.max(b)   // default: a copy of a when b < a, else of b
 ```
 
 **Every witness of `min` returns `self`, and every witness of `max` returns `other`, when neither operand is less than the other in the order they use**, as the defaults do. That order is `<` for every type but `Half`, `Float` and `Double`, whose witnesses put `-0` below `+0` ([04](../04-types/numbers-and-math.md#floating-point)). A NaN operand is never a tie: the float witnesses give NaN for it. Values that tie can still differ, so the rule fixes which one a call returns:
@@ -168,17 +168,17 @@ struct Ranked(let rank: Int, let id: UInt32): Comparable {       // compares on 
 
 let a = Ranked(rank: 1, id: 7)
 let b = Ranked(rank: 1, id: 9)
-let lo = a.min(&b)    // a copy of a, with id 7: the two tie, so min returns self
-let hi = a.max(&b)    // a copy of b, with id 9: max returns other
+let lo = a.min(b)     // a copy of a, with id 7: the two tie, so min returns self
+let hi = a.max(b)     // a copy of b, with id 9: max returns other
 ```
 
 **A type may replace any default with its own operator or method.** `Half`, `Float` and `Double` replace `min` and `max` with IEEE 754-2019's `minimum` and `maximum`, so that a NaN operand gives NaN and `-0` counts as less than `+0` ([04](../04-types/numbers-and-math.md#floating-point)).
 
-**The free functions `min(a, b)` and `max(a, b)` call `a.min(&b)` and `a.max(&b)`**, as `max(0, 1)` and `max(f, d)` above do. So generic code over `Comparable & Copyable` gives the same result as concrete code, bit for bit, for every type it is instantiated with. They own their arguments, so an implicitly copyable argument is copied with nothing written, and any other takes `copy` or `consume`, as `max(copy v1, copy v2)` does for two `Version`s:
+**The free functions `min(a, b)` and `max(a, b)` call `a.min(b)` and `a.max(b)`**, as `max(0, 1)` and `max(f, d)` above do. So generic code over `Comparable & Copyable` gives the same result as concrete code, bit for bit, for every type it is instantiated with. They own their arguments, so an implicitly copyable argument is copied with nothing written, and any other takes `copy` or `consume`, as `max(copy v1, copy v2)` does for two `Version`s:
 
 ```swift
-func min<T: Comparable & Copyable>(_ a: T, _ b: T) -> T { a.min(&b) }
-func max<T: Comparable & Copyable>(_ a: T, _ b: T) -> T { a.max(&b) }
+func min<T: Comparable & Copyable>(_ a: T, _ b: T) -> T { a.min(b) }
+func max<T: Comparable & Copyable>(_ a: T, _ b: T) -> T { a.max(b) }
 ```
 
 **A move-only `Comparable` type, such as `String`, has no `min` or `max`**, since neither can return a copy of a borrowed value of it ([Protocols and generics](protocols-and-generics.md#protocols-and-generics)). Code compares such values with `<` and moves the one it keeps.

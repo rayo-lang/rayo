@@ -188,16 +188,16 @@ Two more facts are part of the boundary between `unsafe` and safe code:
 
 ## Taking an address
 
-**`ptr(to:)` returns the address of a place**, in two forms: one for a place lent to it with `mutable &`, and a shared form for a place lent with `&`.
+**`ptr(to:)` returns the address of a place**, in two forms: one for a place lent to it with `mutable &`, and a shared form for a place lent shared.
 
 ```swift
 unsafe func ptr<T>(to place: mutable &T) -> *T    // the form for a place lent for change
 let p = unsafe ptr(to: mutable &particles[0])     // the address of particles[0], lent for change
-let q = unsafe ptr(to: &particles[0])             // the shared form: the address of a place it borrows
+let q = unsafe ptr(to: particles[0])              // the shared form: the address of a place it borrows
 ```
 
-- **Builtin.** It is builtin, and the call's mark chooses the form: `mutable &` lends the place for change, and `&` lends it shared ([01](../01-values-and-ownership/references.md#making-a-reference)).
-- **Sized places.** The place's type binds `T`, so it is sized, as a raw pointer's target is ([above](#raw-pointers)). So `ptr(to: &hits.span)` is a compile error, and a run's address is its `baseAddress`.
+- **Builtin.** It is builtin, and the argument chooses the form: `mutable &` lends the place for change, and a place given as it is, or with `&`, is lent shared ([05](../05-protocols-generics-and-closures/implicit-conversions.md#places-lent-where-a-reference-is-expected)).
+- **Sized places.** The place's type binds `T`, so it is sized, as a raw pointer's target is ([above](#raw-pointers)). So `ptr(to: hits.span)` is a compile error, and a run's address is its `baseAddress`.
 - **Never a function value.** It converts to no function type or `Closure` and binds no `some F`, so every call of it is direct.
 - **The caller's place.** Its argument, of either form, is always the caller's place, never a copy, since its result is that place's address ([01](../01-values-and-ownership/parameters.md#borrowed-arguments)).
 - **A short access.** The access ends with the call, since a raw pointer is unscoped.

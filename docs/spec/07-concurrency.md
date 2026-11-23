@@ -5,10 +5,10 @@ Concurrent code becomes unsafe when two threads reach the same storage without c
 ```swift
 import std.jobs
 
-join({ updateAI(mutable &world.ai, sense: &world.perception) },   // may run both closures at once, and returns when both are done
+join({ updateAI(mutable &world.ai, sense: world.perception) },    // may run both closures at once, and returns when both are done
      { integrate(mutable &world.bodies, dt: dt) })                 // fine: each closure writes a different field
 
-join({ steer(mutable &world.ai, around: &world.bodies) },
+join({ steer(mutable &world.ai, around: world.bodies) },
      { integrate(mutable &world.bodies, dt: dt) })                 // error: one closure reads 'world.bodies' while the other writes it
 
 ThreadScope.run { s in                                            // threads that may borrow this function's locals

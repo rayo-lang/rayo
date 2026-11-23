@@ -17,7 +17,7 @@ func area(_ s: &Shape) -> Float {
     return when &s {
         .circle(r)         { .pi * r * r }
         .rect(size)        { size.x * size.y }
-        .polygon(p, n)     { polygonArea(&p[..<UInt(n)]) }    // a '&[Vec2]' of the first n points
+        .polygon(p, n)     { polygonArea(p[..<UInt(n)]) }     // lends a '&[Vec2]' of the first n points
     }
 }
 ```
@@ -77,7 +77,7 @@ let label = when &hit {
 }
 ```
 
-**A `when`'s subject is written as an argument is**: `when &e`, `when mutable &e`, `when consume e`, or a value, such as a call's result ([01](../01-values-and-ownership/bindings.md#for-and-when-names)).
+**A `when`'s subject writes its mark, since it expects no type that would lend it**: `when &e`, `when mutable &e`, `when consume e`, or a value, such as a call's result ([01](../01-values-and-ownership/bindings.md#for-and-when-names)).
 
 **The subject holds still while arms are tested.** A `when` borrows its subject from when it is evaluated until an arm is chosen: shared, or exclusively when it is marked `mutable &`. It holds a dynamic place's access as any borrow does ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-6-dynamic-accesses)). Patterns and guards run under that borrow, so a guard sees the value its arm then binds. A guard can't change or consume the subject, every part is a shared view inside a guard, and a part of a consumed subject, or of any value subject, takes its value only once its arm is chosen ([01](../01-values-and-ownership/bindings.md#for-and-when-names)).
 
@@ -175,7 +175,7 @@ An optional binding, such as `if ref let`, binds what such a place holds to a ne
 
 **The narrowed place is its payload, as a place.** Reading it reads the payload in place, and `mutable &x` lends the payload, which can't become `nil`, as a `mutable &T`.
 
-**Where a `T?` is expected, or a member that `Optional` declares is named, the narrowed place is the whole optional.** So `&x` given to a `&T?` parameter lends the optional, with no conversion, and `x.take()` is `Optional`'s `take()`.
+**Where a `T?` is expected, or a member that `Optional` declares is named, the narrowed place is the whole optional.** So `x` given to a `&T?` parameter lends the whole optional as it is, and `x.take()` is `Optional`'s `take()`.
 
 **The narrowing ends wherever the place could become `nil`**, and the place is a `T?` again until the next check. These are the ending events:
 
