@@ -37,7 +37,11 @@ struct ElementAssignmentTests {
         ),
         ("p[0] = 1", "3:1: error[E0230]: 'p' is a borrowed parameter, so it can't change"),
         ("p[1] -= 1", "3:1: error[E0230]: 'p' is a borrowed parameter, so it can't change"),
-        ("made()[0] = 1", "3:1: error[E0223]: only a local, or a field or element of one, can be assigned"),
+        (
+            "made()[0] = 1",
+            "3:1: error[E0291]: changing 'made()' does nothing, since it's dropped right after; "
+                + "store it in a 'var' first",
+        ),
     ])
     func `an element is assigned only where a field would be`(body: String, expected: String) {
         #expect(errorLines(body) == [expected])

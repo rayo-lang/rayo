@@ -219,6 +219,11 @@ final class FileChecker {
         return CheckedProgram(types: types, functions: table, bodies: bodies, main: main)
     }
 
+    /// The source text that `range` covers, on one line, for an error to name it by.
+    func spelling(of range: SourceRange) -> String {
+        file.spelling(of: range)
+    }
+
     /// Whether a function that failed to parse may have been the file's `main`: one that failed before its name, or
     /// named `main`.
     var mainMayHaveFailed: Bool {

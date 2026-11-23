@@ -9,8 +9,8 @@ package struct Parser: ~Copyable {
     typealias ErrorCase = (FoundToken) -> ErrorCode
 
     /// The source, as UTF-8.
-    private let bytes: [UInt8]
-    private let tokens: [Token]
+    let bytes: [UInt8]
+    let tokens: [Token]
     private var position = 0
     private var diagnostics: [Diagnostic]
 
@@ -42,11 +42,6 @@ package struct Parser: ~Copyable {
 
     var current: Token { tokens[position] }
     var atEnd: Bool { current.kind == .eof }
-
-    /// The text of the source that `range` covers.
-    func text(of range: SourceRange) -> String {
-        String(decoding: bytes[range.start.offset..<range.end.offset], as: UTF8.self)
-    }
 
     /// The range of the token before the current one.
     var previousRange: SourceRange { tokens[max(position - 1, 0)].range }

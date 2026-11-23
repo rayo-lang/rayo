@@ -9,7 +9,7 @@ extension Parser {
             // Parse declarations up to the end of the file or a `}` that closes no block.
             declarations += parseDeclarations()
             // The declarations run to the end of the file.
-            if atEnd { return SourceFile(declarations: declarations) }
+            if atEnd { return SourceFile(declarations: declarations, source: bytes, tokens: tokens) }
 
             // A `}` that closes no block ends the sequence early; it is reported, and the declarations go on after it.
             report(.unmatchedBrace)

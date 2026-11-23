@@ -53,9 +53,14 @@ struct AssignmentChecker {
     private func refusal(toChangePartsOf root: CheckedPlaceRoot) -> ErrorCode? {
         switch root {
         case .local(let local, _): refusal(toChange: local, holdsParts: true)
-        // A value that no local holds is no place an assignment can change.
-        case .temporary: .assignToNonLocal
+        case .temporary(let value): refusal(toChange: value)
         }
+    }
+
+    /// The error for an assignment into `temporary`, which ends with its statement. It names the temporary as the
+    /// source writes it.
+    private func refusal(toChange temporary: CheckedExpr) -> ErrorCode {
+        .assignToTemporary(temporary: expressions.file.spelling(of: temporary.range))
     }
 
     /// Checks the value an assignment gives its target. It is checked against the target's type where that is known,
@@ -111,14 +116,13 @@ struct AssignmentChecker {
 /// The rules for the place an assignment changes: it starts from a local that may change, and goes only into fields
 /// declared with `var`, never into a value property such as an array's count.
 extension AssignmentChecker: PlaceRules {
-    /// Checks a target's root that is no name, such as a call. Where the target names the root whole, it is refused
-    /// at once. Where the target goes on from it, it is checked as a value that no local holds, so a value property
-    /// along the target is reported first, and the root is refused last.
+    /// Checks a target's root that is no name, such as a call, as a temporary, which an assignment can't change. A
+    /// target that goes on from it has the root refused last, after the rest of the target.
     func root(_ expr: Expr, holdsParts: Bool) -> TypedPlace? {
-        guard holdsParts else { return refuse(.assignToNonLocal, at: expr.range) }
         // A value that failed was reported, and so is one too large for the stack, where a temporary lies.
         guard let value = expressions.check(expr),
               let held = declarations.fittingOnStack(value, reporting: errors) else { return nil }
+        guard holdsParts else { return refuse(refusal(toChange: held), at: expr.range) }
         return (CheckedPlace(root: .temporary(held)), held.type)
     }
 
@@ -133,7 +137,7 @@ extension AssignmentChecker: PlaceRules {
     func error(naming nonPlace: NonPlaceName, _ name: String) -> ErrorCode {
         switch nonPlace {
         // `_` names no place; it only drops a value.
-        case .underscore: .assignToNonLocal
+        case .underscore: .assignToUnderscore
         case .function: .assignToFunction(name: name)
         case .type: .assignToType(name: name)
         }

@@ -38,7 +38,7 @@ struct BorrowedPlaceTests {
     @Test(arguments: [
         ("var x = e", "var", "e"), ("var x = e.stats", "var", "e.stats"),
         ("let x = e.slots", "let", "e.slots"), ("let x = g[i]", "let", "g[i]"),
-        ("var x = g[i + 1]", "var", "g[…]"),
+        ("var x = g[i + 1]", "var", "g[i + 1]"), ("var x = g[i /* next */ +\n 1]", "var", "g[i + 1]"),
     ])
     func `a 'let' or 'var' given a place names the place, and says to write 'copy', 'consume' or '&'`(
         statement: String, keyword: String, place: String,

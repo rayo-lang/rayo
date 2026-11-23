@@ -194,8 +194,8 @@ public enum ErrorCode: Sendable, Hashable {
     @Code(222, error: "'{name}' is a function, so it can't change")
     case assignToFunction(name: String)
 
-    @Code(223, error: "only a local, or a field or element of one, can be assigned")
-    case assignToNonLocal
+    @Code(223, error: "only '_ = value' can assign to '_'")
+    case assignToUnderscore
 
     @Code(224, error: "'{keyword}' is only allowed inside a loop")
     case outsideLoop(keyword: String)
@@ -397,6 +397,9 @@ public enum ErrorCode: Sendable, Hashable {
 
     @Code(290, error: "'mutable' takes a place, not a reference; write 'mutable {place}'")
     case mutableOfReference(place: String)
+
+    @Code(291, error: "changing '{temporary}' does nothing, since it's dropped right after; store it in a 'var' first")
+    case assignToTemporary(temporary: String)
 
     // MARK: Ownership
 

@@ -11,7 +11,7 @@ extension ExpressionChecker {
     func reportHandedPlaces(of value: CheckedExpr, as code: (String) -> ErrorCode) {
         guard !value.type.isImplicitlyCopyable else { return }
         for handed in value.handedPlaces {
-            file.errors.report(code(sourceName(of: handed)), at: handed.place.range)
+            file.errors.report(code(file.spelling(of: handed.place.range)), at: handed.place.range)
         }
     }
 
@@ -44,7 +44,8 @@ extension ExpressionChecker {
             file.errors.report(.referenceToValue, at: value.range)
             return
         }
-        file.errors.reportKeepingMeaning(.unreferencedPlace(place: sourceName(of: handed)), at: handed.place.range)
+        let place = file.spelling(of: handed.place.range)
+        file.errors.reportKeepingMeaning(.unreferencedPlace(place: place), at: handed.place.range)
     }
 
     /// `lent`, a `&` of a place, as it stands where a position expects what `expected` names. The argument of a
@@ -117,7 +118,7 @@ extension ExpressionChecker {
     /// branch of an `if` declares, which ends with the branch while the `ref let` lives on.
     func reportEndedPlaces(of value: CheckedExpr, referredToBy binding: String) {
         for handed in value.handedPlaces where !names.isInScope(handed.local) {
-            let place = sourceName(of: handed)
+            let place = file.spelling(of: handed.place.range)
             file.errors.report(.referenceOutlivesPlace(binding: binding, place: place), at: handed.place.range)
         }
     }
@@ -127,61 +128,13 @@ extension ExpressionChecker {
     func mutableOfReference(_ operand: Expr, referenceRange: SourceRange, in range: SourceRange) -> CheckedValue? {
         // A place that failed was reported.
         guard let lentPlace = place(operand, under: self) else { return nil }
-        guard let local = lentPlace.place.local else {
+        guard lentPlace.place.local != nil else {
             file.errors.report(.unsupportedLentValue, at: referenceRange)
             return nil
         }
 
-        let placeName = sourceName(of: HandedPlace(local: local, place: lentPlace.place))
+        let placeName = file.spelling(of: lentPlace.place.range)
         file.errors.report(.mutableOfReference(place: placeName), at: range)
         return nil
-    }
-
-    /// The name of `place` as the source writes it, such as `e.stats.hp` or `g[i][0]`, for an error to name it by.
-    /// An index the source writes as anything but an integer literal or a local's bare name is written `…`, since the
-    /// checked program keeps no text for it.
-    private func sourceName(of place: HandedPlace) -> String {
-        var name = names[place.local].name
-        var type = names[place.local].type
-        for step in place.place.steps {
-            let part = written(step, from: type)
-            name += part.text
-            type = part.type
-        }
-        return name
-    }
-
-    /// `step` as the source writes it after the value of `type` it steps from, such as `.hp` or `[i]`, and the type
-    /// of the part it leads to.
-    private func written(_ step: CheckedPlaceStep, from type: RayoType) -> (text: String, type: RayoType) {
-        switch (step, type) {
-        // A field takes its name from the struct that holds it.
-        case (.field(let index, _), .named(.structure(let id))):
-            file.declarations.types.fields(of: id)[index].writtenStep
-        // An element takes its index, where the source writes one that has a name.
-        case (.element(let index, _, _), .array(_, let element)):
-            ("[\(indexName(of: index))]", element)
-        // Checking steps into a field only of a struct, and into an element only of an array.
-        default:
-            preconditionFailure("a place steps into a part that its value doesn't have")
-        }
-    }
-
-    /// The index of an element as an error writes it: an integer literal's value, a local's bare name, or `…`.
-    private func indexName(of index: CheckedExpr) -> String {
-        switch index.kind {
-        case .integerLiteral(let value, _): "\(value)"
-        case .place(let place) where place.steps.isEmpty:
-            if case .local(let local, _) = place.root { names[local].name } else { "…" }
-        default: "…"
-        }
-    }
-}
-
-private extension Field {
-    /// The step into the field as the source writes it after the struct that holds it, such as `.hp`, and the
-    /// field's type.
-    var writtenStep: (text: String, type: RayoType) {
-        ("." + name, type)
     }
 }

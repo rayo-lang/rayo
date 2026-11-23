@@ -248,7 +248,7 @@ each(enemies.span) { e in if e.hp < 10 { low.append(tag) } }        // a closure
 ```swift
 grid.cells.forEachIndexedInParallel { i, cell in cell.value = f(i) }   // each call gets an element and its index
 for (i, e) in items.mutableEnumerated() { … }                        // sequential, changing the elements of a 'var'
-for (i, e) in makeItems().mutableEnumerated() { … }                  // error: a temporary can't be changed; keep it in a 'var'
+for (i, e) in makeItems().mutableEnumerated() { … }                  // error: a temporary can't be changed; store it in a 'var' first
 ```
 
 - **Must accept** with the true index in every call and no copy of the collection. Show how the library's splitting keeps each part's starting index.
