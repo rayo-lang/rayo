@@ -28,6 +28,8 @@ struct TemporaryAssignmentTests {
         ("  spawn(hp:  1+2).hp = 0", "2:3", "spawn(hp: 1+2)"),
         ("spawn(hp: 1 +\n    2).hp = 0", "2:1", "spawn(hp: 1 + 2)"),
         ("spawn(hp: /* full */ 100).hp = 0", "2:1", "spawn(hp: 100)"),
+        ("spawn(\n    hp: 1\n).hp = 0", "2:1", "spawn(hp: 1)"),
+        ("[ 1 , 2 ][0] = 3", "2:1", "[1, 2]"),
         ("(makeEnemy()).hp = 0", "2:1", "makeEnemy()"),
         ("((makeEnemy())).hp = 0", "2:1", "makeEnemy()"),
         ("(makeHP()) + (makeHP()) = 1", "2:1", "(makeHP()) + (makeHP())"),

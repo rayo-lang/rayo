@@ -15,8 +15,9 @@ public struct SourceFile: Sendable {
         self.tokens = tokens
     }
 
-    /// The source text that `range` covers, on one line, for an error to name it by. Spaces, newlines and comments
-    /// between tokens become one space, and parentheses around the whole are left out.
+    /// The source text that `range` covers, on one line, for an error to name it by. A gap of spaces, newlines and
+    /// comments between tokens is one space, or none inside a bracket or before a `,`. Parentheses around the whole
+    /// are left out.
     public func spelling(of range: SourceRange) -> String {
         // The tokens that `range` covers, without the newlines among them or the parentheses around them all.
         var covered = tokens.filter { token in
@@ -28,13 +29,22 @@ public struct SourceFile: Sendable {
             covered.removeLast()
         }
 
-        // Tokens that touch in the source touch in the spelling, and any others are one space apart.
+        // Tokens that touch in the source touch in the spelling, and a gap that keeps a space is one space.
         var spelling = ""
         for (index, token) in covered.enumerated() {
-            if index > 0, covered[index - 1].range.end.offset < token.range.start.offset { spelling += " " }
+            if index > 0, Self.isSpaced(covered[index - 1], token) { spelling += " " }
             spelling += source.text(of: token.range)
         }
         return spelling
+    }
+
+    /// Whether the spelling puts a space between `previous` and `next`: where the source has a gap between them,
+    /// except just inside a bracket or before a `,`.
+    private static func isSpaced(_ previous: Token, _ next: Token) -> Bool {
+        let opensBracket = previous.isPunct(.lparen) || previous.isPunct(.lbracket) || previous.isPunct(.lbrace)
+        let closesBracket = next.isPunct(.rparen) || next.isPunct(.rbracket) || next.isPunct(.rbrace)
+        let hasGap = previous.range.end.offset < next.range.start.offset
+        return hasGap && !opensBracket && !closesBracket && !next.isPunct(.comma)
     }
 
     /// Whether `tokens` start with a `(` that the last of them closes.
