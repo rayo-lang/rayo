@@ -32,7 +32,7 @@ v0.1 adds:
 - a field of a struct type, given by a nested initializer call or by a local, which the call moves, and read through the struct that holds it, as `e.stats.hp`;
 - `copy` of a field of a local or a `&T` parameter, as `copy e.stats` or `copy e.stats.hp`, which leaves the struct whole;
 - assigning and compound-assigning a field of a `var` local, as `e.hp -= 5`, and moving a field out, which leaves the struct unusable until the field is assigned again ([01](docs/spec/01-values-and-ownership/moving-values-out.md#what-can-be-moved-from));
-- `print(Int)`, and `print(Bool)`, which prints `true` or `false`, each given a place or a value with no `&` ([04](docs/spec/04-types/collections.md#printing)).
+- `print(Int)` and `print(Bool)`, each given a place or a value with no `&`, the second printing `true` or `false` ([04](docs/spec/04-types/collections.md#printing)).
 
 ## v0.2: `UInt` and inline arrays
 
