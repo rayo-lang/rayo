@@ -66,7 +66,7 @@ p.step(dt)
 g(mutable e.f, mutable e.u)                        // error when 'f' and 'u' are members of one union
 join({ e.f = 1 }, { use(e.u) })                    // error: the same
 join({ v.x = x }, { v.y = y })                     // error for a Simd 'v': each closure accesses the whole vector
-if ref var (first, second) = mutable pair { ... } // fine for an optional tuple 'pair': two disjoint borrows
+if ref var (first, second) = mutable pair { ... }  // fine for an optional tuple 'pair': two disjoint borrows
 ```
 
 ```c

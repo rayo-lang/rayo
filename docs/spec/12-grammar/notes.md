@@ -86,7 +86,7 @@ let tail = &xs[3...]                // attached to 3 only, and closed by ']': po
 let head = &xs[..<n]                // attached to n only: prefix
 ```
 
-**The prefix `&` makes a shared reference, and the prefix `mutable` a mutable one** ([01](../01-values-and-ownership/references.md#making-a-reference)). Each takes the whole postfix chain after it, as every prefix operator does, so `&enemies[0].pos` refers to the enemy's position, and `mutable world.enemies[i]` lends one enemy for change. Before an expression, `mutable` is that operator and means nothing else. In a type, `mutable` begins a mutable reference, as in `mutable &Enemy`.
+**The prefix `&` makes a shared reference, and the prefix `mutable` a mutable one** ([01](../01-values-and-ownership/references.md#making-a-reference)). Each takes the whole postfix chain after it, as every prefix operator does, so `&enemies[0].pos` refers to the enemy's position, and `mutable world.enemies[i]` lends one enemy for change. Before an expression, `mutable` is that operator and means nothing else, so `mutable &p` reads as `mutable` of `&p`, which is a compile error ([01](../01-values-and-ownership/references.md#making-a-reference)). In a type, `mutable` begins a mutable reference, as in `mutable &Enemy`.
 
 **An operator can be passed as a function value.** Bare, it is allowed only as a whole argument, as in `reduce(0, +)`. Elsewhere it is written in parentheses, `(+)`. The expected function type chooses the overload, using 05's bounded lookup ([05](../05-protocols-generics-and-closures/operators.md#operators)).
 

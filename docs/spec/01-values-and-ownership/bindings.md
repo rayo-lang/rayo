@@ -54,7 +54,7 @@ let all = consume enemies            // a move: 'enemies' can't be used until it
 
 **An initializer that doesn't agree with its `ref` binding is a compile error that names the fix:**
 
-- `ref let x = p`, with a bare place `p` of a type that isn't a reference, says to write `&p`;
+- `ref let x = p`, with a bare place `p` of a type that isn't a `&T`, says to write `&p`;
 - `ref let x = mutable p` says to declare `ref var`, since a `ref let` changes nothing;
 - `ref var x = &p` says to write `mutable p`;
 - `ref var x = p`, with a bare place `p`, says to write `mutable p`, whether `p` holds a reference or not, since a lend for change is always marked ([References](references.md#every-lend-for-change-is-marked));
@@ -66,7 +66,7 @@ let all = consume enemies            // a move: 'enemies' can't be used until it
 
 **A place reached through a reference that a temporary holds lies outside the temporary**, as `rows()[0]` does where `rows()` returns a `&[Row]`. So does a place that a `where return outlives self` place property hands out from a temporary. So a `ref let` can name either, depending on what the temporary carries ([02](../02-views-and-dependencies/dependency-projection-and-results.md#temporaries)).
 
-**`ref var t = mutable r`, where `r` is a changeable place holding a `mutable &T`, reborrows through `r`** ([References](references.md#reborrowing)). `t` names what `r` refers to, and `r` stays borrowed exclusively while `t` is used, so it isn't moved. `ref let e = r`, where `r` holds a `&T`, names what `r` refers to the same way, with no mark, since a shared reborrow only reads.
+**`ref var t = mutable r`, where `r` is a changeable place holding a `mutable &T`, reborrows through `r`** ([References](references.md#reborrowing)). `t` names what `r` refers to, and `r` stays borrowed exclusively while `t` is used, so it isn't moved. `ref let e = &r`, where `r` holds a `mutable &T`, reborrows it shared, and `ref let e = r`, where `r` holds a `&T`, names what `r` refers to with no mark ([References](references.md#unmarked-places)).
 
 ```swift
 ref var lead = mutable enemies[0]
@@ -76,6 +76,8 @@ var pick = mutable enemies[1]
 ref var target = mutable pick        // reborrows: 'target' names enemies[1], and 'pick' stays usable after it
 target.hp = 0
 ref var other = pick                 // error: write 'mutable pick'
+ref let look = &pick                 // a shared reborrow: 'look' names enemies[1], read-only
+ref let peek = pick                  // error: write '&pick'
 ```
 
 ## Bindings that own a value

@@ -54,7 +54,7 @@ func now() -> Double { unsafe plat.time_seconds() }     // 'unsafe' before an ex
 func readPad(_ index: Int32) -> plat.pad? {
     precondition(index >= 0 && index < plat.PLATFORM_MAX_PADS)   // C wouldn't check it
     var raw = plat.pad()                                        // the C struct, all zeros
-    let ok = unsafe plat.poll_pad(index, ptr(to: mutable raw)) // C fills it in through the pointer
+    let ok = unsafe plat.poll_pad(index, ptr(to: mutable raw))  // C fills it in through the pointer
     guard ok && raw.connected else { return nil }
     return consume raw
 }

@@ -96,7 +96,7 @@ put(mutable out)                        // 'out' depends on 'src' from here on
 
 **A function can return or store only what its caller lent it.** Rules 3 and 4 tell the caller what a call borrows from the signature, and rule 5 checks each body against that. So the caller's sets hold without the caller seeing the body. A returned scoped value, an error it fails with included, and anything stored into a scoped `mutable &T` parameter, may depend only on:
 
-- the `&` and `mutable &T` parameters and their dependency sets, except that what is stored into a `mutable &T` parameter depends on another `mutable &T` parameter itself only when a `where` item names it ([above](#rule-4-absorption));
+- the `&T` and `mutable &T` parameters and their dependency sets, except that what is stored into a `mutable &T` parameter depends on another `mutable &T` parameter itself only when a `where` item names it ([above](#rule-4-absorption));
 - the sets carried in by scoped owned parameters, which belong to the caller and flow back through rules 3 and 4;
 - static storage.
 

@@ -23,11 +23,12 @@ A **reference** is a value that refers to a place. A **shared reference**, of ty
 
 **`&p` of a place `p` of type `T` makes a `&T`, and `mutable p` makes a `mutable &T`.** The reference borrows `p`, shared or for change, until the reference's last use, and the law of exclusivity checks that borrow as it checks any other ([Exclusivity](exclusivity.md#the-law-of-exclusivity)). `mutable p` needs `p` to be a [changeable place](bindings.md#changeable-places), so a shared borrow never becomes a write. Where a `&T` is expected, a bare `p` makes the same shared reference, with no `&` written ([below](#places-given-to-a-position)).
 
-**`mutable` is the mark of a lend for change.** One word is enough for it, since it says both that the place is lent and that it is lent for change. A type keeps its `&`, as `mutable &Enemy` does, since a type says that its values are references, while a lend says only how a place is lent. `mutable`, like `&`, takes the whole place after it, member and call chain included, so `mutable world.enemies[i]` lends one enemy ([12](../12-grammar/notes.md#operators-and-punctuation)).
-
 - **`&` and `mutable` of a value lend a temporary.** A call's result or a literal is no place, so `&makeEnemy()` lends a temporary that lives to the end of its statement ([02](../02-views-and-dependencies/dependency-projection-and-results.md#temporaries)). So `heal(mutable makeEnemy())` changes an enemy that the statement then destroys.
 - **A member lends a place as it is declared.** `&x.p` of a place property uses its `borrow`, and `mutable x.p` its `mutate`. `mutable` of a member with only a `borrow` is a compile error, since nothing lends that place for change ([02](../02-views-and-dependencies/place-and-value-properties.md#place-properties-borrow-and-mutate)).
 - **Where a function type is expected, `&f` and `mutable f` make a function value** of the closure in the place `f`: `&f` from a non-`mutating` closure, and `mutable f` from a `mutating` one ([05](../05-protocols-generics-and-closures/implicit-conversions.md#implicit-conversions)).
+- **`mutable` of a `&` expression is a compile error that names `mutable p`**, so `mutable &boss` says to write `mutable boss`. The reference it would lend for change is a temporary that dies with its statement, so the change would reach nothing.
+
+**`mutable` marks a lend for change**: it says both that the place is lent and that it is lent for change. A mutable reference's type is written `mutable &T`, since a type says that its values are references, while a lend says only how a place is lent. `mutable`, like `&`, takes the whole place after it, member and call chain included, so `mutable world.enemies[i]` lends one enemy ([12](../12-grammar/notes.md#operators-and-punctuation)).
 
 **References follow the dependency rules, as every view does, and need no lifetimes.** Both kinds conform to `Scoped`, so a reference stays within the scope that lent it, and a struct or enum that holds one is scoped too ([02](../02-views-and-dependencies/scoped-values.md#scoped-values)). What a reference depends on is the place it borrows ([02](../02-views-and-dependencies.md#dependencies)).
 
@@ -168,11 +169,12 @@ let hp = boss.hp                    // a Float is implicitly copyable: a copy, w
 
 - a `mutating` method's receiver ([below](#unmarked-places));
 - the left side of `=`, or of a compound assignment such as `+=`;
-- a write through a closure's captures ([05](../05-protocols-generics-and-closures/functions-and-closures.md#capturing-places)).
+- a write through a closure's captures ([05](../05-protocols-generics-and-closures/functions-and-closures.md#capturing-places));
+- an `await`, which lends the task's resume parameter for change to what it awaits, so the change shows at the `await` ([07](../07-concurrency/tasks.md#semantics)).
 
 ### Unmarked places
 
-**Three other operands take a place with no mark, since the code around them already says what happens:**
+**Besides those, three operands take a place with no mark, since the code around them already says what happens:**
 
 - **A method's receiver.** The method's declaration says what it does with `self`: a plain `func` borrows it, a `mutating` one borrows it for change, from a changeable place, and a `consuming` one takes it ([Parameters](parameters.md#parameters)).
 - **An operator's operands.** Operators borrow their operands. An operator declares each parameter `&T`, or `T` where `T` is implicitly copyable, so an operand never moves ([05](../05-protocols-generics-and-closures/operators.md#operators)).
@@ -188,4 +190,4 @@ static func * (lhs: Vec3, rhs: Float) -> Vec3 { … }         // a Vec3 is impli
 - **A copyable `const`**, which gives a new value each time ([Constants](moving-values-out.md#constants));
 - **A conversion that makes a value from the place**, such as a copyable value's conversion to or from its static type ([Conversions](bindings.md#conversions));
 - **A part of a temporary**, such as `makeEnemy().pos`, which dies with its statement, so the position takes it as a value, moving it out where [What can be moved from](moving-values-out.md#what-can-be-moved-from) allows;
-- **A place that holds a shared reference, given to a `ref let`**, which reborrows through it, as `ref let e = r` does for a `&T` in `r`, since a shared reborrow only reads ([above](#reborrowing)).
+- **A place that holds a `&T`, given to a `ref let`**, which reborrows through it, as `ref let e = r` does, since copying a shared reference lends nothing ([above](#reborrowing)). A place that holds a `mutable &T` writes `&r` there, as any other shared lend where nothing expects a `&T` does.

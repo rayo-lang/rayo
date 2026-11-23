@@ -46,7 +46,7 @@ func longer(a: &List<Int>, b: &List<Int>) -> List<Int> {
 }
 ```
 
-`return` hands the caller a value that the function owns ([Moves and copies](02-moves-and-copies.md#declaring-assigning-and-returning)). A `&` parameter owns nothing. Like `same` in chapter 2, it refers to a list someone else owns, and has nothing of its own to hand over.
+`return` hands the caller a value that the function owns ([Moves and copies](02-moves-and-copies.md#declaring-assigning-and-returning)). A `&T` parameter owns nothing. Like `same` in chapter 2, it refers to a list someone else owns, and has nothing of its own to hand over.
 
 `longer`'s parameters are references, so its declaration tells every caller that both lists stay theirs. Returning one would break that promise. After `longer(a: hits, b: misses)`, the caller would still use `hits` and `misses`, but one of them would hold nothing.
 
@@ -146,7 +146,7 @@ Each `heal(hp: mutable hp)` lends `heal` the variable that `healTwice` borrowed 
 
 ## Borrowing in a declaration
 
-You've seen `same`, a `let` that holds a reference to a list ([Moves and copies](02-moves-and-copies.md#declaring-assigning-and-returning)). A declaration that begins with `ref` goes one step further: it takes a reference and names the place it refers to, the way a `&` parameter names the caller's value.
+You've seen `same`, a `let` that holds a reference to a list ([Moves and copies](02-moves-and-copies.md#declaring-assigning-and-returning)). A declaration that begins with `ref` goes one step further: it takes a reference and names the place it refers to, the way a `&T` parameter names the caller's value.
 
 To borrow something to change it, declare the name with `ref var`, and write `mutable` before what it borrows, as in a call. Here `first` borrows `hits[0]`, which is the list's first element:
 
