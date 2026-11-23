@@ -5,11 +5,15 @@ description: "Read before writing or changing any code in this repo, every time 
 
 # Code comments
 
-A comment is written for the next person who reads the code, and an error message for the person whose program just failed. Each earns its place by being **readable** and **relevant**. Everything below is those two words applied; where a case isn't covered, judge it by them.
+A comment is written for the next person who reads the code, and an error message for the person whose program just failed. Each earns its place by being **short**, **readable** and **relevant**. Everything below is those three words applied; where a case isn't covered, judge it by them.
+
+## Short
+
+A comment is quick reference: its prose is one line by default, and two short sentences at most; an example in a code block of its own sits outside that. It says what the thing is or does, plus the one reason a reader needs to use or change it safely. A function's doc names what it does in a few words; the cases it handles stay in its body, its tests and the spec. A comment that states a rule says it in one sentence, as it holds at that line, and leaves the full statement to the spec.
 
 ## Readable
 
-A comment reads as plain English at first glance. Write it the way a careful engineer would explain the code to a colleague: everyday words, ordinary sentence order, one idea at a time, in complete sentences. If a sentence needs a second reading, rewrite it; two short sentences beat one dense one. Clear comes before short: one line is right where one line says it all, and where the reader needs more to know what the thing is, write more.
+A comment reads as plain English at first glance. Write it the way a careful engineer would explain the code to a colleague: everyday words, ordinary sentence order, one idea at a time, in complete sentences. If a sentence needs a second reading, rewrite it; two short sentences beat one dense one.
 
 Use the language's and the compiler's own terms (*borrow*, *lower*, *witness*) where they are the precise word, and everyday words everywhere else.
 
@@ -46,4 +50,4 @@ Comments and names describe the code as it is, in the present tense, and state a
 
 ## Before you open a pull request
 
-Audit every comment, name and error message you added or changed, and every comment in code you touched. Each comment and name reads at first glance, is true of the code as it stands, and cites no record of a decision. Each name is spelled out and says what the thing holds or does, and nothing it doesn't. Each comment is in words about the things themselves, says all a reader needs, and tells the reader something the code doesn't (for a block's opening comment, its step; for a type's doc, what it is and holds). Each error message says what is wrong in the fewest plain words, with a reason only where the reader needs it to fix the mistake. A reviewer audits the same.
+Audit every comment, name and error message you added or changed, and every comment in code you touched. Each comment and name reads at first glance, is true of the code as it stands, and cites no record of a decision. Each name is spelled out and says what the thing holds or does, and nothing it doesn't. Each comment is short, its prose one line or two short sentences at most, is in words about the things themselves, says the one reason a reader needs to use or change the code safely, and tells the reader something the code doesn't (for a block's opening comment, its step; for a type's doc, what it is and holds). Each error message says what is wrong in the fewest plain words, with a reason only where the reader needs it to fix the mistake. A reviewer audits the same.
