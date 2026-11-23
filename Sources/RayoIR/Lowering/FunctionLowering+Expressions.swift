@@ -37,9 +37,9 @@ extension FunctionLowering {
         case .if(let condition, let then, let otherwise):
             lowerIf(condition, then, otherwise, into: destination, as: .borrow)
 
-        // Any other value, a place in a temporary that dies with its statement included, is the local's own.
+        // Checking reports any other value given to a `ref let`, which has no place to refer to.
         default:
-            compute(expr, into: destination, as: .take)
+            preconditionFailure("a 'ref let' is given a value that no local holds")
         }
     }
 

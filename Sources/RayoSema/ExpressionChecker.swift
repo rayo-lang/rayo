@@ -32,7 +32,7 @@ struct ExpressionChecker {
     }
 
     /// Checks `expr` on its own, leaving it to wait for its position where it is an untyped value, an array literal,
-    /// an implicit member, an `if`, or a `&`.
+    /// an implicit member, an `if`, a `&` or a `mutable &`.
     func value(of expr: Expr) -> CheckedValue? {
         switch expr.kind {
         // An integer literal is untyped until its position settles it.
@@ -90,6 +90,12 @@ struct ExpressionChecker {
         case .reference(let lent):
             place(lent, under: self).map { .waiting(LentPlace(place: $0.place, placeType: $0.type, range: expr.range)) }
 
+        // So does a `mutable &`, which lends the place for change.
+        case .mutableReference(let lent):
+            place(lent, under: self).map {
+                .waiting(MutablyLentPlace(place: $0.place, placeType: $0.type, range: expr.range))
+            }
+
         // An `if` read for its value gives the value of the branch that runs, so its branches' values wait for its
         // position as the `if` does.
         case .if(let ifExpr):
@@ -125,12 +131,26 @@ struct ExpressionChecker {
         }
     }
 
+    /// Settles `value` where its position gives no type, and `recipient` takes it, reporting what the recipient can't
+    /// take of it as the source writes it.
+    func settled(_ value: CheckedValue, takenBy recipient: Recipient) -> CheckedExpr? {
+        switch value {
+        case .typed(let typed): taken(typed, by: recipient)
+        case .waiting(let waiting): waiting.settled(takenBy: recipient, by: self)
+        }
+    }
+
     /// Makes `value` stand where a position expects what `expected` names, reporting its mismatch where it can't, and
-    /// reporting it where it is given, without a `&`, to a parameter that borrows it.
+    /// what takes it there can't take of it as the source writes it.
     func fitted(_ value: CheckedExpr, to expected: Expectation) -> CheckedExpr? {
-        guard let fitted = typeFitted(value, to: expected) else { return nil }
-        reportUnlent(fitted, to: expected)
-        return fitted
+        typeFitted(value, to: expected).map { taken($0, by: expected.recipient) }
+    }
+
+    /// `value`, as `recipient` takes it, with what the recipient can't take of it as the source writes it reported,
+    /// such as a place written without the `&` that a parameter that borrows takes it with.
+    func taken(_ value: CheckedExpr, by recipient: Recipient?) -> CheckedExpr {
+        reportUnlent(value, to: recipient)
+        return value
     }
 
     /// `value` as a value of the type `expected` names, or nil, with its mismatch reported, where it is of another

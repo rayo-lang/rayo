@@ -68,8 +68,10 @@ struct ParserErrorTests {
 
     @Test(arguments: [
         "func f() { g(&e) }", "func f() { g(&e.stats.hp, by: &a[i].n) }", "func f() {\n    g(&e\n        .hp)\n}",
+        "func f() { g(mutable &e) }", "func f() { ref let x = mutable &e.stats[i] }", "func f() { g(&make()) }",
+        "func f() { ref let x = &make(1).stats[0].hp }", "func f() { g(mutable &make()) }",
     ])
-    func `'&' takes a name and the members and elements after it`(source: String) {
+    func `'&' and 'mutable &' take a name, and the calls, members and elements after it`(source: String) {
         #expect(errors(source) == [])
     }
 
@@ -77,10 +79,13 @@ struct ParserErrorTests {
         ("func f() { g(&) }", ErrorCode.missingLentName(found: .token(")"))),
         ("func f() { g(&(e).hp) }", .missingLentName(found: .token("("))),
         ("func f() { g(&1) }", .missingLentName(found: .token("1"))),
-        ("func f() { g(mutable &e) }", .missingExpression(found: .token("mutable"))),
+        ("func f() { g(mutable &1) }", .missingLentName(found: .token("1"))),
+        ("func f() { g(mutable e) }", .missingExpression(found: .token("mutable"))),
         ("func f() {\n    a & b\n}", .unendedStatement(found: .token("&"))),
     ])
-    func `'&' needs a name first, and stands only before a place`(source: String, expected: ErrorCode) {
+    func `'&' needs a name first, stands only before a place, and 'mutable' needs a '&'`(
+        source: String, expected: ErrorCode,
+    ) {
         #expect(errors(source) == [expected])
     }
 
@@ -272,7 +277,7 @@ struct ParserErrorTests {
     }
 
     @Test(arguments: [
-        ("func f() { ref let a = e.hp }", DeclarationKind.refLet), ("func f() { ref var a: Int = b, c = d }", .refVar),
+        ("func f() { ref let a = &e.hp }", DeclarationKind.refLet), ("func f() { ref var a: Int = b, c = d }", .refVar),
         ("func f() { let a = 1 }", .let), ("func f() { var a: Int }", .var),
     ])
     func `a declaration's words say whether its bindings refer to a place, and whether they may change`(

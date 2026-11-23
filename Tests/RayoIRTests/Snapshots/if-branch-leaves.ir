@@ -41,8 +41,8 @@ bb7:
 bb8:
   goto bb3
 bb9:
-  begin a0 read %1 @6:52-6:55
-  %2 @6:17-6:21 = operand read %1 @6:52-6:55 @6:52-6:55
+  begin a0 read %1 @6:52-6:56
+  %2 @6:17-6:21 = operand read %1 @6:52-6:56 @6:52-6:56
   depend %2 on a0
   goto bb10
 bb10:

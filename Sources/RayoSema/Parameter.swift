@@ -27,6 +27,7 @@ extension Parameter {
     /// What a call that writes `callee` for what it calls expects of the parameter's argument, or nil where the
     /// parameter's type isn't known.
     func expectation(calledAs callee: String) -> Expectation? {
-        type.map { Expectation($0, parameter: ArgumentParameter(callee: callee, convention: convention)) }
+        let parameter = ArgumentParameter(callee: callee, convention: convention)
+        return type.map { Expectation($0, recipient: .parameter(parameter)) }
     }
 }

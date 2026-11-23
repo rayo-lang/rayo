@@ -351,7 +351,8 @@ public enum ErrorCode: Sendable, Hashable {
     @Code(276, error: "{type.withArticle} is too large to hold on the stack")
     case tooLargeForStack(type: TypeName)
 
-    @Code(277, error: "a '{keyword}' can't borrow '{place}'; write 'copy' or 'consume' before it, or declare 'ref let'")
+    @Code(277, error:
+        "a '{keyword}' can't borrow '{place}'; write 'copy' or 'consume' before it, or '&' and declare 'ref let'")
     case ownerBorrowsPlace(keyword: String, place: String)
 
     @Code(278, error:
@@ -362,8 +363,8 @@ public enum ErrorCode: Sendable, Hashable {
         "'{place}' ends with its block before '{binding}' does; declare 'let' and write 'copy' or 'consume' before it")
     case referenceOutlivesPlace(binding: String, place: String)
 
-    @Code(280, error: "'{binding}' has no place to refer to; declare it 'let' or 'var' to own its value")
-    case referenceToValue(binding: String)
+    @Code(280, error: "a 'ref let' refers to a place, not a value; declare 'let' or 'var' to own the value")
+    case referenceToValue
 
     @Code(281, error: "'ref var' isn't supported")
     case unsupportedReferenceVar
@@ -377,11 +378,20 @@ public enum ErrorCode: Sendable, Hashable {
     @Code(284, error: "'{name}' takes {type.withArticle}, not a reference; remove the '&'")
     case referenceToOwnedParameter(name: String, type: TypeName)
 
-    @Code(285, error: "'&' isn't supported outside a call's arguments")
+    @Code(285, error: "'&' isn't supported outside a call's arguments and a 'ref let'")
     case unsupportedReference
 
     @Code(286, error: "lending a value that no local holds isn't supported; put it in a 'let' and lend that")
     case unsupportedLentValue
+
+    @Code(287, error: "a 'ref let' takes a reference; write '&{place}'")
+    case unreferencedPlace(place: String)
+
+    @Code(288, error: "a '{keyword}' holding a reference isn't supported; declare 'ref let', or remove the '&'")
+    case unsupportedHeldReference(keyword: String)
+
+    @Code(289, error: "'mutable &' isn't supported")
+    case unsupportedMutableReference
 
     // MARK: Ownership
 

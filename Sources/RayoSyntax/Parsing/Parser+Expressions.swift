@@ -19,8 +19,8 @@ extension Parser {
         return left
     }
 
-    /// `'-' int-literal`, `('copy' | 'consume' | '&') identifier ('.' member | '[' expression ']')*`,
-    /// `('-' | '!') unary`, or a postfix expression.
+    /// `'-' int-literal`, `('copy' | 'consume') identifier ('.' member | '[' expression ']')*`,
+    /// `'mutable'? '&' identifier postfix*`, `('-' | '!') unary`, or a postfix expression.
     private mutating func parseUnary() throws(ParseFailure) -> Expr {
         let start = current.range
 
@@ -43,10 +43,20 @@ extension Parser {
             return Expr(kind: .consume(place), range: range(from: start))
         }
 
-        // A `&` takes the local it lends, or a part of it at any depth.
+        // A `&` takes what it lends: a place that starts from a name, such as a local, a part of one at any depth, or
+        // a call's result.
         if consume(.ampersand) {
-            let place = try parseNamedPlace(else: ErrorCode.missingLentName)
+            let place = try parseLent()
             return Expr(kind: .reference(place), range: range(from: start))
+        }
+
+        // So does a `mutable &`, which lends it for change. A `mutable` without a `&` after it starts no expression,
+        // and is reported as such.
+        if current.isKeyword(.mutable), peek().isPunct(.ampersand) {
+            advance()
+            advance()
+            let place = try parseLent()
+            return Expr(kind: .mutableReference(place), range: range(from: start))
         }
 
         // An expression without a `-` or `!` in front is a postfix one.
@@ -90,6 +100,14 @@ extension Parser {
                 return value
             }
         }
+    }
+
+    /// After a `&` or a `mutable &`: `identifier postfix*`, what it lends, which starts from a name, such as
+    /// `e.party[i].hp` or `makeEnemy().stats`. A token other than a name first is reported, since a literal or a
+    /// parenthesized expression is no place that a name starts.
+    private mutating func parseLent() throws(ParseFailure) -> Expr {
+        guard case .identifier = current.kind else { throw fail(ErrorCode.missingLentName) }
+        return try parsePostfix()
     }
 
     /// `identifier ('.' member | '[' expression ']')*`: a place that starts from a name, such as `e.party[i].hp`. A

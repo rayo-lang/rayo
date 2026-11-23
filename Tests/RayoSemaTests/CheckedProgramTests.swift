@@ -132,7 +132,7 @@ struct CheckedProgramTests {
             func main() {
                 let a = 1
                 let b = copy a
-                ref let c = a
+                ref let c = &a
                 print(b + c)
             }
             """, toMatch: "places")
@@ -147,7 +147,7 @@ struct CheckedProgramTests {
                 var s = Shot(range: 4, hit: Hit(damage: damage))
                 s.hit.damage = 9
                 print(s.range)
-                ref let h = s.hit
+                ref let h = &s.hit
                 print(h.damage)
                 print(Hit(damage: 3).damage)
             }

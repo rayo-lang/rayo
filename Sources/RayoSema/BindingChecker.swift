@@ -37,13 +37,6 @@ struct BindingChecker {
         case resolved(RayoType, range: SourceRange)
         /// An annotation that names no type, which was reported there.
         case failed
-
-        /// What the annotation expects of the binding's value: the type it names, where it names one.
-        var expected: Expectation? {
-            // An absent annotation expects nothing, and nor does one that failed.
-            guard case .resolved(let type, _) = self else { return nil }
-            return Expectation(type)
-        }
     }
 
     let expressions: ExpressionChecker
@@ -65,7 +58,7 @@ struct BindingChecker {
     /// Checks `binding`, which a declaration of `kind` declares as a local.
     func check(_ binding: Binding, declaredWith kind: DeclarationKind) -> CheckedStmt? {
         // Checked before the name, so a declaration of `_` still reports its type's and its value's errors.
-        let declared = checkTypeAndValue(of: binding)
+        let declared = checkTypeAndValue(of: binding, declaredWith: kind)
 
         // A binding of `_` is reported, and declares no local.
         guard errors.isNaming(binding.name, at: binding.nameRange) else { return nil }
@@ -85,11 +78,9 @@ struct BindingChecker {
         case .let, .var:
             expressions.reportHandedPlaces(of: value) { .ownerBorrowsPlace(keyword: kind.keyword, place: $0) }
 
-        // A `ref let` refers to a place, so it needs one, and one that lasts as long as it does.
+        // A `ref let` refers to a place, which each branch of its value gives, as its position reported, and one that
+        // lasts as long as the `ref let` does.
         case .refLet:
-            if value.handedPlaces.isEmpty {
-                errors.report(.referenceToValue(binding: binding.name), at: binding.nameRange)
-            }
             expressions.reportEndedPlaces(of: value, referredToBy: binding.name)
 
         case .refVar:
@@ -97,24 +88,34 @@ struct BindingChecker {
         }
     }
 
-    /// Checks `binding`'s type annotation and value, and the value against the annotation when it has both.
-    private func checkTypeAndValue(of binding: Binding) -> Declared {
+    /// Checks `binding`'s type annotation and value, which a declaration of `kind` gives the local it declares, and
+    /// the value against the annotation when it has both.
+    private func checkTypeAndValue(of binding: Binding, declaredWith kind: DeclarationKind) -> Declared {
         let annotation = resolveAnnotation(of: binding)
         // Without a value, the annotation alone gives the local's type.
         guard let valueExpr = binding.value else { return Declared(annotation) }
 
-        // An annotation that failed was reported, and leaves the value no type to settle to, so the value reports only
-        // the errors it has on its own, and not those the missing type would bring, such as an implicit member's.
-        if case .failed = annotation {
-            expressions.reportSettlingErrors(of: [expressions.value(of: valueExpr)])
-            return .failed
-        }
-
         // A value that failed, or that has another type than the annotation names, was reported; otherwise the value
         // has the local's type, which the annotation gives where there is one.
-        guard let value = expressions.check(valueExpr, expecting: annotation.expected) else { return .failed }
+        let recipient = Recipient.declaration(kind)
+        let value: CheckedExpr? = switch annotation {
+        case .resolved(let type, _): expressions.check(valueExpr, expecting: Expectation(type, recipient: recipient))
+        case .absent: expressions.value(of: valueExpr).flatMap { expressions.settled($0, takenBy: recipient) }
+        // An annotation that failed was reported, and leaves the value no type to settle to, so the value reports
+        // only the errors it has on its own, and not those the missing type would bring, such as an implicit
+        // member's.
+        case .failed: reportOwnErrors(of: valueExpr)
+        }
+        guard let value else { return .failed }
         let typeRange = if case .resolved(_, let range) = annotation { range } else { value.range }
         return .typed(value.type, typeRange: typeRange, value: value)
+    }
+
+    /// Reports the errors that `valueExpr` has on its own, and returns nil in place of the value, which no type
+    /// settles.
+    private func reportOwnErrors(of valueExpr: Expr) -> CheckedExpr? {
+        expressions.reportSettlingErrors(of: [expressions.value(of: valueExpr)])
+        return nil
     }
 
     /// Resolves `binding`'s type annotation, reporting it when it names no type.
@@ -159,18 +160,6 @@ private extension LocalKind {
         case .let: self = .let
         case .var: self = .var
         case .refLet, .refVar: self = .refLet
-        }
-    }
-}
-
-private extension DeclarationKind {
-    /// The words that start the declaration, as an error names them.
-    var keyword: String {
-        switch self {
-        case .let: "let"
-        case .var: "var"
-        case .refLet: "ref let"
-        case .refVar: "ref var"
         }
     }
 }
