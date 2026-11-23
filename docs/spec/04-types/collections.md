@@ -563,7 +563,7 @@ for e in &enemies where e.hp > 0 { … }     // the body runs only where the con
 for t in visibleTiles() { … }              // 'visibleTiles()' returns a '&[Tile]': 't' is a 'ref let' of each tile
 ```
 
-**A value subject is moved into a hidden local that lives until the loop ends**, and so is every temporary in the subject's expression, each into its own, in evaluation order. Each is still a temporary, so it stays read-only ([01](../01-values-and-ownership/bindings.md#changeable-places)). An adaptor in a hidden local keeps its collection borrowed for the whole loop:
+**A value subject is moved into a hidden local that lives until the loop ends**, and so is every temporary in the subject's expression, each into its own, in evaluation order. Each is still a temporary, so it stays read-only ([01](../01-values-and-ownership/bindings.md#temporaries-are-read-only)). An adaptor in a hidden local keeps its collection borrowed for the whole loop:
 
 ```swift
 for (i, e) in makeEnemies().enumerated() { … }          // the new list is a hidden local, and so is its adaptor

@@ -74,7 +74,7 @@ v0.3 adds:
 - the compile errors for a place given to a `mutable &T` parameter without `mutable`, and for a struct or an array given to an owning parameter without `consume` or `copy`, each of which names the marks that fit;
 - the compile error for `mutable a` given to a parameter that doesn't take a mutable reference;
 - `mutating func`, whose `self` names the receiver's place as a `mutable &T` parameter names its argument's;
-- the compile errors for a change to what a temporary owns: `mutable` of a temporary, a `mutating` call on one, and an assignment into one, which v0.1 rejects without naming the fix ([01](docs/spec/01-values-and-ownership/bindings.md#changeable-places)).
+- the compile errors for a change to what a temporary owns: `mutable` of a temporary, a `mutating` call on one, and an assignment into one, which v0.1 rejects without naming the fix ([01](docs/spec/01-values-and-ownership/bindings.md#temporaries-are-read-only)).
 
 ## Not yet planned
 

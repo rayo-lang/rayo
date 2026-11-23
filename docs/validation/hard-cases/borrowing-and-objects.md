@@ -248,12 +248,12 @@ each(enemies.span) { e in if e.hp < 10 { low.append(tag) } }        // a closure
 ```swift
 grid.cells.forEachIndexedInParallel { i, cell in cell.value = f(i) }   // each call gets an element and its index
 for (i, e) in items.mutableEnumerated() { … }                        // sequential, changing the elements of a 'var'
-for (i, e) in makeItems().mutableEnumerated() { … }                  // a temporary, which can't be changed
+for (i, e) in makeItems().mutableEnumerated() { … }                  // error: a temporary can't be changed; keep it in a 'var'
 ```
 
 - **Must accept** with the true index in every call and no copy of the collection. Show how the library's splitting keeps each part's starting index.
 - **Must accept** the sequential form over `items` above, which changes its elements, with the true index in every iteration and no copy of the list.
-- **Must reject** the same loop over a temporary, whose changes would be lost with it, with an error that says to keep the list in a `var` ([01](../../spec/01-values-and-ownership/bindings.md#changeable-places)).
+- **Must reject** the same loop over a temporary, whose changes would be lost with it, with an error that says to keep the list in a `var` ([01](../../spec/01-values-and-ownership/bindings.md#temporaries-are-read-only)).
 
 ### A20 · Mutating through a list of existential views
 
