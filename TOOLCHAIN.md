@@ -78,7 +78,9 @@ Each benchmark runs `rayoc` to one stop point over one program, and is named `st
 
 M is 200, 400, 800 and 1600 unless `--sizes` names others, and N is five times M. `--stops` names the stop points to measure, such as `check,compile-debug`. The script measures the instructions `rayoc` retires and its peak memory, as the system reports them for the process, and its wall-clock time, and gives the median of three runs.
 
-On Linux, `--counter valgrind` has Valgrind's Cachegrind count the instructions instead, with its cache and branch simulations off, on a processor it simulates, and takes peak memory and wall-clock time from a run of its own outside Valgrind. The size of the environment and of the arguments, and Swift's random hash seed, each move that count by up to 0.14%. So the script runs `rayoc` under Valgrind through a link in a temporary directory, with only `SWIFT_DETERMINISTIC_HASHING=1` in its environment. Its count varies by under 0.001% from run to run, even on a virtual machine whose processor counts nothing, so it measures one run. Valgrind runs `rayoc` about 40 times slower, so measure small sizes with it:
+On Linux, `--counter valgrind` has Valgrind's Cachegrind count the instructions instead, with its cache and branch simulations off, on a processor it simulates, and takes peak memory and wall-clock time from a run of its own outside Valgrind.
+
+The size of the environment and of the arguments, and Swift's random hash seed, each move that count by up to 0.14%. So the script runs a copy of `rayoc` from a temporary directory in `/tmp`, which is also its working directory, with only `SWIFT_DETERMINISTIC_HASHING=1` in its environment. Its count then varies by under 0.002%, from run to run and between builds from two checkouts, even on a virtual machine whose processor counts nothing, so it measures one run. Valgrind runs `rayoc` about 40 times slower, so measure small sizes with it:
 
 ```sh
 python3 Benchmarks/benchmark.py --counter valgrind --sizes 50,100,200 --stops check,compile-debug

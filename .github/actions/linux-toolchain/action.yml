@@ -69,9 +69,8 @@ runs:
           exit 1
         fi
 
-        # Fetch LLVM, clang and LLD, and the job's other packages, with each dependency the container lacks, into
-        # the directory the cache keeps, without apt's working files. The pin keeps LLVM's major release:
-        # apt.llvm.org serves only the newest build of it, so no exact build can be named.
+        # Fetch LLVM's packages and the job's, with what the container lacks, into the cached directory.
+        # The pin names only LLVM's major release, since apt.llvm.org serves only its newest build.
         suite="llvm-toolchain-noble-$LLVM_MAJOR_VERSION"
         echo "deb [signed-by=/usr/share/keyrings/llvm.gpg] https://apt.llvm.org/noble/ $suite main" \
           > /etc/apt/sources.list.d/llvm.list
@@ -88,9 +87,8 @@ runs:
       shell: bash
       env:
         CACHED: ${{ steps.image.outputs.path }}
-      # The cache holds each package that LLVM and the job's other packages need and the container lacks, so apt
-      # installs them from their files alone, with no package index and no network. apt rather than dpkg, since
-      # only apt orders the packages so that each one's pre-dependencies are configured before it is unpacked.
+      # Installs from the cached files alone, with no package index or network. apt, not dpkg, configures each
+      # package's pre-dependencies before it unpacks the package.
       run: |
         apt-get install -y --no-install-recommends --no-download -o Dir::Cache::Archives="$CACHED" "$CACHED"/*.deb
         echo "version=$(dpkg-query -W -f='${Version}' "llvm-$LLVM_MAJOR_VERSION-dev")" >> "$GITHUB_OUTPUT"

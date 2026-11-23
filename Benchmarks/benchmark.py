@@ -19,7 +19,7 @@ both are reported and never compared; a machine that counts no instructions comp
 By default the system counts the instructions: on macOS `/usr/bin/time -l` gives the measures, and on Linux `perf
 stat` and `/usr/bin/time` give them. That count varies by up to 2.8% between runs, so the threshold is 5%. On Linux,
 `--counter valgrind` has Valgrind's Cachegrind count them instead, on a processor it simulates, so the count varies
-by under 0.001% between runs, even on a virtual machine whose processor counts nothing. Its threshold is 1%, which
+by under 0.002% between runs, even on a virtual machine whose processor counts nothing. Its threshold is 1%, which
 leaves out only the smallest rises. CI counts so, since GitHub's runners count nothing, and Valgrind runs rayoc about
 40 times slower, so CI measures small programs:
 
@@ -169,10 +169,10 @@ def cachegrind_instructions(output):
     return int(found.group(1))
 
 
-def run_timed(wrapped, command, env=None):
-    """The wall-clock seconds that `wrapped`, which runs `command`, took; `command` must succeed."""
+def run_timed(wrapped, command, directory, env=None):
+    """The wall-clock seconds that `wrapped`, which runs `command` in `directory`, took; `command` must succeed."""
     start = time.perf_counter()
-    result = subprocess.run(wrapped, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, env=env)
+    result = subprocess.run(wrapped, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, cwd=directory, env=env)
     seconds = time.perf_counter() - start
     if result.returncode != 0:
         raise RuntimeError(f"'{' '.join(command)}' failed: {result.stderr.decode('utf-8', 'replace')}")
@@ -189,12 +189,12 @@ def system_measures(command, directory):
     reports them, and its wall time."""
     report = os.path.join(directory, 'measures.txt')
     if sys.platform == 'darwin':
-        seconds = run_timed(['/usr/bin/time', '-l', '-o', report, *command], command)
+        seconds = run_timed(['/usr/bin/time', '-l', '-o', report, *command], command, directory)
         return {**macos_measures(read(report)), 'wall_seconds': seconds}
 
     counts = os.path.join(directory, 'counts.txt')
     seconds = run_timed(['perf', 'stat', '-x,', '-e', 'instructions:u', '-o', counts,
-                         '/usr/bin/time', '-f', '%M', '-o', report, *command], command)
+                         '/usr/bin/time', '-f', '%M', '-o', report, *command], command, directory)
     return {**linux_measures(read(counts), read(report)), 'wall_seconds': seconds}
 
 
@@ -214,10 +214,10 @@ def valgrind_measures(command, directory):
     and wall time of a run outside Valgrind, which slows it many times over and adds memory of its own."""
     counts = os.path.join(directory, 'cachegrind.out')
     wrapped, environment = cachegrind_run(command, counts)
-    run_timed(wrapped, command, env=environment)
+    run_timed(wrapped, command, directory, env=environment)
 
     report = os.path.join(directory, 'measures.txt')
-    seconds = run_timed(['/usr/bin/time', '-f', '%M', '-o', report, *command], command)
+    seconds = run_timed(['/usr/bin/time', '-f', '%M', '-o', report, *command], command, directory)
     return {'instructions': cachegrind_instructions(read(counts)),
             'peak_memory_bytes': largest_resident_set(read(report)), 'wall_seconds': seconds}
 
@@ -235,10 +235,9 @@ COUNTERS = {
     'system': InstructionCounter(system_measures, runs=3, threshold=5.0,
                                  method="Instructions and peak memory are as the system reports them for rayoc's "
                                         'process.'),
-    # Valgrind's count varies by under 0.001% between runs, so one run gives it. Two builds of one compiler can still
-    # differ by about 0.1% as their memory lands, which 1% leaves room for.
+    # Valgrind's count varies by under 0.002%, even between builds from two checkouts, so one run gives it.
     'valgrind': InstructionCounter(valgrind_measures, runs=1, threshold=1.0,
-                                   method="Instructions are as Valgrind's Cachegrind counts them, within 0.001% from "
+                                   method="Instructions are as Valgrind's Cachegrind counts them, within 0.002% from "
                                           'run to run, and peak memory as the system reports it for a run outside '
                                           'Valgrind.'),
 }
@@ -252,15 +251,17 @@ def median_measures(runs):
     return {key: median(key) for key in ('instructions', 'peak_memory_bytes', 'wall_seconds')}
 
 
-def linked_rayoc(rayoc, directory):
-    """A link to `rayoc` in `directory`, whose path has one length wherever rayoc was built."""
-    # rayoc's arguments sit on the stack it starts on, so a longer path moves the stack, and with it Valgrind's
-    # count, as a larger environment does.
-    linked = os.path.join(directory, 'rayoc')
-    if os.path.lexists(linked):
-        os.remove(linked)
-    os.symlink(rayoc, linked)
-    return linked
+def scratch_directory():
+    """A temporary directory in `/tmp`, whose path has one length whatever the system's temporary directory is."""
+    # rayoc's arguments are paths in it, and their length moves rayoc's stack and its count by up to 0.13%.
+    return tempfile.TemporaryDirectory(dir='/tmp')
+
+
+def copied_rayoc(rayoc, directory):
+    """A copy of `rayoc` in `directory`, whose path, and the executable's own, have one length wherever it was built."""
+    copied = os.path.join(directory, 'rayoc')
+    shutil.copy2(rayoc, copied)
+    return copied
 
 
 def measure_all(rayoc, sources, options):
@@ -268,8 +269,8 @@ def measure_all(rayoc, sources, options):
     with its counter, printing each as it is measured."""
     measure_once = COUNTERS[options.counter].measure
     results = {}
-    with tempfile.TemporaryDirectory() as directory:
-        rayoc = linked_rayoc(rayoc, directory)
+    with scratch_directory() as directory:
+        rayoc = copied_rayoc(rayoc, directory)
         for program, source in sources:
             path = os.path.join(directory, program + '.rayo')
             with open(path, 'w', encoding='utf-8') as f:
@@ -416,7 +417,7 @@ def arguments_parser():
                         help='the copies of a loop each program is made with, separated by commas')
     parser.add_argument('--counter', choices=COUNTERS, default='system',
                         help="what counts rayoc's instructions: the system, or Valgrind on Linux, whose count varies "
-                             'by under 0.001%% between runs but which runs rayoc about 40 times slower')
+                             'by under 0.002%% between runs but which runs rayoc about 40 times slower')
     parser.add_argument('--runs', type=int, help="the runs to take the median of; the counter's unless named")
     parser.add_argument('--save', action='store_true', help="save the results as the baseline of the package's commit")
     parser.add_argument('--code', help='what the code at the commit is, which a saved baseline and a summary record')

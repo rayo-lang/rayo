@@ -6,9 +6,9 @@ import tempfile
 import unittest
 from unittest import mock
 
-from benchmark import (STOP_POINTS, UNCOUNTED, cachegrind_instructions, cachegrind_run, linked_rayoc, linux_measures,
+from benchmark import (STOP_POINTS, UNCOUNTED, cachegrind_instructions, cachegrind_run, copied_rayoc, linux_measures,
                        loops, macos_measures, main, parse_arguments, programs, read, ref_let_loops, regressions,
-                       stage_costs, straight_line, summary)
+                       scratch_directory, stage_costs, straight_line, summary)
 
 MACOS_TIME = '''        0.31 real         0.27 user         0.03 sys
             52183040  maximum resident set size
@@ -63,18 +63,30 @@ class MeasuresTests(unittest.TestCase):
         self.assertEqual(with_base, with_head)
         self.assertEqual(with_base['SWIFT_DETERMINISTIC_HASHING'], '1')
 
-    def test_rayoc_runs_by_the_same_path_wherever_it_was_built(self):
+    def test_rayoc_runs_as_a_copy_at_the_same_path_wherever_it_was_built(self):
         with tempfile.TemporaryDirectory() as checkouts, tempfile.TemporaryDirectory() as directory:
-            linked = []
+            copies = []
             for checkout in ('a', 'a-checkout-at-a-longer-path'):
                 built = os.path.join(checkouts, checkout, 'rayoc')
                 os.makedirs(os.path.dirname(built))
                 with open(built, 'w', encoding='utf-8') as f:
                     f.write(checkout)
-                linked.append(linked_rayoc(built, directory))
-                self.assertEqual(read(linked[-1]), checkout)
+                copies.append(copied_rayoc(built, directory))
+                self.assertEqual(read(copies[-1]), checkout)
+                self.assertFalse(os.path.islink(copies[-1]))
 
-        self.assertEqual(linked[0], linked[1])
+        self.assertEqual(copies[0], copies[1])
+
+    def test_the_scratch_directory_has_one_path_length_whatever_the_temporary_directory_is(self):
+        lengths = []
+        for temporary in ('/tmp', '/tmp/' + 'a-longer-temporary-directory' * 3):
+            os.makedirs(temporary, exist_ok=True)
+            with mock.patch.dict(os.environ, {'TMPDIR': temporary}), mock.patch('tempfile.tempdir', None):
+                with scratch_directory() as directory:
+                    lengths.append(len(directory))
+        os.rmdir('/tmp/' + 'a-longer-temporary-directory' * 3)
+
+        self.assertEqual(lengths[0], lengths[1])
 
     def test_a_cachegrind_file_with_no_summary_is_an_error(self):
         with self.assertRaises(ValueError):
@@ -167,7 +179,7 @@ These rose past the threshold:
     def test_a_summary_of_instructions_valgrind_counted_says_so(self):
         results = {'check/loops-200': measures(2647118212, 40322368)}
 
-        self.assertIn("\nInstructions are as Valgrind's Cachegrind counts them, within 0.001% from run to run, and "
+        self.assertIn("\nInstructions are as Valgrind's Cachegrind counts them, within 0.002% from run to run, and "
                       'peak memory as the system reports it for a run outside Valgrind.\n',
                       summary(results, 'rayoc', counter='valgrind'))
 

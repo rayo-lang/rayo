@@ -240,8 +240,8 @@ jobs:
           llvm-version: ${{ env.LLVM_BUILD }}
           changed-paths: ${{ needs.changes.outputs.test-paths }}
 
-  # Measures a pull request's rayoc and its base's under Valgrind, since GitHub's runners count no instructions, and
-  # fails on a rise past the threshold. The CI check leaves it out, since a change may cost more on purpose.
+  # Counts both sides' instructions under Valgrind, since GitHub's runners count none, and fails past the threshold.
+  # The CI check leaves it out, since a change may cost more on purpose.
   benchmarks:
     name: Benchmark on Linux
     needs: changes
@@ -250,9 +250,8 @@ jobs:
     timeout-minutes: 60
     container: swift:${{ needs.changes.outputs.swift-release }}-noble
     env:
-      # Valgrind runs rayoc about 40 times slower, so the job measures three small sizes, which still show how a
-      # cost grows, at checking and a debug compile, which take about two minutes a side. Printing costs little past
-      # checking, and LLVM's optimisations make most of a release compile's cost.
+      # Valgrind runs rayoc about 40 times slower, so these take about two minutes a side.
+      # Printing costs little past checking, and a release compile's cost is mostly LLVM's.
       SIZES: 50,100,200
       STOPS: check,compile-debug
     steps:
