@@ -198,15 +198,23 @@ def system_measures(command, directory):
     return {**linux_measures(read(counts), read(report)), 'wall_seconds': seconds}
 
 
+def cachegrind_run(command, counts):
+    """The command line that runs `command` under Cachegrind, writing its counts to `counts`, and its environment."""
+    # Cachegrind with its cache and branch simulations off only counts instructions, the cheapest of Valgrind's
+    # tools that does.
+    wrapped = [shutil.which('valgrind') or 'valgrind', '--tool=cachegrind', '--cache-sim=no', '--branch-sim=no',
+               f'--cachegrind-out-file={counts}', *command]
+    # The environment's size moves the stack, which moves the count by up to 0.13%, and Swift's random hash seed
+    # moves it as much, so every run gets this one environment.
+    return wrapped, {'SWIFT_DETERMINISTIC_HASHING': '1'}
+
+
 def valgrind_measures(command, directory):
     """The measures of `command` on Linux, which must succeed: the instructions Cachegrind counts, and the peak memory
     and wall time of a run outside Valgrind, which slows it many times over and adds memory of its own."""
-    # Cachegrind with its cache and branch simulations off only counts instructions, the cheapest of Valgrind's
-    # tools that does. Swift seeds its hashing randomly, which would change the count from run to run.
     counts = os.path.join(directory, 'cachegrind.out')
-    run_timed(['valgrind', '--tool=cachegrind', '--cache-sim=no', '--branch-sim=no',
-               f'--cachegrind-out-file={counts}', *command], command,
-              env={**os.environ, 'SWIFT_DETERMINISTIC_HASHING': '1'})
+    wrapped, environment = cachegrind_run(command, counts)
+    run_timed(wrapped, command, env=environment)
 
     report = os.path.join(directory, 'measures.txt')
     seconds = run_timed(['/usr/bin/time', '-f', '%M', '-o', report, *command], command)
@@ -307,8 +315,9 @@ def described(baseline):
 
 
 def change(old, new):
-    """The change from `old` to `new` as a signed percentage, or `-` where either is missing."""
-    return '-' if not old or new is None else f'{(new - old) * 100 / old:+.1f}%'
+    """The change from `old` to `new` as a signed percentage, to the hundredth that Valgrind's count is exact to, or
+    `-` where either is missing."""
+    return '-' if not old or new is None else f'{(new - old) * 100 / old:+.2f}%'
 
 
 def summary(results, measured, baseline=None, found=(), counter='system'):

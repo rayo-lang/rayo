@@ -6,8 +6,9 @@ import tempfile
 import unittest
 from unittest import mock
 
-from benchmark import (STOP_POINTS, UNCOUNTED, cachegrind_instructions, linux_measures, loops, macos_measures, main,
-                       parse_arguments, programs, ref_let_loops, regressions, stage_costs, straight_line, summary)
+from benchmark import (STOP_POINTS, UNCOUNTED, cachegrind_instructions, cachegrind_run, linux_measures, loops,
+                       macos_measures, main, parse_arguments, programs, ref_let_loops, regressions, stage_costs,
+                       straight_line, summary)
 
 MACOS_TIME = '''        0.31 real         0.27 user         0.03 sys
             52183040  maximum resident set size
@@ -52,6 +53,15 @@ class MeasuresTests(unittest.TestCase):
 
     def test_cachegrind_gives_the_instructions_it_counted_in_its_summary(self):
         self.assertEqual(cachegrind_instructions(CACHEGRIND_OUT), 2647118212)
+
+    def test_cachegrind_runs_rayoc_in_the_same_environment_whatever_the_callers_is(self):
+        with mock.patch.dict(os.environ, {'BASE': 'c3953348'}):
+            _, with_base = cachegrind_run(['rayoc', '--check', 'loops-200.rayo'], 'cachegrind.out')
+        with mock.patch.dict(os.environ, {'HEAD_COMMIT': 'ce2f676e6110', 'BASE_COMMIT': 'c3953348'}):
+            _, with_head = cachegrind_run(['rayoc', '--check', 'loops-200.rayo'], 'cachegrind.out')
+
+        self.assertEqual(with_base, with_head)
+        self.assertEqual(with_base['SWIFT_DETERMINISTIC_HASHING'], '1')
 
     def test_a_cachegrind_file_with_no_summary_is_an_error(self):
         with self.assertRaises(ValueError):
@@ -133,7 +143,7 @@ Compared with the baseline 2042c3c1 (main), measured 2026-11-23T10:00:00+00:00 o
 
 | Benchmark | Instructions | Change | Peak memory | Change | Wall time | Wall time of the baseline |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| check/loops-200 | 0 M | +10.0% | 0.0 MiB | -0.5% | 300 ms | 200 ms |
+| check/loops-200 | 0 M | +10.00% | 0.0 MiB | -0.50% | 300 ms | 200 ms |
 | check/loops-400 | 0 M | - | 0.0 MiB | - | 1,000 ms | - |
 
 These rose past the threshold:
@@ -160,7 +170,7 @@ These rose past the threshold:
 
         self.assertIn('| check/loops-200 | - |', summary(results, 'rayoc'))
         self.assertIn(UNCOUNTED, summary(results, 'rayoc'))
-        self.assertIn('| check/loops-200 | - | - | 0.0 MiB | +11.1% |', summary(results, 'rayoc', baseline, []))
+        self.assertIn('| check/loops-200 | - | - | 0.0 MiB | +11.11% |', summary(results, 'rayoc', baseline, []))
         self.assertNotIn('Nothing rose', summary(results, 'rayoc', baseline, []))
         self.assertNotIn(UNCOUNTED, summary({'check/loops-200': measures(1000, 1000)}, 'rayoc'))
 
