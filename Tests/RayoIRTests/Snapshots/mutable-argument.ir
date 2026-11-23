@@ -11,8 +11,8 @@ bb0:
   return
 }
 
-func "bump(_: &Int)"(_: mutable Int) -> Void {
-  param %0 n: mutable Int @6:13-6:14
+func "bump(_: &Int)"(_: mutable &Int) -> Void {
+  param %0 n: mutable &Int @6:13-6:14
 bb0:
   return
 }

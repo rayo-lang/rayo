@@ -100,9 +100,9 @@ struct StackSlotTests {
 private let replacingOneArray = """
     main "main()"
 
-    func "bump(_: &[100000 of Int], _: UInt)"(_: [100000 of Int], _: owned UInt) -> [100000 of Int] {
-      param %0 a: [100000 of Int] @1:13-1:14
-      param %1 i: owned UInt @1:36-1:37
+    func "bump(_: &[100000 of Int], _: UInt)"(_: &[100000 of Int], _: UInt) -> [100000 of Int] {
+      param %0 a: &[100000 of Int] @1:13-1:14
+      param %1 i: UInt @1:36-1:37
       var %2 b: [100000 of Int] @2:9-2:10
       temp %3: UInt
     bb0:
@@ -174,9 +174,9 @@ private let replacingOneArray = """
 /// here, with each local declared and retired where lowering and the ownership stage would put them.
 private let passingOwnedCopies = """
     main "main()"
-    func "bumpedSum(_: [100000 of Int], _: UInt)"(_: owned [100000 of Int], _: UInt) -> Int {
-      param %0 a: owned [100000 of Int] @1:1-1:2
-      param %1 i: UInt @1:1-1:2
+    func "bumpedSum(_: [100000 of Int], _: UInt)"(_: [100000 of Int], _: &UInt) -> Int {
+      param %0 a: [100000 of Int] @1:1-1:2
+      param %1 i: &UInt @1:1-1:2
       temp %2: UInt
       var %3 sum: Int @1:1-1:2
       var %4 j: UInt @1:1-1:2
@@ -255,8 +255,8 @@ private let passingOwnedCopies = """
 private let summingTwoTemporaries = """
     main "main()"
 
-    func "filled(_: UInt)"(_: owned UInt) -> [100000 of Int] {
-      param %0 i: owned UInt @1:15-1:16
+    func "filled(_: UInt)"(_: UInt) -> [100000 of Int] {
+      param %0 i: UInt @1:15-1:16
       var %1 a: [100000 of Int] @2:9-2:10
       temp %2: UInt
     bb0:
@@ -271,8 +271,8 @@ private let summingTwoTemporaries = """
       unreachable
     }
 
-    func "sum(_: &[100000 of Int])"(_: [100000 of Int]) -> Int {
-      param %0 a: [100000 of Int] @6:12-6:13
+    func "sum(_: &[100000 of Int])"(_: &[100000 of Int]) -> Int {
+      param %0 a: &[100000 of Int] @6:12-6:13
       var %1 total: Int @7:9-7:14
       var %2 j: UInt @8:9-8:10
       temp %3: Bool

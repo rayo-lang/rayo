@@ -84,7 +84,7 @@ private func borrowing(_ blocks: String) -> String {
       %0 @1:1-1:2 = operand 1 @1:1-1:2
     \(blocks)
     }
-    func "f(_: Int)"(_: Int) -> Void
+    func "f(_: Int)"(_: &Int) -> Void
     """
 }
 

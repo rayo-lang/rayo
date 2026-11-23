@@ -162,17 +162,17 @@ public struct CheckedPrinter: ~Copyable {
         }
     }
 
-    /// Writes a call's argument: a borrowed value as its expression, and an owned value or a mutable place under
-    /// `owned` or `mutable`, as the program's text declares the parameter that takes it.
+    /// Writes a call's argument as the source would write it: an owned value as its expression, and a borrowed value
+    /// or a mutable place under `&` or `mutable &`.
     private mutating func write(_ argument: CheckedArgument, depth: Int) {
         switch argument {
-        case .borrowed(let value):
-            write(value, depth: depth)
         case .owned(let value):
-            line("owned", depth)
+            write(value, depth: depth)
+        case .borrowed(let value):
+            line("&", depth)
             write(value, depth: depth + 1)
         case .mutable(let place):
-            line("mutable", depth)
+            line("mutable &", depth)
             write(place, depth: depth + 1)
         }
     }

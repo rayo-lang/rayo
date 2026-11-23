@@ -8,25 +8,25 @@ struct Enemy {
 
 main "main()"
 
-init "Stats(hp: Int)"(hp: owned Int) -> Stats
+init "Stats(hp: Int)"(hp: Int) -> Stats
 
-init "Enemy(stats: Stats)"(stats: owned Stats) -> Enemy
+init "Enemy(stats: Stats)"(stats: Stats) -> Enemy
 
 func "main()"() -> Void {
 bb0:
   return
 }
 
-func "given(_: &Stats)"(_: Stats) -> Stats {
-  param %0 s: Stats @2:14-2:15
+func "given(_: &Stats)"(_: &Stats) -> Stats {
+  param %0 s: &Stats @2:14-2:15
 bb0:
   return move %0 @2:36-2:37
 bb1:
   unreachable
 }
 
-func "stats(_: &Enemy)"(_: Enemy) -> Stats {
-  param %0 e: Enemy @3:14-3:15
+func "stats(_: &Enemy)"(_: &Enemy) -> Stats {
+  param %0 e: &Enemy @3:14-3:15
   let %1 f: Enemy @4:9-4:10
 bb0:
   declare %1

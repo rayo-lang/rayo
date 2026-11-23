@@ -8,8 +8,8 @@ bb0:
   return
 }
 
-func "double(_: Int)"(_: owned Int) -> Int {
-  param %0 n: owned Int @4:15-4:16
+func "double(_: Int)"(_: Int) -> Int {
+  param %0 n: Int @4:15-4:16
   temp %1: Int
 bb0:
   declare %1

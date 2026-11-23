@@ -59,7 +59,7 @@ private let ownershipStatements = [
 private func assigningALocal(_ blocks: String) -> String {
     """
     main "main()"
-    func "show(_: &Int)"(_: Int) -> Void
+    func "show(_: &Int)"(_: &Int) -> Void
     func "main()"() -> Void {
       temp %0: Int
     bb0:

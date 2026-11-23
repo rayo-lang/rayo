@@ -64,7 +64,7 @@ struct InitializationCheckerTests {
         #expect(try checked(function(blocks)).errors == [])
     }
 
-    @Test(arguments: ["Int", "owned Int", "mutable Int"])
+    @Test(arguments: ["&Int", "Int", "mutable &Int"])
     func `a parameter holds its argument from the function's entry, whatever its convention`(parameter: String) throws {
         let function = (name: "f(_: Int)", text: """
             func "f(_: Int)"(_: \(parameter)) -> Void {

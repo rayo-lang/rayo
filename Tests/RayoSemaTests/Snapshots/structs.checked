@@ -9,9 +9,9 @@ struct Hit {
 
 main "main()"
 
-init "Shot(range: Int, hit: Hit)"(range: owned Int, hit: owned Hit) -> Shot
+init "Shot(range: Int, hit: Hit)"(range: Int, hit: Hit) -> Shot
 
-init "Hit(damage: Int)"(damage: owned Int) -> Hit
+init "Hit(damage: Int)"(damage: Int) -> Hit
 
 func "main()"() -> Void {
   let %0 damage: Int @4:9-4:15
@@ -21,35 +21,28 @@ func "main()"() -> Void {
     integer 7: Int @4:18-4:19
   bind %1 @5:9-5:10
     call "Shot(range: Int, hit: Hit)": Shot @5:13-5:53
-      owned
-        integer 4: Int @5:25-5:26
-      owned
-        call "Hit(damage: Int)": Hit @5:33-5:52
-          owned
-            value: Int @5:45-5:51
-              place %0 @5:45-5:51
+      integer 4: Int @5:25-5:26
+      call "Hit(damage: Int)": Hit @5:33-5:52
+        value: Int @5:45-5:51
+          place %0 @5:45-5:51
   assign
     place %1 @6:5-6:6 .1 @6:5-6:10 .0 @6:5-6:17
     integer 9: Int @6:20-6:21
   expression
     call builtin "print(_: Int)": Void @7:5-7:19
-      owned
-        value: Int @7:11-7:18
-          place %1 @7:11-7:12 .0 @7:11-7:18
+      value: Int @7:11-7:18
+        place %1 @7:11-7:12 .0 @7:11-7:18
   bind %2 @8:13-8:14
     value: Hit @8:17-8:22
       place %1 @8:17-8:18 .1 @8:17-8:22
   expression
     call builtin "print(_: Int)": Void @9:5-9:20
-      owned
-        value: Int @9:11-9:19
-          place %2 @9:11-9:12 .0 @9:11-9:19
+      value: Int @9:11-9:19
+        place %2 @9:11-9:12 .0 @9:11-9:19
   expression
     call builtin "print(_: Int)": Void @10:5-10:33
-      owned
-        value: Int @10:11-10:32
-          place temporary .0 @10:11-10:32
-            call "Hit(damage: Int)": Hit @10:11-10:25
-              owned
-                integer 3: Int @10:23-10:24
+      value: Int @10:11-10:32
+        place temporary .0 @10:11-10:32
+          call "Hit(damage: Int)": Hit @10:11-10:25
+            integer 3: Int @10:23-10:24
 }

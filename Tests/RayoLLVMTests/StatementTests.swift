@@ -208,14 +208,14 @@ struct OwnershipStatementTests {
               end a1
               return
             }
-            func "show(_: &Int)"(_: Int) -> Void {
-              param %0 n: Int @1:1-1:1
+            func "show(_: &Int)"(_: &Int) -> Void {
+              param %0 n: &Int @1:1-1:1
             bb0:
               \(printInt("%0"))
               return
             }
-            func "change(_: mutable &Int)"(_: mutable Int) -> Void {
-              param %0 n: mutable Int @1:1-1:1
+            func "change(_: mutable &Int)"(_: mutable &Int) -> Void {
+              param %0 n: mutable &Int @1:1-1:1
             bb0:
               \(printInt("%0"))
               return

@@ -15,13 +15,11 @@ func "main()"() -> Void {
     then
       expression
         call builtin "print(_: Int)": Void @4:12-4:20
-          owned
-            integer 1: Int @4:18-4:19
+          integer 1: Int @4:18-4:19
     else
       expression
         call builtin "print(_: Int)": Void @4:30-4:38
-          owned
-            integer 2: Int @4:36-4:37
+          integer 2: Int @4:36-4:37
   bind %2 @5:9-5:10
     if: Int @5:13-5:34
       value: Bool @5:16-5:17

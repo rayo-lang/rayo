@@ -15,8 +15,8 @@ let programStructs = """
       var pair: Pair
       var items: [3 of Int]
     }
-    init "Pair(a: Int, b: Int)"(a: owned Int, b: owned Int) -> Pair
-    init "Trio(a: Int, b: Int, c: Bool)"(a: owned Int, b: owned Int, c: owned Bool) -> Trio
+    init "Pair(a: Int, b: Int)"(a: Int, b: Int) -> Pair
+    init "Trio(a: Int, b: Int, c: Bool)"(a: Int, b: Int, c: Bool) -> Trio
 
     """
 

@@ -89,8 +89,8 @@ struct CompilerTests {
               return
             }
 
-            func "show(_: &Int)"(_: Int) -> Void {
-              param %0 n: Int @5:13-5:14
+            func "show(_: &Int)"(_: &Int) -> Void {
+              param %0 n: &Int @5:13-5:14
             bb0:
               return
             }
@@ -106,8 +106,7 @@ struct CompilerTests {
             func "main()"() -> Void {
               expression
                 call builtin "print(_: Int)": Void @2:5-2:13
-                  owned
-                    integer 1: Int @2:11-2:12
+                  integer 1: Int @2:11-2:12
             }
 
             """))

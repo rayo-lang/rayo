@@ -125,9 +125,9 @@ private func mainBody(from blocks: String) throws -> IRBody {
         \(blocks)
         }
 
-        func "bump(_: Int, _: Int)"(_: mutable Int, _: owned Int) -> Void {
-          param %0 a: mutable Int @1:1-1:2
-          param %1 b: owned Int @1:3-1:4
+        func "bump(_: Int, _: Int)"(_: mutable &Int, _: Int) -> Void {
+          param %0 a: mutable &Int @1:1-1:2
+          param %1 b: Int @1:3-1:4
         bb0:
           return
         }

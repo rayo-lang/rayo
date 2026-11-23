@@ -48,7 +48,7 @@ struct FunctionVerifier {
         }
     }
 
-    /// `parameter` as a violation of a body's parameters names it, such as `a parameter of owned Int`, or `no
+    /// `parameter` as a violation of a body's parameters names it, such as `a parameter of &Int`, or `no
     /// parameter` where it is nil.
     private static func text(of parameter: FunctionParameter?) -> String {
         parameter.map { "a parameter of \($0.convention.spelling(of: $0.type))" } ?? "no parameter"

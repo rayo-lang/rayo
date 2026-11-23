@@ -17,8 +17,8 @@ bb2:
   return
 }
 
-func "show(_: Bool)"(_: owned Bool) -> Void {
-  param %0 b: owned Bool @5:13-5:14
+func "show(_: Bool)"(_: Bool) -> Void {
+  param %0 b: Bool @5:13-5:14
 bb0:
   return
 }

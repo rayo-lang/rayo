@@ -17,10 +17,10 @@ bb0:
   return
 }
 
-func "add(_: &Int, _: Int, _: &Int)"(_: Int, _: owned Int, _: Int) -> Void {
-  param %0 a: Int @6:12-6:13
-  param %1 b: owned Int @6:23-6:24
-  param %2 c: Int @6:33-6:34
+func "add(_: &Int, _: Int, _: &Int)"(_: &Int, _: Int, _: &Int) -> Void {
+  param %0 a: &Int @6:12-6:13
+  param %1 b: Int @6:23-6:24
+  param %2 c: &Int @6:33-6:34
 bb0:
   return
 }

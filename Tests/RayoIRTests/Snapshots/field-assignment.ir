@@ -5,7 +5,7 @@ struct Enemy {
 
 main "main()"
 
-init "Enemy(hp: Int, armor: Int)"(hp: owned Int, armor: owned Int) -> Enemy
+init "Enemy(hp: Int, armor: Int)"(hp: Int, armor: Int) -> Enemy
 
 func "main()"() -> Void {
   var %0 e: Enemy @2:5-2:6

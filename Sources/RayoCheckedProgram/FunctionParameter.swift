@@ -12,7 +12,7 @@ public struct FunctionParameter: Equatable, Sendable, CustomStringConvertible {
         self.type = type
     }
 
-    /// The parameter as a declaration writes it, with `_` for no label, such as `by: owned Int`.
+    /// The parameter as a declaration writes it, with `_` for no label, such as `by: &Int`.
     public var description: String {
         "\(label ?? "_"): \(convention.spelling(of: type))"
     }

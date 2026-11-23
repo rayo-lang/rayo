@@ -25,7 +25,7 @@ private func program(running blocks: String) throws -> IRProgram {
         bb0:
         \(blocks)
         }
-        func "f(_: Int)"(_: Int) -> Void
+        func "f(_: Int)"(_: &Int) -> Void
         """)
 }
 

@@ -15,7 +15,7 @@ struct ParameterTests {
         #expect(run(source) == CommandResult(exitCode: 0, output: "7\n20\n", errors: ""))
     }
 
-    @Test func `a call that lends its argument reaches the function that borrows it, and one that doesn't, the other`() {
+    @Test func `a lent argument reaches the function that borrows it, and a bare one the function that owns it`() {
         let source = """
             func main() {
                 let a = 1

@@ -9,8 +9,8 @@ bb0:
   return
 }
 
-func "firstOver(_: Int)"(_: owned Int) -> Int {
-  param %0 n: owned Int @4:18-4:19
+func "firstOver(_: Int)"(_: Int) -> Int {
+  param %0 n: Int @4:18-4:19
   var %1 i: Int @5:9-5:10
   temp %2: Bool
 bb0:

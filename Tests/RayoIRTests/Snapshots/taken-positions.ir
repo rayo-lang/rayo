@@ -4,7 +4,7 @@ struct Hit {
 
 main "main()"
 
-init "Hit(damage: Int)"(damage: owned Int) -> Hit
+init "Hit(damage: Int)"(damage: Int) -> Hit
 
 func "main()"() -> Void {
   let %0 a: Hit @2:9-2:10
@@ -53,8 +53,8 @@ bb6:
   return
 }
 
-func "show(_: &Hit)"(_: Hit) -> Void {
-  param %0 h: Hit @12:13-12:14
+func "show(_: &Hit)"(_: &Hit) -> Void {
+  param %0 h: &Hit @12:13-12:14
 bb0:
   return
 }

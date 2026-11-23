@@ -288,7 +288,7 @@ struct UnusedValueCheckerTests {
               return
             }
             """)
-        let use = (name: "use(_: [32 of Int])", text: #"func "use(_: [32 of Int])"(_: [32 of Int]) -> Int"#)
+        let use = (name: "use(_: [32 of Int])", text: #"func "use(_: [32 of Int])"(_: &[32 of Int]) -> Int"#)
         #expect(try checked(stores, beside: [use]).errors == [])
     }
 
@@ -320,7 +320,7 @@ struct UnusedValueCheckerTests {
               %0 @2:2-2:2 = operand 2 @1:1-1:1
               return
             """
-        #expect(try checked(taking("mutable Int", blocks)).errors == [])
+        #expect(try checked(taking("mutable &Int", blocks)).errors == [])
     }
 
     @Test(arguments: [
@@ -330,11 +330,11 @@ struct UnusedValueCheckerTests {
     func `an owned parameter that no code reads is reported where it is declared`(
         statement: String, expected: [Diagnostic],
     ) throws {
-        #expect(try checked(taking("owned Int", "bb0:\n  \(statement)\n  return")).errors == expected)
+        #expect(try checked(taking("Int", "bb0:\n  \(statement)\n  return")).errors == expected)
     }
 
     @Test func `a borrowed parameter that no code reads is not reported`() throws {
-        #expect(try checked(taking("Int", "bb0:\n  return")).errors == [])
+        #expect(try checked(taking("&Int", "bb0:\n  return")).errors == [])
     }
 }
 
@@ -353,7 +353,7 @@ private func taking(_ parameter: String, _ blocks: String) -> (name: String, tex
 /// A function that takes an array of a billion Ints and gives an Int, which has no body.
 private let totalOfHuge = (
     name: "total(_: [1000000000 of Int])",
-    text: #"func "total(_: [1000000000 of Int])"(_: [1000000000 of Int]) -> Int"#,
+    text: #"func "total(_: [1000000000 of Int])"(_: &[1000000000 of Int]) -> Int"#,
 )
 
 /// The statement that passes the array of a billion Ints, through the access `access`, to `total`.

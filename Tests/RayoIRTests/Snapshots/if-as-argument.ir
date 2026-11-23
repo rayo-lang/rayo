@@ -19,8 +19,8 @@ bb3:
   return
 }
 
-func "show(_: Int)"(_: owned Int) -> Void {
-  param %0 n: owned Int @5:13-5:14
+func "show(_: Int)"(_: Int) -> Void {
+  param %0 n: Int @5:13-5:14
 bb0:
   return
 }

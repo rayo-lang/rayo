@@ -21,7 +21,6 @@ func "main()"() -> Void {
     integer 3: Int @7:10-7:11
   expression
     call builtin "print(_: Int)": Void @8:5-8:13
-      owned
-        value: Int @8:11-8:12
-          place %1 @8:11-8:12
+      value: Int @8:11-8:12
+        place %1 @8:11-8:12
 }

@@ -4,7 +4,7 @@ struct P {
 
 main "main()"
 
-init "P(hp: Int)"(hp: owned Int) -> P
+init "P(hp: Int)"(hp: Int) -> P
 
 func "main()"() -> Void {
   var %0 x: Int @2:9-2:10
@@ -51,9 +51,9 @@ bb6:
   return
 }
 
-func "show(_: Int, _: Int)"(_: owned Int, _: owned Int) -> Void {
-  param %0 a: owned Int @9:13-9:14
-  param %1 b: owned Int @9:23-9:24
+func "show(_: Int, _: Int)"(_: Int, _: Int) -> Void {
+  param %0 a: Int @9:13-9:14
+  param %1 b: Int @9:23-9:24
 bb0:
   return
 }

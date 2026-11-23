@@ -4,7 +4,7 @@ struct Enemy {
 
 main "main()"
 
-init "Enemy(slots: [2 of Int])"(slots: owned [2 of Int]) -> Enemy
+init "Enemy(slots: [2 of Int])"(slots: [2 of Int]) -> Enemy
 
 func "main()"() -> Void {
   var %0 a: [2 of Int] @2:9-2:10
