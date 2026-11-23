@@ -252,10 +252,16 @@ struct CallChecker {
 
         // Pick the one candidate that the arguments' labels and values fit.
         let labels = arguments.map(\.label)
-        let remaining = remaining(of: candidates, passing: labels, values)
+        let (remaining, takeArgumentsAsWritten) = remaining(of: candidates, passing: labels, values)
         // No candidate fits, which is reported with the arguments' types.
         guard !remaining.isEmpty else {
             reportNoMatch(of: name, labels: labels, values: values, in: range)
+            return nil
+        }
+        // Several fit by type, and none takes the arguments as they are written. A candidate that failed was
+        // reported where it is declared, and is left to `chosen` to pass over.
+        if !takeArgumentsAsWritten, remaining.count > 1, !remaining.contains(where: \.hasFailed) {
+            reportMiswritten(values, among: remaining, named: name, labels: labels, in: range)
             return nil
         }
         // Where several fit and none of them is the call's, the arguments' literals are settled for their own errors.
@@ -304,9 +310,10 @@ struct CallChecker {
         return nil
     }
 
-    /// The candidates that a call passing arguments with `labels` and `values`, in order, can reach.
+    /// The candidates that a call passing arguments with `labels` and `values`, in order, can reach, and whether they
+    /// take each argument as it is written.
     private func remaining(of candidates: [Signature], passing labels: [String?],
-                           _ values: [CheckedValue]) -> [Signature] {
+                           _ values: [CheckedValue]) -> (candidates: [Signature], takeArgumentsAsWritten: Bool) {
         // Keep the candidates whose labels the arguments match, in order.
         let labeled = candidates.filter { $0.takesLabels(labels) }
         // Keep those that the typed arguments fit, so that an untyped argument is offered only the parameters of the
@@ -318,7 +325,27 @@ struct CallChecker {
         // Where some candidates take each argument as it is written, with or without a `&`, the others drop out.
         // Where none does, those the types fit stay, so the one the call reaches reports how to write its arguments.
         let writtenFit = typesFit.filter { $0.takesWritten(values) }
-        return writtenFit.isEmpty ? typesFit : writtenFit
+        return writtenFit.isEmpty ? (typesFit, false) : (writtenFit, true)
+    }
+
+    /// Reports `values`, which several of `candidates`, the functions the call names as `name`, fit by type, though
+    /// none takes each of them as it is written. Where every candidate takes each argument the same way, each
+    /// argument reports what any of them would report of it; otherwise the call fits none of them as written.
+    private func reportMiswritten(_ values: [CheckedValue], among candidates: [Signature], named name: String,
+                                  labels: [String?], in range: SourceRange) {
+        let conventions = candidates[0].parameters.map(\.convention)
+        guard candidates.allSatisfy({ $0.parameters.map(\.convention) == conventions }) else {
+            reportNoMatch(of: name, labels: labels, values: values, in: range)
+            return
+        }
+
+        // The candidates differ only in types the arguments fit, so the first stands for them all. The call still
+        // fails, so its body is tainted, whatever the arguments report.
+        let expectations = candidates[0].parameters.compactMap { $0.expectation(calledAs: name) }
+        for (value, expected) in zip(values, expectations) {
+            _ = expressions.settled(value, expecting: expected)
+        }
+        errors.taints.taint()
     }
 
     /// Reports a call of `name` whose arguments, with `labels` and `values`, fit none of its functions, unless an

@@ -59,10 +59,14 @@ struct ParameterTests {
 
     // An argument written with a `&` reaches the function that borrows it, and one written without reaches the one
     // that owns it. Where none takes an argument as it is written, the one its type fits reports how to write it.
+    // Where its type fits several, each of which takes each argument the same way, the argument reports what any of
+    // them would, and where they take the arguments in different ways, the call fits none of them as written.
     @Test(arguments: [
         ("f(&a)", [ErrorCode]()), ("f(a)", []), ("f(1)", []),
         ("g(a)", [.unlentPlace(name: "g", type: "Int", place: "a")]),
         ("h(&a)", [.referenceToOwnedParameter(name: "h", type: "Int")]),
+        ("u(1)", [.unsupportedLentValue]),
+        ("v(1, 2)", [.noMatchingFunction(name: "v", arguments: "Int, Int")]),
     ])
     func `an overload is picked by how each argument is written, where its type fits several`(
         call: String, expected: [ErrorCode],
@@ -74,6 +78,10 @@ struct ParameterTests {
             func g(_ x: &Bool) {}
             func h(_ x: Int) {}
             func h(_ x: Bool) {}
+            func u(_ x: &Int) {}
+            func u(_ x: &UInt) {}
+            func v(_ x: &Int, _ y: Int) {}
+            func v(_ x: UInt, _ y: &UInt) {}
             """
         #expect(errors("func main() {\n    let a = 1\n    \(call)\n}\n\(declarations)") == expected)
     }
