@@ -81,7 +81,7 @@ A part of the code that takes a value, such as an argument or a `return`, where 
 A new reference, made by `&r` or `mutable &r` of a place `r` that holds a reference, to what `r` refers to, which keeps `r` borrowed until its last use ([01](docs/spec/01-values-and-ownership/references.md#reborrowing)).
 
 **Reference**:
-A value that borrows a place: a **shared reference** `&T`, made by `&p` or a bare `p`, or a **mutable reference** `mutable &T`, made by `mutable &p`, which may change it ([01](docs/spec/01-values-and-ownership/references.md#references)).
+A value that borrows a place: a **shared reference** `&T`, made by `&p`, or by a bare `p` where one is expected, or a **mutable reference** `mutable &T`, made by `mutable &p` ([01](docs/spec/01-values-and-ownership/references.md#references)).
 _Avoid_: pointer (a raw, object or reference-counted one)
 
 **Safe code**:
