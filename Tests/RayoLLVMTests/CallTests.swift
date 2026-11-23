@@ -10,7 +10,7 @@ struct CallTests {
             func "main()"() -> Void {
               temp %0: Int
             bb0:
-              %0 @1:1-1:2 = call "double(_: Int)"(21) @1:1-1:2
+              %0 @1:1-1:2 = call "double(_: &Int)"(21) @1:1-1:2
               \(printInt("%0", through: 0))
               return
             }
@@ -27,7 +27,7 @@ struct CallTests {
             bb0:
               %0 @1:1-1:2 = call "Pair(a: Int, b: Int)"(1, 2) @1:1-1:2
               begin a0 read %0 @1:1-1:2
-              %1 @1:1-1:2 = call "swapped(_: Pair)"(a0) @1:1-1:2
+              %1 @1:1-1:2 = call "swapped(_: &Pair)"(a0) @1:1-1:2
               end a0
               \(printInt("%1.0", through: 1))
               \(printInt("%1.1", through: 2))
@@ -43,7 +43,7 @@ struct CallTests {
             func "main()"() -> Void {
               var %0 t: Trio @1:1-1:1
             bb0:
-              %0 @1:1-1:2 = call "trio(_: Int)"(5) @1:1-1:2
+              %0 @1:1-1:2 = call "trio(_: &Int)"(5) @1:1-1:2
               \(printInt("%0.0", through: 0))
               \(printInt("%0.1", through: 1))
               \(printBool("%0.2", through: 2))
@@ -63,7 +63,7 @@ struct CallTests {
             bb0:
               %0 @1:1-1:2 = call "Trio(a: Int, b: Int, c: Bool)"(3, 4, false) @1:1-1:2
               begin a0 read %0 @1:1-1:2
-              %1 @1:1-1:2 = call "sum(_: Trio)"(a0) @1:1-1:2
+              %1 @1:1-1:2 = call "sum(_: &Trio)"(a0) @1:1-1:2
               end a0
               \(printInt("%1", through: 1))
               return
@@ -85,7 +85,7 @@ struct CallTests {
             bb0:
               %0 @1:1-1:2 = call "Trio(a: Int, b: Int, c: Bool)"(1, 2, true) @1:1-1:2
               begin a0 read %0 @1:1-1:2
-              %0 @1:1-1:2 = call "swapped(_: Trio)"(a0) @1:1-1:2
+              %0 @1:1-1:2 = call "swapped(_: &Trio)"(a0) @1:1-1:2
               end a0
               \(printInt("%0.0", through: 1))
               \(printInt("%0.1", through: 2))
@@ -102,8 +102,8 @@ struct CallTests {
             main "main()"
             func "main()"() -> Void {
             bb0:
-              _ = call "double(_: Int)"(1) @1:1-1:2
-              _ = call "trio(_: Int)"(9223372036854775807) @1:1-1:2
+              _ = call "double(_: &Int)"(1) @1:1-1:2
+              _ = call "trio(_: &Int)"(9223372036854775807) @1:1-1:2
               return
             }
             """
@@ -116,7 +116,7 @@ struct CallTests {
     /// an Int, the next Int and true; and `sum`, which returns the sum of a Trio's Ints.
     private let functions = """
 
-        func "double(_: Int)"(_: &Int) -> Int {
+        func "double(_: &Int)"(_: &Int) -> Int {
           param %0 x: &Int @1:1-1:1
           temp %1: Int
         bb0:
@@ -124,14 +124,14 @@ struct CallTests {
           %1 @1:1-1:2 = add checked read %0 @1:1-1:2, read %0 @1:1-1:2 @1:1-1:2
           return read %1 @1:1-1:2
         }
-        func "swapped(_: Pair)"(_: &Pair) -> Pair {
+        func "swapped(_: &Pair)"(_: &Pair) -> Pair {
           param %0 p: &Pair @1:1-1:1
           temp %1: Pair
         bb0:
           %1 @1:1-1:2 = call "Pair(a: Int, b: Int)"(read %0.1 @1:1-1:2, read %0.0 @1:1-1:2) @1:1-1:2
           return move %1 @1:1-1:2
         }
-        func "trio(_: Int)"(_: &Int) -> Trio {
+        func "trio(_: &Int)"(_: &Int) -> Trio {
           param %0 x: &Int @1:1-1:1
           temp %1: Int
           temp %2: Trio
@@ -140,14 +140,14 @@ struct CallTests {
           %2 @1:1-1:2 = call "Trio(a: Int, b: Int, c: Bool)"(read %0 @1:1-1:2, read %1 @1:1-1:2, true) @1:1-1:2
           return move %2 @1:1-1:2
         }
-        func "sum(_: Trio)"(_: &Trio) -> Int {
+        func "sum(_: &Trio)"(_: &Trio) -> Int {
           param %0 t: &Trio @1:1-1:1
           temp %1: Int
         bb0:
           %1 @1:1-1:2 = add checked read %0.0 @1:1-1:2, read %0.1 @1:1-1:2 @1:1-1:2
           return read %1 @1:1-1:2
         }
-        func "swapped(_: Trio)"(_: &Trio) -> Trio {
+        func "swapped(_: &Trio)"(_: &Trio) -> Trio {
           param %0 t: &Trio @1:1-1:1
           temp %1: Trio
         bb0:

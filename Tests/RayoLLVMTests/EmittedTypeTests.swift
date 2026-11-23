@@ -10,7 +10,7 @@ struct EmittedTypeTests {
     ) throws {
         // The emitted signature takes an i64 and an i1, and returns the LLVM type of `result`.
         try withEmitted(executable(emptyMain + pick(returning: result))) { module in
-            let signature = try signature(of: "pick(_: Int, _: Bool)", in: module)
+            let signature = try signature(of: "pick(_: &Int, _: &Bool)", in: module)
             #expect(signature.parameters.map(\.text) == ["i64", "i1"])
             #expect(signature.result.text == resultText)
         }
@@ -29,7 +29,7 @@ struct EmittedTypeTests {
 
         // The emitted function allocates a slot of each local's LLVM type, its parameters' first.
         try withEmitted(executable(emptyMain + pick)) { module in
-            let llvmFunction = try function(named: "pick(_: Int, _: Bool)", in: module)
+            let llvmFunction = try function(named: "pick(_: &Int, _: &Bool)", in: module)
             let slotTypes = instructions(.allocate, in: llvmFunction).map(\.allocatedType?.text)
             #expect(slotTypes == ["i64", "i1", "i1", "i64"])
         }
@@ -289,13 +289,13 @@ struct EmittedTypeTests {
 
         """
 
-    /// `pick(_: Int, _: Bool)`, which holds temporaries of the types `temporaries` names besides its parameters, and
+    /// `pick(_: &Int, _: &Bool)`, which holds temporaries of the types `temporaries` names besides its parameters, and
     /// returns the parameter of the type `result` names.
     private func pick(returning result: String, temporaries: [String] = []) -> String {
         let locals = temporaries.enumerated().map { "  temp %\($0 + 2): \($1)\n" }.joined()
         return """
 
-            func "pick(_: Int, _: Bool)"(_: &Int, _: &Bool) -> \(result) {
+            func "pick(_: &Int, _: &Bool)"(_: &Int, _: &Bool) -> \(result) {
               param %0 n: &Int @1:1-1:1
               param %1 b: &Bool @1:1-1:1
             \(locals)bb0:

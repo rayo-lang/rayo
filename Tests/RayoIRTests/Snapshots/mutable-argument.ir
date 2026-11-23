@@ -6,13 +6,13 @@ bb0:
   declare %0
   %0 @2:9-2:10 = operand 1 @2:13-2:14
   begin a0 modify %0 @3:11-3:12
-  _ = call "bump(_: &Int)"(a0) @3:5-3:13
+  _ = call "bump(_: mutable &Int)"(a0) @3:5-3:13
   begin a1 read %0 @4:11-4:12
   _ = call builtin "print(_: &Int)"(a1) @4:5-4:13
   return
 }
 
-func "bump(_: &Int)"(_: mutable &Int) -> Void {
+func "bump(_: mutable &Int)"(_: mutable &Int) -> Void {
   param %0 n: mutable &Int @6:13-6:14
 bb0:
   return

@@ -23,7 +23,7 @@ struct AccessScopeTests {
     @Test func `an access that ends once on every path from its beginning is no violation`() throws {
         let program = try IRParser.program(from: borrowing("""
               begin a0 read %0 @1:1-1:2
-              _ = call "f(_: Int)"(a0) @1:1-1:2
+              _ = call "f(_: &Int)"(a0) @1:1-1:2
               branch true, bb1, bb2
             bb1:
               end a0
@@ -56,7 +56,7 @@ struct AccessScopeTests {
     @Test func `lowering's IR, whose ends the ownership stage writes later, ends no access`() throws {
         let program = try IRParser.program(from: borrowing("""
               begin a0 read %0 @1:1-1:2
-              _ = call "f(_: Int)"(a0) @1:1-1:2
+              _ = call "f(_: &Int)"(a0) @1:1-1:2
               return
             """))
         #expect(IRVerifier.verify(program, from: .lowering) == nil)
@@ -73,7 +73,7 @@ struct AccessScopeTests {
     }
 }
 
-/// A program whose `main` assigns its Int local `%0` and then runs `blocks`, and which declares `f(_: Int)`, which
+/// A program whose `main` assigns its Int local `%0` and then runs `blocks`, and which declares `f(_: &Int)`, which
 /// borrows its one Int.
 private func borrowing(_ blocks: String) -> String {
     """
@@ -84,7 +84,7 @@ private func borrowing(_ blocks: String) -> String {
       %0 @1:1-1:2 = operand 1 @1:1-1:2
     \(blocks)
     }
-    func "f(_: Int)"(_: &Int) -> Void
+    func "f(_: &Int)"(_: &Int) -> Void
     """
 }
 
@@ -93,7 +93,7 @@ private let unscopedAccesses = [
         testDescription: "an access not ended before the function returns",
         blocks: """
               begin a0 read %0 @1:1-1:2
-              _ = call "f(_: Int)"(a0) @1:1-1:2
+              _ = call "f(_: &Int)"(a0) @1:1-1:2
               return
             """,
         message: "the IR leaves the function at bb0 without ending a0",
@@ -140,7 +140,7 @@ private let unscopedAccesses = [
         blocks: """
               begin a0 read %0 @1:1-1:2
               end a0
-              _ = call "f(_: Int)"(a0) @1:1-1:2
+              _ = call "f(_: &Int)"(a0) @1:1-1:2
               return
             """,
         message: "the IR uses a0 at bb0, where it isn't held",

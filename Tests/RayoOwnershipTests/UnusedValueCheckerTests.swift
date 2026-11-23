@@ -294,11 +294,11 @@ struct UnusedValueCheckerTests {
             \(conditionalStores.joined(separator: "\n"))
             bb\(2 * branchCount + 1):
               begin a0 read %0 @1:1-1:1
-              _ = call "use(_: [32 of Int])"(a0) @1:1-1:1
+              _ = call "use(_: &[32 of Int])"(a0) @1:1-1:1
               return
             }
             """)
-        let use = (name: "use(_: [32 of Int])", text: #"func "use(_: [32 of Int])"(_: &[32 of Int]) -> Int"#)
+        let use = (name: "use(_: &[32 of Int])", text: #"func "use(_: &[32 of Int])"(_: &[32 of Int]) -> Int"#)
         #expect(try checked(stores, beside: [use]).errors == [])
     }
 
@@ -349,25 +349,26 @@ struct UnusedValueCheckerTests {
     }
 }
 
-/// The function `f(_: Int)`, made of `blocks`, whose one local is its parameter `n` (`%0`), of `parameter`, the
-/// parameter's convention and type, which the source declares at column 1 of line 2.
+/// The function `f`, made of `blocks`, whose one local is its parameter `n` (`%0`), of `parameter`, the parameter's
+/// convention and type, which the source declares at column 1 of line 2.
 private func taking(_ parameter: String, _ blocks: String) -> (name: String, text: String) {
+    let name = "f(_: \(parameter))"
     let text = """
-        func "f(_: Int)"(_: \(parameter)) -> Void {
+        func "\(name)"(_: \(parameter)) -> Void {
           param %0 n: \(parameter) @2:1-2:1
         \(blocks)
         }
         """
-    return ("f(_: Int)", text)
+    return (name, text)
 }
 
 /// A function that takes an array of a billion Ints and gives an Int, which has no body.
 private let totalOfHuge = (
-    name: "total(_: [1000000000 of Int])",
-    text: #"func "total(_: [1000000000 of Int])"(_: &[1000000000 of Int]) -> Int"#,
+    name: "total(_: &[1000000000 of Int])",
+    text: #"func "total(_: &[1000000000 of Int])"(_: &[1000000000 of Int]) -> Int"#,
 )
 
 /// The statement that passes the array of a billion Ints, through the access `access`, to `total`.
 private func totalOfArray(_ access: String) -> String {
-    #"_ = call "total(_: [1000000000 of Int])"(\#(access)) @1:1-1:1"#
+    #"_ = call "total(_: &[1000000000 of Int])"(\#(access)) @1:1-1:1"#
 }

@@ -176,7 +176,7 @@ private let replacingOneArray = """
 /// here, with each local declared and retired where lowering and the ownership stage would put them.
 private let passingOwnedCopies = """
     main "main()"
-    func "bumpedSum(_: [100000 of Int], _: UInt)"(_: [100000 of Int], _: &UInt) -> Int {
+    func "bumpedSum(_: [100000 of Int], _: &UInt)"(_: [100000 of Int], _: &UInt) -> Int {
       param %0 a: [100000 of Int] @1:1-1:2
       param %1 i: &UInt @1:1-1:2
       temp %2: UInt
@@ -219,11 +219,11 @@ private let passingOwnedCopies = """
       declare %0
       %0 @1:1-1:2 = fill 100000 of 1 @1:1-1:2
       declare %1
-      %1 @1:1-1:2 = call "bumpedSum(_: [100000 of Int], _: UInt)"(read %0 @1:1-1:2, UInt 3) @1:1-1:2
+      %1 @1:1-1:2 = call "bumpedSum(_: [100000 of Int], _: &UInt)"(read %0 @1:1-1:2, UInt 3) @1:1-1:2
       \(printInt("%1", through: 0))
       retire %1
       declare %2
-      %2 @1:1-1:2 = call "bumpedSum(_: [100000 of Int], _: UInt)"(read %0 @1:1-1:2, UInt 5) @1:1-1:2
+      %2 @1:1-1:2 = call "bumpedSum(_: [100000 of Int], _: &UInt)"(read %0 @1:1-1:2, UInt 5) @1:1-1:2
       \(printInt("%2", through: 1))
       retire %2
       \(printInt("%0[3]", through: 2))

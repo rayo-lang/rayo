@@ -13,7 +13,7 @@ struct AccessExtentTests {
               %0 @1:1-1:1 = operand 1 @1:1-1:1
               begin a0 modify %0 @2:3-2:3
               begin a1 read %0 @2:6-2:6
-              _ = call "change(_: Int, _: Int)"(a0, a1) @1:1-1:1
+              _ = call "change(_: mutable &Int, _: &Int)"(a0, a1) @1:1-1:1
               return
             """
         let expected = Diagnostic(
@@ -29,7 +29,7 @@ struct AccessExtentTests {
             \(storeShot())
               begin a0 modify %5.0 @2:3-2:3
               begin a1 read %5.1 @2:6-2:6
-              _ = call "change(_: Int, _: Hit)"(a0, a1) @1:1-1:1
+              _ = call "change(_: mutable &Int, _: &Hit)"(a0, a1) @1:1-1:1
               return
             """
         #expect(try checked(function(blocks)).errors == [])
@@ -43,7 +43,7 @@ struct AccessExtentTests {
               %7 @1:1-1:1 = fill 2 of read %4 @1:1-1:1 @1:1-1:1
               begin a0 modify %7[0].0 @2:3-2:3
               begin a1 read %7[1] @2:6-2:6
-              _ = call "change(_: Int, _: Hit)"(a0, a1) @1:1-1:1
+              _ = call "change(_: mutable &Int, _: &Hit)"(a0, a1) @1:1-1:1
               return
             """
         #expect(try checked(function(blocks)).errors == [])
@@ -65,7 +65,7 @@ struct AccessExtentTests {
               %8 @1:1-1:1 = index UInt 1 below 2 @1:1-1:1
               begin a0 modify \(modified) @2:3-2:3
               begin a1 read \(read) @2:6-2:6
-              _ = call "change(_: Int, _: Hit)"(a0, a1) @1:1-1:1
+              _ = call "change(_: mutable &Int, _: &Hit)"(a0, a1) @1:1-1:1
               return
             """
         let expected = Diagnostic(code, at: at(6), labeling: [.init(.borrowed, at: at(3))])
@@ -78,7 +78,7 @@ struct AccessExtentTests {
               %0 @1:1-1:1 = operand 1 @1:1-1:1
               begin a0 read %0 @2:3-2:3
               begin a1 read %0 @2:6-2:6
-              _ = call "g(_: Int, _: Int)"(a0, a1) @1:1-1:1
+              _ = call "g(_: &Int, _: &Int)"(a0, a1) @1:1-1:1
               return
             """
         #expect(try checked(function(blocks)).errors == [])
@@ -99,7 +99,7 @@ struct AccessExtentTests {
             \(storeShot())
               begin a0 read %5.1 @2:3-2:3
               \(change)
-              _ = call "take(_: Int, _: Hit)"(1, a0) @1:1-1:1
+              _ = call "take(_: &Int, _: &Hit)"(1, a0) @1:1-1:1
               return
             """
         #expect(try checked(function(blocks)).errors == [
@@ -113,7 +113,7 @@ struct AccessExtentTests {
               %0 @1:1-1:1 = operand 1 @1:1-1:1
               begin a0 modify %0 @2:3-2:3
               %1 @1:1-1:1 = operand read %0 @2:6-2:6 @1:1-1:1
-              _ = call "change(_: Int, _: Int)"(a0, 1) @1:1-1:1
+              _ = call "change(_: mutable &Int, _: &Int)"(a0, 1) @1:1-1:1
               return
             """
         let expected = Diagnostic(
@@ -140,7 +140,7 @@ struct AccessExtentTests {
             bb3:
               begin a0 read %0 @2:3-2:3
               begin a1 read %3 @1:1-1:1
-              _ = call "g(_: Int, _: Int)"(a0, a1) @1:1-1:1
+              _ = call "g(_: &Int, _: &Int)"(a0, a1) @1:1-1:1
               return
             """
         #expect(try checked(function(blocks)).errors == [])
@@ -152,12 +152,12 @@ struct AccessExtentTests {
             bb0:
               %0 @1:1-1:1 = operand 1 @1:1-1:1
               begin a0 read %0 @2:3-2:3
-              %0 @2:5-2:5 = call "double(_: Int)"(a0) @1:1-1:1
+              %0 @2:5-2:5 = call "double(_: &Int)"(a0) @1:1-1:1
               begin a1 read %0 @1:1-1:1
               _ = call builtin "print(_: &Int)"(a1) @1:1-1:1
               %0 @2:6-2:6 = operand 2 @1:1-1:1
               begin a2 read %0 @1:1-1:1
-              _ = call "g(_: Int, _: Int)"(a2, 2) @1:1-1:1
+              _ = call "g(_: &Int, _: &Int)"(a2, 2) @1:1-1:1
               return
             """
         #expect(try checked(function(blocks)).errors == [])
@@ -169,8 +169,8 @@ struct AccessExtentTests {
               %0 @1:1-1:1 = operand 1 @1:1-1:1
               begin a0 read %0 @1:1-1:1
               begin a1 read %0 @1:1-1:1
-              _ = call "g(_: Int, _: Int)"(a0, a1) @1:1-1:1
-              _ = call "g(_: Int, _: Int)"(1, 2) @1:1-1:1
+              _ = call "g(_: &Int, _: &Int)"(a0, a1) @1:1-1:1
+              _ = call "g(_: &Int, _: &Int)"(1, 2) @1:1-1:1
               return
             """
         #expect(try ended(blocks) == body(of: """
@@ -178,10 +178,10 @@ struct AccessExtentTests {
               %0 @1:1-1:1 = operand 1 @1:1-1:1
               begin a0 read %0 @1:1-1:1
               begin a1 read %0 @1:1-1:1
-              _ = call "g(_: Int, _: Int)"(a0, a1) @1:1-1:1
+              _ = call "g(_: &Int, _: &Int)"(a0, a1) @1:1-1:1
               end a1
               end a0
-              _ = call "g(_: Int, _: Int)"(1, 2) @1:1-1:1
+              _ = call "g(_: &Int, _: &Int)"(1, 2) @1:1-1:1
               return
             """))
     }
@@ -209,7 +209,7 @@ struct AccessExtentTests {
               begin a0 read %0 @1:1-1:1
               branch true, bb1, bb2
             bb1:
-              _ = call "g(_: Int, _: Int)"(a0, 1) @1:1-1:1
+              _ = call "g(_: &Int, _: &Int)"(a0, 1) @1:1-1:1
               goto bb3
             bb2:
               goto bb3
@@ -222,7 +222,7 @@ struct AccessExtentTests {
               begin a0 read %0 @1:1-1:1
               branch true, bb1, bb2
             bb1:
-              _ = call "g(_: Int, _: Int)"(a0, 1) @1:1-1:1
+              _ = call "g(_: &Int, _: &Int)"(a0, 1) @1:1-1:1
               end a0
               goto bb3
             bb2:
@@ -241,7 +241,7 @@ struct AccessExtentTests {
               begin a0 read %0 @1:1-1:1
               branch true, bb1, bb2
             bb1:
-              _ = call "g(_: Int, _: Int)"(a0, 1) @1:1-1:1
+              _ = call "g(_: &Int, _: &Int)"(a0, 1) @1:1-1:1
               goto bb2
             bb2:
               return
@@ -252,7 +252,7 @@ struct AccessExtentTests {
               begin a0 read %0 @1:1-1:1
               branch true, bb1, bb3
             bb1:
-              _ = call "g(_: Int, _: Int)"(a0, 1) @1:1-1:1
+              _ = call "g(_: &Int, _: &Int)"(a0, 1) @1:1-1:1
               end a0
               goto bb2
             bb2:
@@ -273,7 +273,7 @@ struct AccessExtentTests {
               begin a0 read %0 @1:1-1:1
               branch true, bb0, bb2
             bb2:
-              _ = call "g(_: Int, _: Int)"(a0, 1) @1:1-1:1
+              _ = call "g(_: &Int, _: &Int)"(a0, 1) @1:1-1:1
               return
             """
         #expect(try ended(blocks) == body(of: """
@@ -284,7 +284,7 @@ struct AccessExtentTests {
               begin a0 read %0 @1:1-1:1
               branch true, bb3, bb2
             bb2:
-              _ = call "g(_: Int, _: Int)"(a0, 1) @1:1-1:1
+              _ = call "g(_: &Int, _: &Int)"(a0, 1) @1:1-1:1
               end a0
               return
             bb3:
@@ -302,7 +302,7 @@ struct AccessExtentTests {
               branch true, bb2, bb3
             bb2:
               begin a0 read %0 @1:1-1:1
-              _ = call "g(_: Int, _: Int)"(a0, 1) @1:1-1:1
+              _ = call "g(_: &Int, _: &Int)"(a0, 1) @1:1-1:1
               goto bb1
             bb3:
               return
@@ -315,7 +315,7 @@ struct AccessExtentTests {
               branch true, bb2, bb3
             bb2:
               begin a0 read %0 @1:1-1:1
-              _ = call "g(_: Int, _: Int)"(a0, 1) @1:1-1:1
+              _ = call "g(_: &Int, _: &Int)"(a0, 1) @1:1-1:1
               end a0
               goto bb1
             bb3:

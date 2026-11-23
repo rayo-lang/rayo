@@ -30,7 +30,7 @@ import RayoSource
 /// bb1:
 ///   retire %1
 ///   begin a0 read %0 @4:11-4:12
-///   _ = call "show(_: Int)"(a0) @4:6-4:13
+///   _ = call "show(_: &Int)"(a0) @4:6-4:13
 ///   end a0
 ///   retire %0
 /// ...

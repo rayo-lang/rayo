@@ -43,7 +43,7 @@ struct IllTypedIRTests {
 
     @Test func `a retirement of a parameter, whose place the call keeps until it returns, is a violation`() throws {
         let program = try IRParser.program(from: main("bb0:\n  return", after: """
-            func "f(_: Int)"(_: &Int) -> Void {
+            func "f(_: &Int)"(_: &Int) -> Void {
               param %0 n: &Int @1:1-1:2
             bb0:
               retire %0
@@ -52,7 +52,7 @@ struct IllTypedIRTests {
             """))
         // Only the ownership stage writes a retirement, so only its IR can retire a parameter.
         let message = "the IR retires the parameter %0 in its function's body"
-        #expect(IRVerifier.verify(program, from: .ownership) == IRViolation(function: "f(_: Int)", message: message))
+        #expect(IRVerifier.verify(program, from: .ownership) == IRViolation(function: "f(_: &Int)", message: message))
     }
 
     @Test func `a primary initializer with a body, or that makes another type than its struct, is a violation`()
@@ -136,17 +136,17 @@ private func computing(_ value: String, on operands: [String], into result: Stri
 }
 
 /// A program whose `main` assigns its Int local `%0`, runs `begin`, where it isn't empty, and then passes `argument` to
-/// `f(_: Int)`, whose one parameter is `parameter`, its convention and type.
+/// `f`, whose one parameter is `parameter`, its convention and type.
 private func passing(_ begin: String, _ argument: String, to parameter: String) -> String {
     let begun = begin.isEmpty ? "" : "\n  \(begin)"
     let body = """
           var %0 x: Int @1:1-1:2
         bb0:
           %0 @1:1-1:2 = operand 1 @1:1-1:2\(begun)
-          _ = call "f(_: Int)"(\(argument)) @1:1-1:2
+          _ = call "f(_: \(parameter))"(\(argument)) @1:1-1:2
           return
         """
-    return main(body, after: "func \"f(_: Int)\"(_: \(parameter)) -> Void")
+    return main(body, after: "func \"f(_: \(parameter))\"(_: \(parameter)) -> Void")
 }
 
 private let illTypedIR = [
@@ -301,8 +301,8 @@ private let illTypedIR = [
     ),
     IllTypedIR(
         testDescription: "a call given one argument too few",
-        text: main("bb0:\n  _ = call \"f(_:_:)\"(1) @1:1-1:2\n  return", after: """
-            func "f(_:_:)"(_: &Int, _: &Int) -> Void {
+        text: main("bb0:\n  _ = call \"f(_: &Int, _: &Int)\"(1) @1:1-1:2\n  return", after: """
+            func "f(_: &Int, _: &Int)"(_: &Int, _: &Int) -> Void {
               temp %0: Int
               temp %1: Int
             bb0:
@@ -310,7 +310,7 @@ private let illTypedIR = [
             }
             """),
         function: "main()",
-        message: "the IR passes 'f(_:_:)' 1 argument, where it takes 2",
+        message: "the IR passes 'f(_: &Int, _: &Int)' 1 argument, where it takes 2",
     ),
     IllTypedIR(
         testDescription: "a store of what a call that returns nothing gives",
@@ -360,6 +360,24 @@ private let illTypedIR = [
         message: "the IR returns a value of type Bool from a function that returns Void",
     ),
     IllTypedIR(
+        testDescription: "a function whose name spells another convention than its parameter's",
+        text: main("bb0:\n  return", after: "func \"f(_: Int)\"(_: &Int) -> Void"),
+        function: "f(_: Int)",
+        message: "the IR names the function 'f(_: Int)', where its parameters name it 'f(_: &Int)'",
+    ),
+    IllTypedIR(
+        testDescription: "a function whose name spells another label than its parameter's",
+        text: main("bb0:\n  return", after: "func \"f(by: Int)\"(_: Int) -> Void"),
+        function: "f(by: Int)",
+        message: "the IR names the function 'f(by: Int)', where its parameters name it 'f(_: Int)'",
+    ),
+    IllTypedIR(
+        testDescription: "a primary initializer whose name spells another type than its parameter's",
+        text: main("bb0:\n  return", after: "init \"Pair(count: Bool)\"(count: Int) -> Pair"),
+        function: "Pair(count: Bool)",
+        message: "the IR names the function 'Pair(count: Bool)', where its parameters name it 'Pair(count: Int)'",
+    ),
+    IllTypedIR(
         testDescription: "a primary initializer that takes fewer values than its struct has fields",
         text: main("bb0:\n  return", after: "init \"Pair()\"() -> Pair"),
         function: "Pair()",
@@ -373,8 +391,8 @@ private let illTypedIR = [
     ),
     IllTypedIR(
         testDescription: "a primary initializer that borrows its struct's field",
-        text: main("bb0:\n  return", after: "init \"Pair(count: Int)\"(count: &Int) -> Pair"),
-        function: "Pair(count: Int)",
+        text: main("bb0:\n  return", after: "init \"Pair(count: &Int)\"(count: &Int) -> Pair"),
+        function: "Pair(count: &Int)",
         message: "the IR's primary initializer of 'Pair' takes (count: &Int), where it takes (count: Int)",
     ),
     IllTypedIR(
@@ -392,26 +410,26 @@ private let illTypedIR = [
     IllTypedIR(
         testDescription: "a local that is no parameter, where the function declares one",
         text: main("bb0:\n  return", after: """
-            func "f(_: Int)"(_: &Int) -> Void {
+            func "f(_: &Int)"(_: &Int) -> Void {
               var %0 n: Int @1:1-1:2
             bb0:
               return
             }
             """),
-        function: "f(_: Int)",
+        function: "f(_: &Int)",
         message: "the IR declares %0 as no parameter, where its function declares a parameter of &Int",
     ),
     IllTypedIR(
         testDescription: "a declaration of a parameter, whose argument holds its value from the start",
         text: main("bb0:\n  return", after: """
-            func "f(_: Int)"(_: &Int) -> Void {
+            func "f(_: &Int)"(_: &Int) -> Void {
               param %0 n: &Int @1:1-1:2
             bb0:
               declare %0
               return
             }
             """),
-        function: "f(_: Int)",
+        function: "f(_: &Int)",
         message: "the IR declares the parameter %0 in its function's body",
     ),
     IllTypedIR(
@@ -424,25 +442,25 @@ private let illTypedIR = [
         testDescription: "a call that passes a value to a mutable parameter",
         text: passing("", "read %0 @1:1-1:2", to: "mutable &Int"),
         function: "main()",
-        message: "the IR passes 'f(_: Int)' a value, where it takes a modify access",
+        message: "the IR passes 'f(_: mutable &Int)' a value, where it takes a modify access",
     ),
     IllTypedIR(
         testDescription: "a call that passes a modify access to a borrowed parameter",
         text: passing("begin a0 modify %0 @1:1-1:2", "a0", to: "&Int"),
         function: "main()",
-        message: "the IR passes 'f(_: Int)' a modify access, where it takes a constant or a read access",
+        message: "the IR passes 'f(_: &Int)' a modify access, where it takes a constant or a read access",
     ),
     IllTypedIR(
         testDescription: "a call that passes a place's value to a borrowed parameter, with no access to the place",
         text: passing("", "read %0 @1:1-1:2", to: "&Int"),
         function: "main()",
-        message: "the IR passes 'f(_: Int)' a value, where it takes a constant or a read access",
+        message: "the IR passes 'f(_: &Int)' a value, where it takes a constant or a read access",
     ),
     IllTypedIR(
         testDescription: "a call that moves a place's value into a borrowed parameter",
         text: passing("", "move %0 @1:1-1:2", to: "&Int"),
         function: "main()",
-        message: "the IR passes 'f(_: Int)' a value, where it takes a constant or a read access",
+        message: "the IR passes 'f(_: &Int)' a value, where it takes a constant or a read access",
     ),
     IllTypedIR(
         testDescription: "a run that starts at a primary initializer",

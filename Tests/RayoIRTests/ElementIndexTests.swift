@@ -49,7 +49,7 @@ struct ElementIndexTests {
 }
 
 /// A program whose `main` holds an array of two Ints in `%0` and the index `local` in `%1`, runs `store`, and then
-/// reads the element of `%0` at `%1`. It declares `change(_: UInt)`, which takes a mutable UInt.
+/// reads the element of `%0` at `%1`. It declares `change(_: mutable &UInt)`, which takes a mutable UInt.
 private func indexing(_ local: String, after store: String) -> String {
     """
     main "main()"
@@ -62,7 +62,7 @@ private func indexing(_ local: String, after store: String) -> String {
       _ = operand read %0[%1] @1:1-1:2 @1:1-1:2
       return
     }
-    func "change(_: UInt)"(_: mutable &UInt) -> Void
+    func "change(_: mutable &UInt)"(_: mutable &UInt) -> Void
     """
 }
 
@@ -97,7 +97,7 @@ private let uncheckedIndices = [
         store: """
             %1 @1:1-1:2 = index UInt 1 below 2 @1:1-1:2
               begin a0 modify %1 @1:1-1:2
-              _ = call "change(_: UInt)"(a0) @1:1-1:2
+              _ = call "change(_: mutable &UInt)"(a0) @1:1-1:2
             """,
         message: "the IR indexes an array of 2 elements at %1, which it changes without checking it is below 2",
     ),
