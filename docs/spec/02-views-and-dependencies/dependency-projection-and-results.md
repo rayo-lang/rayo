@@ -148,16 +148,7 @@ let hp = hpOf(&makeEnemy())                   // an error if 'hp' is used later:
 
 **A value that holds an inline array, such as a matrix of four `Vec4` columns, can lend its elements.** So a result keeps depending on the argument place, as every result of an unsealed type does.
 
-**A function value that its parameter owns absorbs nothing from the call's other arguments**, since a call of it stores nothing it derives from its arguments ([05](../05-protocols-generics-and-closures/functions-and-closures.md#a-closures-parameters-are-lent-for-the-call)). So its type counts as sealed there. The same holds for a closure of concrete type owned through a `some F` parameter, or through a type parameter constrained to a function type. So the temporary key below leaves nothing borrowed:
-
-```swift
-func forEachMatch(_ key: &Key, _ body: mutating (&Symbol) -> Void) { … }
-
-forEachMatch(&Key(text: "if", hash: h)) { s in count += 1 }   // 'count' takes on nothing from the temporary key
-print("\(count) matches")
-```
-
-**A function value or a closure given to a `mutable &` parameter stays unsealed**, since the callee may replace it with another closure.
+**A function value that its parameter owns is no absorbing argument**, since nothing a call of it stores into its captures may depend on its arguments ([Rule 4: Absorption](dependency-absorption-and-accesses.md#rule-4-absorption)).
 
 **In generic code, a type is shallow only if it is for every type argument its constraints allow**, since generic code is checked once for every type it may stand for. `&[T]` is. `T`, `T?`, `(T, Int)`, an associated type, and a struct whose fields a `static if` or `static for` generates aren't.
 

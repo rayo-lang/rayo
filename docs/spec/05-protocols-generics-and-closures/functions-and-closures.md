@@ -291,21 +291,21 @@ func lock<R: ~Scoped>(_ body: consuming (mutable &T) -> R) -> R { … }   // Mut
 
 **The kinds nest.** A non-`mutating` value is accepted where a `mutating` or `consuming` one is expected, and a `mutating` one where a `consuming` one is. That holds for values only, never for what a `mutable &` refers to ([Implicit conversions](implicit-conversions.md#conversions-through-a-mutable-reference)), and it never adds ownership ([below](#function-typed-values)).
 
-## A closure's parameters are lent for the call
+## What a closure may keep from its parameters
 
-A closure's parameters are lent for the one call, so a closure never keeps what its caller lends it:
+A closure keeps nothing that depends on its parameters, whether a parameter is lent its argument or given it:
 
 ```swift
-m.lock { d in kept = &d.items.span }              // error: 'd' is lent only for the call
-let names = alloc entries.map { &$0.name }        // fine: the closure returns a reference into its parameter, and keeps none
-for line in src.lines() { lines.append(&line) }   // fine: a loop over an iterator collects what it hands out
+m.lock { d in kept = &d.items.span }                  // error: 'kept' would depend on 'd', the closure's parameter
+let names = alloc entries.map { &$0.name }            // fine: the closure returns a reference into its parameter, and keeps none
+for line in src.lines() { collected.append(&line) }   // fine: lines() returns a SharedIterator, whose lines outlive it
 ```
 
-**A closure stores nothing it derives from its arguments into its captures.** Rule 5 rejects such a store in a closure body ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-5-the-callee-side)), and a call absorbs nothing from its arguments into the closure, by rule 4 ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-4-absorption)). A closure may still return what depends on a parameter, as the `map` above does. The call's result, and every absorbing argument, by rule 4, still depend on what the closure captures, since the closure is the call's `self`.
+**Nothing a closure stores into its captures may depend on its parameters, or on what they carry.** Rule 5 rejects such a store in a closure body ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-5-the-callee-side)), and a call absorbs nothing from its arguments into the closure, by rule 4 ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-4-absorption)). A closure may still return what depends on a parameter, as the `map` above does. The call's result, and every absorbing argument, by rule 4, still depend on what the closure captures, since the closure is the call's `self`.
 
-**The closure's caller may lend data that stays safe only for the call**, as an `RwLock`'s `read` lends its data while it holds the lock, and releases the lock when the closure returns ([07](../07-concurrency/synchronization.md#locks-mutex-and-rwlock)). A dependency says what a value borrows, never that the borrow ends with a call, so a view of the data kept in the closure's captures would outlive the lock. Since no closure keeps what it is lent, such a caller needs no rule of its own.
+**The closure's caller may lend data that stays safe only for the call**, as an `RwLock`'s `read` lends its data while it holds the lock, and releases the lock when the closure returns ([07](../07-concurrency/synchronization.md#locks-mutex-and-rwlock)). A dependency says what a value borrows, but not that the borrow ends with the call, so the closure's captures may depend on none of its parameters. So no view of the data outlives the lock.
 
-**A callback that collects what it is handed is a loop over an iterator instead.** An iterator over shared elements hands out elements that outlive the iteration, since `SharedIterator` declares `next()` `where return outlives self` ([02](../02-views-and-dependencies/dependency-lifetimes.md#staying-valid-after-a-parameter-moves-on-outlives)). So `lines` above depends on `src`, never on the iterator, and the loop's body may store each line.
+**Code that collects what it is handed loops over an iterator.** An iterator that conforms to `SharedIterator` hands out elements that outlive the iteration, since its `next()` is declared `where return outlives self` ([02](../02-views-and-dependencies/dependency-lifetimes.md#staying-valid-after-a-parameter-moves-on-outlives)). So `collected` above depends on `src`, never on the iterator, and the loop's body may store each line.
 
 ## Unscoped closures: `Closure<F>`
 

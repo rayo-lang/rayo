@@ -21,7 +21,7 @@ func splitLines(_ text: &Text, into out: mutable &List<&Text>) { ... }
 
 splitLines(&source, into: mutable &lines)                    // the helper appends to the caller's list
 for entry in &table.entries { names.append(&entry.name) }   // a loop over a collection
-for line in src.lines() { lines.append(&line) }             // an iterator over the text's lines
+for line in src.lines() { collected.append(&line) }         // a SharedIterator over the text's lines
 print(lines.count)
 ```
 
