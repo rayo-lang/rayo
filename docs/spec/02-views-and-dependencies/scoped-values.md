@@ -7,7 +7,7 @@ A **view** is a value that borrows memory something else owns, so code can read 
 ```swift
 let text: &Text = source                      // refers to source's text: no copy
 let body = &mesh.vertices.span                // a '&[Vertex]': refers to the list's elements, read-only
-var hot = mutable &heat.span                  // a 'mutable &[Float]': refers to them for change
+var hot = mutable heat.span                   // a 'mutable &[Float]': refers to them for change
 ```
 
 **A view of memory that can be freed must stay within the scope that lent it.** Inside that scope, the compiler sees every borrow, and rejects freeing the memory while the view lives ([Dependencies](../02-views-and-dependencies.md#dependencies)). A type whose values must stay there conforms to the marker protocol **`Scoped`**, and any value of such a type is a **scoped value**. Among them are these, each of which reaches memory it doesn't own:
@@ -32,23 +32,23 @@ var hot = mutable &heat.span                  // a 'mutable &[Float]': refers to
 **Writing through a view changes what it views, so it needs the view in a changeable place**, as any change does ([01](../01-values-and-ownership/bindings.md#changeable-places)). Through a reference, the write also needs a mutable one ([01](../01-values-and-ownership/references.md#forwarding-through-a-reference)). So a `let` can't write through a view it holds, and a loop name that owns a view can:
 
 ```swift
-var hot = mutable &heat.span                            // a 'mutable &[Float]' that a var holds
+var hot = mutable heat.span                             // a 'mutable &[Float]' that a var holds
 hot[0] = 0                                              // fine: writes heat[0] through the reference
-let cold = mutable &chill.span
+let cold = mutable chill.span
 cold[0] = 0                                             // error: writing through a view needs a changeable place; declare 'var cold'
-for chunk in data.mutableChunks(64) { scale(mutable &chunk) }   // fine: the loop owns each chunk, and lends 'scale' a reborrow of it
-for d in &targets { d.takeDamage(1) }                   // error: 'd' names each 'mutable &any Damageable' read-only; write 'mutable &targets'
+for chunk in data.mutableChunks(64) { scale(mutable chunk) }    // fine: the loop owns each chunk, and lends 'scale' a reborrow of it
+for d in &targets { d.takeDamage(1) }                   // error: 'd' names each 'mutable &any Damageable' read-only; write 'mutable targets'
 ```
 
-`mutable &chunk` above is a reborrow, so `chunk` is usable again once `scale` returns ([01](../01-values-and-ownership/references.md#reborrowing)).
+`mutable chunk` above is a reborrow, so `chunk` is usable again once `scale` returns ([01](../01-values-and-ownership/references.md#reborrowing)).
 
 **A reference's members are those of what it refers to**, which it forwards ([01](../01-values-and-ownership/references.md#forwarding-through-a-reference)). So what a member does through it follows from how the member is declared, as with `[T]`'s members through a `mutable &[T]`:
 
 ```swift
-var some = mutable &hits[0..<8]                 // a 'mutable &[Int]' that a var holds
+var some = mutable hits[0..<8]                  // a 'mutable &[Int]' that a var holds
 print("\(some.count) hits")                     // a plain member: reads what 'some' refers to
 some.sort()                                     // a 'mutating' member: writes through 'some'
-some = mutable &some[1...]                      // points 'some' at part of what it refers to
+some = mutable some[1...]                       // points 'some' at part of what it refers to
 let (low, high) = some.consumingSplit(at: 4)    // takes 'some', and hands over its halves
 ```
 
@@ -171,7 +171,7 @@ func show(_ hint: &Hint, _ token: &Token) {
 
 ### Converting to and from a static type
 
-**A static value converts to its plain type wherever that is expected** ([05](../05-protocols-generics-and-closures/implicit-conversions.md#implicit-conversions)). A copyable one is read and a move-only one taken, as `consume` takes it ([01](../01-values-and-ownership/bindings.md#conversions)), and a place of one is lent as its plain type, shared. No conversion applies through `mutable &`, so a static value is never lent to a `mutable &` parameter of its plain type, which could store a view of shorter-lived data in it. A static value depends on nothing, so it meets `where return borrows static` ([Precise dependencies (opt-in)](dependency-lifetimes.md#precise-dependencies-opt-in)).
+**A static value converts to its plain type wherever that is expected** ([05](../05-protocols-generics-and-closures/implicit-conversions.md#implicit-conversions)). A copyable one is read and a move-only one taken, as `consume` takes it ([01](../01-values-and-ownership/bindings.md#conversions)), and a place of one is lent as its plain type, shared. No conversion applies through a mutable reference, so a static value is never lent to a `mutable &T` parameter of its plain type, which could store a view of shorter-lived data in it. A static value depends on nothing, so it meets `where return borrows static` ([Precise dependencies (opt-in)](dependency-lifetimes.md#precise-dependencies-opt-in)).
 
 **A value converts to its static type where it depends only on static storage and immortal data**, read or taken as above ([Dependencies](../02-views-and-dependencies.md#dependencies)). What a lock guard lends depends on the place that holds the guard, which no global can be, since a guard takes no `static`, so it never converts ([Lock guards are released on the thread that took them](dependency-lifetimes.md#lock-guards-are-released-on-the-thread-that-took-them)). So these convert wherever a static type is expected:
 

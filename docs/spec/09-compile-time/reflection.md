@@ -27,14 +27,14 @@ func serialize<T>(_ value: &T, into w: mutable &Writer) {
     static if T.conforms(Pod.self) && T.isPaddingFree {
         w.bytes(of: value)                                    // Vec3, Color, …: raw bytes
     } else static if T.conforms(Serializable.self) {          // List, String, Map, Handle… conform in std
-        value.serialize(into: mutable &w)
+        value.serialize(into: mutable w)
     } else static if T.isEnum {
-        serializeEnum(value, into: mutable &w)
+        serializeEnum(value, into: mutable w)
     } else static if T.isConstructible {                      // every field visible here, so none is skipped silently
         w.beginObject(T.name)
         static for field in T.fields where !field.has(Transient.self) {
             w.key(field.name)
-            serialize(value[field], into: mutable &w)
+            serialize(value[field], into: mutable w)
         }
         w.endObject()
     } else {
@@ -46,7 +46,7 @@ func serializeEnum<T>(_ value: &T, into w: mutable &Writer) {
     static for c in T.cases {
         if ref let payload = &value[case: c] {                // nil unless value holds case c
             w.tag(c.name)
-            static for field in c.payload { serialize(payload[field], into: mutable &w) }
+            static for field in c.payload { serialize(payload[field], into: mutable w) }
         }
     }
 }
@@ -92,7 +92,7 @@ Reflection reads three kinds of fact, one table each: a type's fields, cases and
 
 | Expression | Meaning |
 | --- | --- |
-| `value[field]` | That field's place: `&value[field]` lends it, `mutable &value[field]` lends it for change from a changeable place, and `consume value[field]` moves it out of one the code may move from |
+| `value[field]` | That field's place: `&value[field]` lends it, `mutable value[field]` lends it for change from a changeable place, and `consume value[field]` moves it out of one the code may move from |
 | `value[fields: (f1, f2)]` | Several distinct fields at once, as a tuple of disjoint places ([below](#tuples-field-lists-and-queries)) |
 | `value[case: c]` | Case `c`'s payload, an optional place: a tuple whose fields are `c.payload`, a one-element tuple for a one-field payload ([04](../04-types/collections.md#tuples-ranges-and-arrays)), or `nil` when `value` holds another case. It is lent and moved from as `value[field]` is, and `consume` moves the payload out only when `value` holds `c` |
 
@@ -182,7 +182,7 @@ public struct Enemy(
 
 - **Which fields are listed.** `T.fields` lists every field inside `T`'s own module, and elsewhere only the `public` ones, or all of them when `T` is `@reflect(private)`.
 - **`@reflect(private)`** lets reflective code in other modules, such as a serializer, list the type's private fields and read them. Where the use site can call the type's primary initializer ([below](#constructing-values-reflectively)), it also lets that code write them and pass them to `T.construct`. It grants nothing else, so a `private init` keeps guarding the type's invariants.
-- **Writing.** `mutable &value[field]`, and a write through `value[field]`, reach only a `var` of a changeable place ([01](../01-values-and-ownership/bindings.md#changeable-places)) that code there could assign by name, or that `@reflect(private)` lets it write.
+- **Writing.** `mutable value[field]`, and a write through `value[field]`, reach only a `var` of a changeable place ([01](../01-values-and-ownership/bindings.md#changeable-places)) that code there could assign by name, or that `@reflect(private)` lets it write.
 - **Moving out.** `consume value[field]` moves the field out where consuming it by name could ([01](../01-values-and-ownership/moving-values-out.md#what-can-be-moved-from)): from a place the code may move from, with no `deinit` along the path. `consume value[case: c]` moves a payload out under the same conditions. A private field of another module's type is moved out only where `@reflect(private)` lets the use site write it.
 - **`unsafe` fields and unions.** A field declared `unsafe`, such as the raw pointer that an `unsafe` core keeps ([10](../10-errors-and-safety/unsafe-code.md#raw-allocations)), is read or written through reflection only inside `unsafe`, as by name. Reading a union member follows the union read rule ([04](../04-types/enums.md#untagged-unions)).
 
@@ -195,9 +195,9 @@ func deserialize<T>(_ r: mutable &Reader) -> T!LoadError {
     static if T.conforms(Pod.self) && T.isPaddingFree {      // mirrors serialize: raw bytes
         return try r.read(T.self)
     } else static if T.conforms(Serializable.self) {         // one protocol for both directions
-        return try T(from: mutable &r)
+        return try T(from: mutable r)
     } else static if T.isEnum {
-        return try deserializeEnum(mutable &r)
+        return try deserializeEnum(mutable r)
     } else static if T.isConstructible {
         try r.beginObject(T.name)
         let value = try T.construct { static field in          // one instantiation per stored field
@@ -205,7 +205,7 @@ func deserialize<T>(_ r: mutable &Reader) -> T!LoadError {
                 return field.defaultValue()                   // never saved; a @Transient field needs a default
             } else {
                 try r.expectKey(field.name)
-                return try deserialize(mutable &r) as field.type   // must produce exactly field.type
+                return try deserialize(mutable r) as field.type    // must produce exactly field.type
             }
         }
         try r.endObject()
@@ -218,7 +218,7 @@ func deserialize<T>(_ r: mutable &Reader) -> T!LoadError {
 func deserializeEnum<T>(_ r: mutable &Reader) -> T!LoadError {
     static for c in T.cases {
         if try r.acceptTag(c.name) {                          // compares the file's tag with c's name as bytes, and reads past it only when they match
-            return try T.makeCase(c) { static field in try deserialize(mutable &r) as field.type }
+            return try T.makeCase(c) { static field in try deserialize(mutable r) as field.type }
         }
     }
     throw .unknownCase(type: T.name, offset: r.offset)       // the tag no case matched is still unread at r.offset
@@ -276,7 +276,7 @@ func calibrateAll(_ t: mutable &Telemetry) {             // every table with all
     static for f in Telemetry.fields where f.type.Row.hasField(ofType: Reading.self)
                                          && f.type.Row.hasField(ofType: Calibration.self)
                                          && f.type.Row.hasField(ofType: Calibrated.self) {
-        calibrate(mutable &t[f])                          // instantiated for 'thermometers' and 'flowMeters'
+        calibrate(mutable t[f])                           // instantiated for 'thermometers' and 'flowMeters'
     }
 }
 ```
@@ -306,7 +306,7 @@ func integrateAll(_ w: mutable &World, dt: Float) {        // "Transform and Vel
     static for f in World.fields where f.type.Row.hasField(ofType: Transform.self)
                                      && f.type.Row.hasField(ofType: Velocity.self)
                                      && !f.type.Row.hasField(ofType: Asleep.self) {
-        integrate(mutable &w[f], dt: dt)                  // instantiated for 'movers' only
+        integrate(mutable w[f], dt: dt)                   // instantiated for 'movers' only
     }
 }
 ```
@@ -324,7 +324,7 @@ For one row of a table, held in a `var` in code generic over `Row`, the two fiel
 
 ```swift
 var row: Row = …
-ref var (o, r) = mutable &row[fields: (out, raw)]   // both borrowed exclusively, checked distinct at instantiation
+ref var (o, r) = mutable row[fields: (out, raw)]    // both borrowed exclusively, checked distinct at instantiation
 ```
 
 For a concrete type, each field takes the declaration it needs, since distinct stored fields never overlap:
@@ -333,7 +333,7 @@ For a concrete type, each field takes the declaration it needs, since distinct s
 const sOut = Sample.field(ofType: Calibrated.self)
 const sRaw = Sample.field(ofType: Reading.self)
 var sample: Sample = …
-ref var o = mutable &sample[sOut]             // borrows the Calibrated exclusively
+ref var o = mutable sample[sOut]              // borrows the Calibrated exclusively
 ref let r = &sample[sRaw]                     // borrows the Reading shared: a disjoint field
 ```
 

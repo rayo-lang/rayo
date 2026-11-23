@@ -7,7 +7,7 @@ Rayo is a systems programming language with the control of C++ and memory safety
 ### Ownership and borrowing
 
 **Argument label**:
-The name a call writes before an argument, as `by` in `damage(mutable &boss, by: 10)` ([01](docs/spec/01-values-and-ownership/parameters.md#argument-labels)).
+The name a call writes before an argument, as `by` in `damage(mutable boss, by: 10)` ([01](docs/spec/01-values-and-ownership/parameters.md#argument-labels)).
 
 **Borrow**:
 Use of a value by code that doesn't own it, through a reference: a **shared** borrow only reads it, and a **mutable** borrow may change it ([01](docs/spec/01-values-and-ownership.md)).
@@ -18,7 +18,7 @@ A binding that is a place it borrows: a `ref let` or `ref var`, a `&T` or `mutab
 _Avoid_: reference variable, alias
 
 **Changeable place**:
-A place that may be changed or lent with `mutable &`, such as a `var`, a temporary or a `mutable &T` parameter ([01](docs/spec/01-values-and-ownership/bindings.md#changeable-places)).
+A place that may be changed or lent with `mutable`, such as a `var`, a temporary or a `mutable &T` parameter ([01](docs/spec/01-values-and-ownership/bindings.md#changeable-places)).
 
 **Consume**:
 To move a value out of a place the code owns, implicitly or with `consume place` ([01](docs/spec/01-values-and-ownership/moving-values-out.md#moving-values-out)).
@@ -75,13 +75,13 @@ Storage that holds a value: a local, a global, a parameter or a temporary, or a 
 _Avoid_: lvalue
 
 **Position**:
-A part of the code that takes a value, such as an argument or a `return`, where a place writes `&`, `mutable &`, `consume` or `copy`, unless it is implicitly copyable or a `&T` is expected, which lends it ([01](docs/spec/01-values-and-ownership/references.md#places-given-to-a-position)).
+A part of the code that takes a value, such as an argument or a `return`, where a place writes `&`, `mutable`, `consume` or `copy`, unless it is implicitly copyable or a `&T` is expected, which lends it ([01](docs/spec/01-values-and-ownership/references.md#places-given-to-a-position)).
 
 **Reborrow**:
-A new reference, made by `&r` or `mutable &r` of a place `r` that holds a reference, to what `r` refers to, which keeps `r` borrowed until its last use ([01](docs/spec/01-values-and-ownership/references.md#reborrowing)).
+A new reference, made by `&r` or `mutable r` of a place `r` that holds a reference, to what `r` refers to, which keeps `r` borrowed until its last use ([01](docs/spec/01-values-and-ownership/references.md#reborrowing)).
 
 **Reference**:
-A value that borrows a place: a **shared reference** `&T`, made by `&p`, or by a bare `p` where one is expected, or a **mutable reference** `mutable &T`, made by `mutable &p` ([01](docs/spec/01-values-and-ownership/references.md#references)).
+A value that borrows a place: a **shared reference** `&T`, made by `&p`, or by a bare `p` where one is expected, or a **mutable reference** `mutable &T`, made by `mutable p` ([01](docs/spec/01-values-and-ownership/references.md#references)).
 _Avoid_: pointer (a raw, object or reference-counted one)
 
 **Safe code**:
@@ -130,7 +130,7 @@ _Avoid_: exclusive reference
 A place property whose declared type is written `T?`, which hands out either a place of type `T` or `nil` ([02](docs/spec/02-views-and-dependencies/place-and-value-properties.md#optional-places-and-tuples-of-places)).
 
 **Place property**:
-A computed property or subscript whose `borrow`, and optional `mutate`, hand out a place in storage, which `&` and `mutable &` lend as a stored field, with no accessor code after ([02](docs/spec/02-views-and-dependencies/place-and-value-properties.md#place-and-value-properties)).
+A computed property or subscript whose `borrow`, and optional `mutate`, hand out a place in storage, which `&` and `mutable` lend as a stored field, with no accessor code after ([02](docs/spec/02-views-and-dependencies/place-and-value-properties.md#place-and-value-properties)).
 _Avoid_: projection, `read`/`modify` accessor
 
 **PlainDeinit**:
@@ -289,11 +289,11 @@ A value of the unsized type `any P`, reached through `&any P` or `mutable &any P
 _Avoid_: trait object, protocol type, boxed protocol
 
 **Existential reference**:
-A `&any P` or a `mutable &any P`: a reference to an existential, a pointer and a witness table, made from `&x` or `mutable &x` of a `T: P` ([05](docs/spec/05-protocols-generics-and-closures/protocols-and-generics.md#any-p-explicit-dynamic-dispatch)).
+A `&any P` or a `mutable &any P`: a reference to an existential, a pointer and a witness table, made from `&x` or `mutable x` of a `T: P` ([05](docs/spec/05-protocols-generics-and-closures/protocols-and-generics.md#any-p-explicit-dynamic-dispatch)).
 _Avoid_: `&dyn` reference
 
 **Function value**:
-A value of a function type, which views a closure's storage or names a function; `&f`, `mutable &f` or `consume f` makes one from a closure in a place ([05](docs/spec/05-protocols-generics-and-closures/functions-and-closures.md#function-typed-values)).
+A value of a function type, which views a closure's storage or names a function; `&f`, `mutable f` or `consume f` makes one from a closure in a place ([05](docs/spec/05-protocols-generics-and-closures/functions-and-closures.md#function-typed-values)).
 _Avoid_: function pointer (a `@c` type)
 
 **Implicit conversion**:

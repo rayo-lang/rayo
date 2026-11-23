@@ -134,17 +134,17 @@ It is move-only, and owns its allocation, whose element count is fixed when it i
 var particles = alloc SoA<Particle>(capacity: 100_000)  // or alloc SoA<Particle>(), as for List
 particles.append(Particle(pos: p, vel: v, life: 2))
 
-for p in mutable &particles {          // p is a row: one place per field
+for p in mutable particles {           // p is a row: one place per field
     p.pos += p.vel * dt                // touches only the pos and vel arrays
 }
 ```
 
 **`SoA<T>` is builtin, and its columns are `T`'s stored fields in declaration order**, private ones included, as `T.fields` lists them ([09](../09-compile-time/reflection.md#static-reflection)). A tuple's columns are `s.0`, `s.1`, and so on. An anonymous union is one field, so its members share a column. `SoA`'s own members, such as `count`, `capacity` and `append`, hide a field of the same name, whose column `s[field: f]` still reaches.
 
-**Columns are places.** `s.life` is the column's buffer as a `[Float]` place, a place property with a `borrow` and a `mutate`. So `&s.life` is a `&[Float]`, and `mutable &s.life` a `mutable &[Float]` ([Shared and mutable views of one collection](collections.md#shared-and-mutable-views-of-one-collection)). A reference to a column depends on that column alone, a part of `s` disjoint from the other columns, as a stored field is from its siblings ([01](../01-values-and-ownership/exclusivity.md#which-places-overlap)). So `mutable &s.pos` and `&s.vel` can be held at once:
+**Columns are places.** `s.life` is the column's buffer as a `[Float]` place, a place property with a `borrow` and a `mutate`. So `&s.life` is a `&[Float]`, and `mutable s.life` a `mutable &[Float]` ([Shared and mutable views of one collection](collections.md#shared-and-mutable-views-of-one-collection)). A reference to a column depends on that column alone, a part of `s` disjoint from the other columns, as a stored field is from its siblings ([01](../01-values-and-ownership/exclusivity.md#which-places-overlap)). So `mutable s.pos` and `&s.vel` can be held at once:
 
 ```swift
-var lives = mutable &particles.life    // a 'mutable &[Float]' of one column
+var lives = mutable particles.life     // a 'mutable &[Float]' of one column
 let vels = &particles.vel              // a '&[Vec3]' of another, held at the same time
 lives[0] -= 1
 ```
@@ -155,12 +155,12 @@ lives[0] -= 1
 var (ts, vs) = table.rows[mutableFields: (tf, vf)]  // 'ts' and 'vs' are mutable references to two distinct columns
 ```
 
-**Each element that a loop over `&s` or `mutable &s` hands out is a row.** A **row** is a value that lends one index across every column: shared from `&s`, and exclusive from `mutable &s`. The loop name owns each row, as it owns a chunk ([Iteration](collections.md#iteration)). `s.row(i)` and `s.mutableRow(i)` hand out the row at index `i` the same way. A row has one place property per field of `T`, named as the field is, which lends that field's place in its column.
+**Each element that a loop over `&s` or `mutable s` hands out is a row.** A **row** is a value that lends one index across every column: shared from `&s`, and exclusive from `mutable s`. The loop name owns each row, as it owns a chunk ([Iteration](collections.md#iteration)). `s.row(i)` and `s.mutableRow(i)` hand out the row at index `i` the same way. A row has one place property per field of `T`, named as the field is, which lends that field's place in its column.
 
-**A shared row's field places have only a `borrow`.** So a row from `&s` or `s.row(i)` reads its fields, and `mutable &` of one, or a write through it, is a compile error. Only a row from `mutable &s` or `s.mutableRow(i)` lends its fields with `mutable &`, since only it holds `s` exclusively.
+**A shared row's field places have only a `borrow`.** So a row from `&s` or `s.row(i)` reads its fields, and `mutable` of one, or a write through it, is a compile error. Only a row from `mutable s` or `s.mutableRow(i)` lends its fields with `mutable`, since only it holds `s` exclusively.
 
 **A row's places are disjoint, as a struct's stored fields are** ([01](../01-values-and-ownership/exclusivity.md#which-places-overlap)), so `p.pos += p.vel * dt` writes one while it reads another. A row isn't a `T`: code reads and writes it field by field, and appending and removing move whole `T` values.
 
-**Columns and rows obey the rules of `value[field]` at the use site.** Under those rules ([09](../09-compile-time/reflection.md#reflection-and-access-control)), a column can be lent with `mutable &`, and a row's field written, only for a `var` field that could be assigned there. So a `let` field's column has only a `borrow`, and `mutable &` of it, or `s[mutableFields:]` naming it, is a compile error. A column of an `unsafe` field is available only inside `unsafe`, and a private field's column exists only where the field is visible. Appending and removing whole rows moves whole values, so it needs none of this.
+**Columns and rows obey the rules of `value[field]` at the use site.** Under those rules ([09](../09-compile-time/reflection.md#reflection-and-access-control)), a column can be lent with `mutable`, and a row's field written, only for a `var` field that could be assigned there. So a `let` field's column has only a `borrow`, and `mutable` of it, or `s[mutableFields:]` naming it, is a compile error. A column of an `unsafe` field is available only inside `unsafe`, and a private field's column exists only where the field is visible. Appending and removing whole rows moves whole values, so it needs none of this.
 
 **A growing operation grows every column or none.** When an allocation fails, `tryAppend` fails with `AllocError`, with every column as it was, and `append` ends the program ([06](../06-memory-and-allocators/allocation-lifecycle.md#allocation-failure)).

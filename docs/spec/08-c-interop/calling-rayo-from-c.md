@@ -82,7 +82,7 @@ A C or C++ program uses a library written in Rayo:
 
 ## What a C entry hands back to C
 
-**A reference handed back to C refers to what it depends on** ([02](../02-views-and-dependencies.md#dependencies)), and C uses it only while that memory lives. What a C entry ([below](#c-entries-and-threads)) hands back to C is its scoped result, and whatever it stores through a `mutable &` parameter or through a reference a parameter carries.
+**A reference handed back to C refers to what it depends on** ([02](../02-views-and-dependencies.md#dependencies)), and C uses it only while that memory lives. What a C entry ([below](#c-entries-and-threads)) hands back to C is its scoped result, and whatever it stores through a `mutable &T` parameter or through a reference a parameter carries.
 
 **Once a C entry returns, nothing in Rayo holds what it borrowed**: a lock guard is released, and an open no longer counts as a use of its allocator ([06](../06-memory-and-allocators/arena-safety.md#opening-an-owning-value-checks-it)).
 
@@ -98,7 +98,7 @@ A C or C++ program uses a library written in Rayo:
 
 **Ownership crosses to C in these ways:**
 
-- as a `List`, `String` or `TrailingArray` that a C entry returns to C or stores through a `mutable &` parameter C lent, or that Rayo passes to an owning parameter of an `extern c func` or a `@c` pointer ([above](#c-representations));
+- as a `List`, `String` or `TrailingArray` that a C entry returns to C or stores through a `mutable &T` parameter C lent, or that Rayo passes to an owning parameter of an `extern c func` or a `@c` pointer ([above](#c-representations));
 - as a weak pointer from `UniquePointer.leak`, which comes back through `adopt` ([03](../03-handles-and-objects.md#weak-pointers-as-bits-and-handing-objects-to-c));
 - as a weak link from `Shared.leak`, which comes back through `adopt` ([06](../06-memory-and-allocators/owning-values.md#sharedt-data-with-many-owners));
 - as a `RawAllocation` through `Box.leak` and the `unsafe` `Box.adopt` ([06](../06-memory-and-allocators/owning-values.md#owning-boxes)).

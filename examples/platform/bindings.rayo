@@ -32,7 +32,7 @@ func log(_ level: Int32, _ text: &Text) {
 func pad(_ index: Int32) -> Pad? {
     precondition(index >= 0 && index < plat.PLATFORM_MAX_PADS)   // prefix stripping is case-sensitive
     var raw = plat.pad()                      // C struct, zero-initialized
-    let ok = unsafe { plat.poll_pad(index, ptr(to: mutable &raw)) }
+    let ok = unsafe { plat.poll_pad(index, ptr(to: mutable raw)) }
     guard ok && raw.connected else { return nil }
     return Pad(
         leftStick:  Vec2(unsafe pad_deadzone(raw.left_stick[0]), unsafe pad_deadzone(raw.left_stick[1])),
@@ -88,7 +88,7 @@ func requestFile(_ path: static &Text, _ loads: mutable &Loads) -> Handle<LoadSt
 func pumpLoads(_ loads: mutable &Loads) {
     while let (ticket, result) = completedLoads.pop() {   // pop() never blocks; waitPop() would
         guard let h = loads.tickets.removeValue(forKey: ticket) else { continue }    // a ticket never issued: ignored
-        if ref var r = mutable &loads.requests[h] { r = consume result }   // skipped if the request was cancelled: 'result' is then dropped
+        if ref var r = mutable loads.requests[h] { r = consume result }    // skipped if the request was cancelled: 'result' is then dropped
     }
 }
 
@@ -102,8 +102,8 @@ func main() {
     var last = now()
     while true {
         let t = now()
-        pumpLoads(mutable &loads)
-        tick(mutable &game.value, dt: Float(t - last))          // one checked access for the whole frame
+        pumpLoads(mutable loads)
+        tick(mutable game.value, dt: Float(t - last))           // one checked access for the whole frame
         last = consume t
     }
 }

@@ -167,7 +167,7 @@ hits.append(5)                  // error: 'hits' is borrowed by 'same' (used bel
 log("\(same.count)")
 ```
 
-Once `same` isn't used any more, `hits` can change the list again. Chapter 3 shows the rest of borrowing, including `mutable &`, which borrows a value to change it ([Borrowing](03-borrowing.md)).
+Once `same` isn't used any more, `hits` can change the list again. Chapter 3 shows the rest of borrowing, including `mutable`, which borrows a value to change it ([Borrowing](03-borrowing.md)).
 
 To move the list into the new variable instead, write `consume` before it, as the call to `archive` did ([01](../spec/01-values-and-ownership/moving-values-out.md#moving-values-out)):
 

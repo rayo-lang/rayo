@@ -14,7 +14,7 @@ struct Enemy(
 )
 
 game.window = unsafe plat.window_create(1280, 720, "Rayo".cString) // a direct call into C, which you vouch for
-save(boss.value, into: mutable &file)                             // writes pos, vel and hp, found by reflection
+save(boss.value, into: mutable file)                              // writes pos, vel and hp, found by reflection
 ```
 
 Rayo calls C directly, with no glue code. Where C can't promise something, you promise it yourself, and Rayo marks that code `unsafe`. You write `save` once for every type, with code the compiler runs while it builds your program: `const`, `static if`, and reflection over a type's fields.
@@ -54,7 +54,7 @@ func now() -> Double { unsafe plat.time_seconds() }     // 'unsafe' before an ex
 func readPad(_ index: Int32) -> plat.pad? {
     precondition(index >= 0 && index < plat.PLATFORM_MAX_PADS)   // C wouldn't check it
     var raw = plat.pad()                                        // the C struct, all zeros
-    let ok = unsafe plat.poll_pad(index, ptr(to: mutable &raw)) // C fills it in through the pointer
+    let ok = unsafe plat.poll_pad(index, ptr(to: mutable raw))  // C fills it in through the pointer
     guard ok && raw.connected else { return nil }
     return consume raw
 }
@@ -81,7 +81,7 @@ Breaking that promise is undefined behavior, as in C. Code that makes such promi
 
 ```swift
 var raw = plat.pad()
-let p = unsafe ptr(to: mutable &raw)            // the address of 'raw': a *plat.pad
+let p = unsafe ptr(to: mutable raw)             // the address of 'raw': a *plat.pad
 let address = CUIntPtr(bitPattern: p)           // safe: a pointer turned into an integer of its size
 unsafe {
     p.pointee.buttons = 0                       // the plat.pad that 'p' points at
@@ -302,12 +302,12 @@ func save<T>(_ value: &T, into w: mutable &Writer) {
     static if T.conforms(Pod.self) && T.isPaddingFree {
         w.bytes(of: value)                              // a Float or a Vec3: its bytes, as they are
     } else static if T.conforms(Serializable.self) {
-        value.serialize(into: mutable &w)               // List, String and Map conform in std
+        value.serialize(into: mutable w)                // List, String and Map conform in std
     } else static if T.isConstructible {                // a struct whose fields this code all sees
         w.beginObject(T.name)
         static for field in T.fields where !field.has(Transient.self) {   // skip live links and caches
             w.key(field.name)
-            save(value[field], into: mutable &w)        // each copy checked with its own field's type
+            save(value[field], into: mutable w)         // each copy checked with its own field's type
         }
         w.endObject()
     } else {
@@ -358,7 +358,7 @@ struct Enemy(
 func inspect<T>(_ value: mutable &T, in ui: mutable &Inspector) {
     static for f in T.fields where f.has(Bounds.self) {
         const b = f.attribute(Bounds.self)!             // this field's @Bounds, known at compile time
-        ui.slider(f.name, mutable &value[f], min: b.min, max: b.max)
+        ui.slider(f.name, mutable value[f], min: b.min, max: b.max)
     }
 }
 ```

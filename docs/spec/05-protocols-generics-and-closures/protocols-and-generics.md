@@ -17,7 +17,7 @@ extension Damageable {
 extension Enemy: Damageable {}
 
 func applyAoE<T: Damageable>(_ targets: mutable &[T], amount: Float) {
-    for t in mutable &targets { t.takeDamage(amount) }
+    for t in mutable targets { t.takeDamage(amount) }
 }
 ```
 
@@ -294,15 +294,15 @@ A list of widgets holds buttons, sliders and other types that only the running p
 protocol Drawable { func draw(_ ctx: mutable &DrawContext) }
 
 func drawAll(_ items: &[Box<any Drawable>], _ ctx: mutable &DrawContext) {
-    for b in &items { b.value.draw(mutable &ctx) }      // dynamic dispatch, visible in the signature
+    for b in &items { b.value.draw(mutable ctx) }       // dynamic dispatch, visible in the signature
 }
 
 func strike(_ d: mutable &any Damageable) { d.takeDamage(10) }
-strike(mutable &barrel)                                 // a 'mutable &Barrel' converts to a 'mutable &any Damageable'
+strike(mutable barrel)                                  // a 'mutable &Barrel' converts to a 'mutable &any Damageable'
 
 var widgets = alloc List<Box<any Widget>>()
 widgets.append(alloc Box(Button(label: "Play")))        // allocation, visible in source
-for w in mutable &widgets { w.value.update(dt) }        // a mutating requirement, through dynamic dispatch
+for w in mutable widgets { w.value.update(dt) }         // a mutating requirement, through dynamic dispatch
 ```
 
 **`any P` is an existential: a value of some type that conforms to `P`, known only at run time.** The types that conform to `P` have different sizes, so `any P` is unsized, and code holds it only behind a reference, a `Box`, an object pointer or a reference-counted pointer ([01](../01-values-and-ownership/references.md#unsized-types)). A call on it reaches the value's witness through its witness table.
@@ -312,12 +312,12 @@ for w in mutable &widgets { w.value.update(dt) }        // a mutating requiremen
 | Form | What it is | Made from |
 | --- | --- | --- |
 | `&any P` | Shared existential reference: implicitly copyable, scoped | `&x` of a `T: P`, or of an unscoped existential's `value` |
-| `mutable &any P` | Mutable existential reference: move-only, scoped | `mutable &x` of a `T: P`, or of an unscoped existential's `value` |
+| `mutable &any P` | Mutable existential reference: move-only, scoped | `mutable x` of a `T: P`, or of an unscoped existential's `value` |
 | `Box<any P>` | Unscoped existential, on the heap | A `Box` holding an unscoped `T: P` |
 | `UniquePointer<any P>`, `WeakPointer<any P>` | Unscoped existentials of objects | An object pointer of the same kind to an unscoped `T: P` |
 | `Shared<any P>`, `LocalShared<any P>`, `WeakShared<any P>` | Unscoped existentials of reference-counted values | A reference-counted pointer or weak link of the same kind to an unscoped `T: P` |
 
-**`&any P` and `mutable &any P` are references like any other**, each an **existential reference**. So they follow the rules for every reference ([01](../01-values-and-ownership/references.md#references)): a shared one is implicitly copyable, a mutable one is move-only, both are scoped, and each is a pointer and a witness table ([01](../01-values-and-ownership/references.md#layout)). `&x` and `mutable &x` of a place holding a `T: P` make one where one is expected, by a conversion, and so does a bare `x` where a `&any P` is expected ([Implicit conversions](implicit-conversions.md#implicit-conversions)). `&box.value` makes one with no conversion, since `box.value` is a place of type `any P` (below).
+**`&any P` and `mutable &any P` are references like any other**, each an **existential reference**. So they follow the rules for every reference ([01](../01-values-and-ownership/references.md#references)): a shared one is implicitly copyable, a mutable one is move-only, both are scoped, and each is a pointer and a witness table ([01](../01-values-and-ownership/references.md#layout)). `&x` and `mutable x` of a place holding a `T: P` make one where one is expected, by a conversion, and so does a bare `x` where a `&any P` is expected ([Implicit conversions](implicit-conversions.md#implicit-conversions)). `&box.value` makes one with no conversion, since `box.value` is a place of type `any P` (below).
 
 **An existential hides its value's type, which may not be `Sendable`, so it is `Sendable` only when its protocols say so.** `any P & Sendable` accepts only `Sendable` types, so `&any P & Sendable`, a reference to an `any P & Sendable`, is `Sendable`, and so is a `Box<any P & Sendable>` ([07](../07-concurrency/race-freedom-and-sendable.md#what-may-cross-threads-sendable)).
 
@@ -348,25 +348,25 @@ func reset(_ d: mutable &any Damageable) {
 
 ```swift
 var targets = alloc List<mutable &any Damageable>()
-targets.append(mutable &boss)                   // 'boss' stays borrowed exclusively while the list holds the reference
-targets.append(mutable &barrel)
-for d in mutable &targets { d.takeDamage(1) }   // 'd' names each element for change, and writes through its reference
+targets.append(mutable boss)                    // 'boss' stays borrowed exclusively while the list holds the reference
+targets.append(mutable barrel)
+for d in mutable targets { d.takeDamage(1) }    // 'd' names each element for change, and writes through its reference
 for d in &targets { d.takeDamage(1) }           // error: 'd' names each element read-only, so it can't write through it
-targets[0] = mutable &crate                     // points the first reference at 'crate'
+targets[0] = mutable crate                      // points the first reference at 'crate'
 ```
 
-**A loop over a list of references names each element, a place that holds a reference**, as a `ref let` through `&` and a `ref var` through `mutable &` ([04](../04-types/collections.md#iteration)). A call through `d` forwards to the existential, and writing through it needs the `ref var` ([01](../01-values-and-ownership/references.md#forwarding-through-a-reference)). Assigning an element, as the last line does, or `d` in the first loop, points that reference elsewhere, as assigning any place that holds a reference does ([02](../02-views-and-dependencies/dependency-lifetimes.md#assigning-a-reference-to-a-var)).
+**A loop over a list of references names each element, a place that holds a reference**, as a `ref let` through `&` and a `ref var` through `mutable` ([04](../04-types/collections.md#iteration)). A call through `d` forwards to the existential, and writing through it needs the `ref var` ([01](../01-values-and-ownership/references.md#forwarding-through-a-reference)). Assigning an element, as the last line does, or `d` in the first loop, points that reference elsewhere, as assigning any place that holds a reference does ([02](../02-views-and-dependencies/dependency-lifetimes.md#assigning-a-reference-to-a-var)).
 
 **A box that holds a shared existential reference is `Box<&any P>`**, a box like any other, which generic code gets from `Box<T>` with `T` bound to `&any P`. It is scoped, since it holds a reference ([02](../02-views-and-dependencies/scoped-values.md#which-types-are-scoped)).
 
 ### Unscoped existentials
 
-**`Box<any P>` holds an unscoped value in a heap allocation.** `box.value` is a place property of type `any P`, with a `borrow` and a `mutate` ([02](../02-views-and-dependencies/place-and-value-properties.md#place-properties-borrow-and-mutate)). So `&box.value` is a `&any P`, and `mutable &box.value` a `mutable &any P`. Assigning to `box.value` is a compile error, since `any P` is unsized ([above](#what-an-existential-may-call)).
+**`Box<any P>` holds an unscoped value in a heap allocation.** `box.value` is a place property of type `any P`, with a `borrow` and a `mutate` ([02](../02-views-and-dependencies/place-and-value-properties.md#place-properties-borrow-and-mutate)). So `&box.value` is a `&any P`, and `mutable box.value` a `mutable &any P`. Assigning to `box.value` is a compile error, since `any P` is unsized ([above](#what-an-existential-may-call)).
 
 **`box[as: T.self]` is an optional place property that hands out the value as a `T` place**, with a `borrow` and a `mutate` as `box.value` has, and `nil` when its dynamic type isn't `T`. The language provides it, as it provides `UniquePointer.value` ([02](../02-views-and-dependencies/place-and-value-properties.md#places-behind-a-run-time-check)), since no Rayo declaration can be generic over the protocol inside `Box<any P>`. So a test that fails moves nothing:
 
 ```swift
-if ref var s = mutable &box[as: Slider.self] { s.label = "Go" }   // a Slider changes in place; any other value stays as it was
+if ref var s = mutable box[as: Slider.self] { s.label = "Go" }    // a Slider changes in place; any other value stays as it was
 ```
 
 **An unscoped existential is a type of its own, which binding a type parameter never makes.** The **unscoped existentials** are `Box<any P>`, and the object pointers, reference-counted pointers and weak links to `any P`. A value of one holds or names only an unscoped value, and comes from one of these:
@@ -375,7 +375,7 @@ if ref var s = mutable &box[as: Slider.self] { s.label = "Go" }   // a Slider ch
 - for a weak pointer or a weak link, `WeakPointer<any P>(bits:)` or `WeakShared<any P>(bits:)` ([03](../03-handles-and-objects.md#weak-pointers-as-bits-and-handing-objects-to-c), [06](../06-memory-and-allocators/owning-values.md#sharedt-data-with-many-owners));
 - another unscoped existential of the same protocol, as `u.weak()` makes a `WeakPointer<any P>` from a `UniquePointer<any P>`.
 
-**Object pointers to `any P`** ([03](../03-handles-and-objects.md#objects-and-weak-pointers-uniquepointert-and-weakpointert)) reference objects of different types, as an observer list `List<WeakPointer<any Listener>>` does. A `UniquePointer<any P>`'s `value` is a place of type `any P`, as `box.value` is, and a `WeakPointer<any P>`'s is an optional place that hands one out, or `nil` once the object is gone. Either way, `&` lends the place for a shared access, and `mutable &` for an exclusive one. `w.downcast(to: T.self)` gives back a `WeakPointer<T>?`.
+**Object pointers to `any P`** ([03](../03-handles-and-objects.md#objects-and-weak-pointers-uniquepointert-and-weakpointert)) reference objects of different types, as an observer list `List<WeakPointer<any Listener>>` does. A `UniquePointer<any P>`'s `value` is a place of type `any P`, as `box.value` is, and a `WeakPointer<any P>`'s is an optional place that hands one out, or `nil` once the object is gone. Either way, `&` lends the place for a shared access, and `mutable` for an exclusive one. `w.downcast(to: T.self)` gives back a `WeakPointer<T>?`.
 
 **Reference-counted pointers to `any P`** ([06](../06-memory-and-allocators/owning-values.md#sharedt-data-with-many-owners)) lend the value through `s.value`, a place of type `any P` with only a `borrow`, so `&s.value` is a `&any P`. `w.upgrade()` on a `WeakShared<any P>` gives a `Shared<any P>?`.
 
@@ -385,7 +385,7 @@ if ref var s = mutable &box[as: Slider.self] { s.label = "Go" }   // a Slider ch
 func refill<T: Damageable>(_ t: mutable &T) { t.hp = 100 }
 
 func refillAll(_ targets: mutable &List<Box<any Damageable>>) {
-    for b in mutable &targets { refill(mutable &b.value) }    // unpacks each box: T is that value's dynamic type
+    for b in mutable targets { refill(mutable b.value) }      // unpacks each box: T is that value's dynamic type
 }
 ```
 
@@ -394,7 +394,7 @@ func refillAll(_ targets: mutable &List<Box<any Damageable>>) {
 **`any P` never conforms to `P`, and it is unsized, so it binds no `T`** ([above](#type-parameters-stand-for-sized-types)). Two existentials unpack to two types, so passing two boxes' values for one `T` is a compile error:
 
 ```swift
-swap(mutable &a.value, mutable &b.value)   // error: two Box<any Widget>s, whose values unpack to two types
+swap(mutable a.value, mutable b.value)     // error: two Box<any Widget>s, whose values unpack to two types
 ```
 
 **These rules decide whether a call unpacks:**

@@ -11,21 +11,21 @@
 
 **`ref` marks a binding that is a place.** It takes a reference and names the place the reference refers to: `ref let` names it read-only, and `ref var` names it for change. A `let` or `var` holds a value, which it owns, and that value may be a reference: `let best = &enemies[0]` holds a `&Enemy`. A condition's binding writes the same four words with the same meanings ([below](#conditions)). A `for` name or a `when` payload name writes none of them, since its subject says what it is ([below](#for-and-when-names)).
 
-**An initializer given a place writes `&`, `mutable &`, `consume` or `copy` before it**, as every position does, unless the place's type is implicitly copyable, or the binding is annotated with a `&T`, which lends it ([References](references.md#places-given-to-a-position)). So each binding shows what it does to the place it is given:
+**An initializer given a place writes `&`, `mutable`, `consume` or `copy` before it**, as every position does, unless the place's type is implicitly copyable, or the binding is annotated with a `&T`, which lends it ([References](references.md#places-given-to-a-position)). So each binding shows what it does to the place it is given:
 
 ```swift
 var enemies = loadEnemies()
 
 ref let seen = &enemies[0]           // names the enemy, read-only: nothing copied
-ref var boss = mutable &enemies[0]   // names it for change: boss.hp = 0 changes enemies[0]
+ref var boss = mutable enemies[0]    // names it for change: boss.hp = 0 changes enemies[0]
 let best = &enemies[1]               // holds a '&Enemy', a reference to the enemy
 let top: &Enemy = enemies[1]         // the same: the annotation expects a reference, so 'enemies[1]' is lent
 var spare = copy enemies[0]          // a second enemy of its own
 let last = enemies[1]                // error: write 'copy' or '&' before 'enemies[1]'
 let hp = enemies[1].hp               // a Float is implicitly copyable: a copy, with nothing written
 ref let next = enemies[1]            // error: write '&enemies[1]'
-ref var other = &enemies[1]          // error: write 'mutable &enemies[1]'
-ref let lead = mutable &enemies[1]   // error: 'mutable &' lends for change; declare 'ref var'
+ref var other = &enemies[1]          // error: write 'mutable enemies[1]'
+ref let lead = mutable enemies[1]    // error: 'mutable' lends for change; declare 'ref var'
 let first = consume enemies[0]       // error: an element can't move out of its list
 let mesh = loadMesh()                // a value, not a place: the binding owns it
 let all = consume enemies            // a move: 'enemies' can't be used until it gets a new value
@@ -34,8 +34,8 @@ let all = consume enemies            // a move: 'enemies' can't be used until it
 | Form | Like the parameter | Meaning | Cost |
 | --- | --- | --- | --- |
 | `ref let x = &place` | `_ x: &T` | A shared **borrow** of `place`, of any type: `place` can't be changed, moved or destroyed while `x` is live | None |
-| `ref var x = mutable &place` | `_ x: mutable &T` | A mutable **borrow** of a [changeable place](#changeable-places): `place` is reachable only through `x` while `x` is live | None |
-| `let x = &place`, `let x: &T = place`, `var x = mutable &place` | | The binding holds a reference to `place`, which borrows it as a `ref` binding would, and a `var` may later point it elsewhere ([below](#bindings-that-own-a-value)) | The reference's own bytes ([References](references.md#layout)) |
+| `ref var x = mutable place` | `_ x: mutable &T` | A mutable **borrow** of a [changeable place](#changeable-places): `place` is reachable only through `x` while `x` is live. Given a place that holds a `mutable &T`, it reborrows through it ([below](#bindings-that-refer-to-a-place)) | None |
+| `let x = &place`, `let x: &T = place`, `var x = mutable place` | | The binding holds a reference to `place`, which borrows it as a `ref` binding would, and a `var` may later point it elsewhere ([below](#bindings-that-own-a-value)) | The reference's own bytes ([References](references.md#layout)) |
 | `let x = consume place`, `var x = consume place` | `_ x: T` | A **move** from a place the code owns ([What can be moved from](moving-values-out.md#what-can-be-moved-from)): `place` can't be used until it gets a new value | A `memcpy` at most |
 | `let x = copy place`, `var x = copy place` | | An independent **copy** of a copyable value; a move-only one is copied with `alloc place.clone()` | A `memcpy` |
 | `let x = f()`, `var x = f()` | | The binding owns the value, even a move-only scoped value such as a `mutable &[T]` or a lock guard ([02](../02-views-and-dependencies/scoped-values.md#scoped-values)); `_ = consume x` ends it early | None |
@@ -47,16 +47,17 @@ let all = consume enemies            // a move: 'enemies' can't be used until it
 **A binding that is a place it borrows is a borrowing binding**, and can't be consumed, since the place's value has another owner. A declaration or a condition makes one only with `ref`. A `&T` or `mutable &T` parameter is one ([Parameters](parameters.md#parameters)), and so is a `for` or `when` name whose subject is a reference ([below](#for-and-when-names)).
 
 - **`ref let` and `ref var` declare locals**, so they appear only in a function or closure body. A borrow lasts no longer than the body that makes it ([How long a borrow lasts](#how-long-a-borrow-lasts)).
-- **A `ref let` takes a shared reference, and a `ref var` a mutable one**: `&p` or `mutable &p` of a place, or a reference value, such as a place that holds one or a call that returns one. A `ref var` needs a mutable reference, since it may change the place.
+- **A `ref let` takes a shared reference, and a `ref var` a mutable one**: `&p` or `mutable p` of a place, a reborrow through a place that holds a reference ([References](references.md#reborrowing)), or a call that returns a reference. A `ref var` needs a mutable reference, since it may change the place.
 - **`var` on a borrowing binding means the place may change through it, never that the name may point elsewhere.** So `x = q` on a `ref var` writes `q` into the place `x` names. A `ref` binding never points elsewhere, though a `var` that holds a reference does ([below](#bindings-that-own-a-value)).
 - **Views taken from a `ref let` depend on the place itself** ([02](../02-views-and-dependencies/dependency-projection-and-results.md#rule-1-projection)).
 - **No borrowing binding may bind an under-aligned place**: that is a compile error, since a load or store of its type at that address may be invalid, and fault on some targets ([04](../04-types/structs.md#packed-structs-and-under-aligned-places)).
 
 **An initializer that doesn't agree with its `ref` binding is a compile error that names the fix:**
 
-- `ref let x = p`, with a bare place `p` of a type that isn't a reference, says to write `&p`;
-- `ref let x = mutable &p` says to declare `ref var`, since a `ref let` changes nothing;
-- `ref var x = &p` says to write `mutable &p`;
+- `ref let x = p`, with a bare place `p` of a type that isn't a `&T`, says to write `&p`;
+- `ref let x = mutable p` says to declare `ref var`, since a `ref let` changes nothing;
+- `ref var x = &p` says to write `mutable p`;
+- `ref var x = p`, with a bare place `p`, says to write `mutable p`, whether `p` holds a reference or not, since a lend for change is always marked ([References](references.md#every-lend-for-change-is-marked));
 - a `ref let` or `ref var` given a value that isn't a reference says to write `let` or `var`, which own it.
 
 **A value that isn't a reference has no place to name.** A literal, an operator's result, `copy place`, `consume place`, what a value property's `get` returns, and a call's result of any type but a reference are such values. So is a part of a temporary, such as `makeEnemy().hp`, which a `let` owns instead ([below](#bindings-that-own-a-value)).
@@ -65,15 +66,18 @@ let all = consume enemies            // a move: 'enemies' can't be used until it
 
 **A place reached through a reference that a temporary holds lies outside the temporary**, as `rows()[0]` does where `rows()` returns a `&[Row]`. So does a place that a `where return outlives self` place property hands out from a temporary. So a `ref let` can name either, depending on what the temporary carries ([02](../02-views-and-dependencies/dependency-projection-and-results.md#temporaries)).
 
-**`ref var t = r`, where `r` is a changeable place holding a `mutable &T`, reborrows through `r`** ([References](references.md#reborrowing)). `t` names what `r` refers to, and `r` stays borrowed exclusively while `t` is used, so it isn't moved. `ref let e = r`, where `r` holds a `&T`, names what `r` refers to the same way.
+**`ref var t = mutable r`, where `r` is a changeable place holding a `mutable &T`, reborrows through `r`** ([References](references.md#reborrowing)). `t` names what `r` refers to, and `r` stays borrowed exclusively while `t` is used, so it isn't moved. A `ref let` reborrows through a place that holds a reference as [References](references.md#unmarked-places) says.
 
 ```swift
-ref var lead = mutable &enemies[0]
+ref var lead = mutable enemies[0]
 lead = makeEnemy()                   // writes the new enemy into enemies[0]; 'lead' still names it
 ref let hp = &makeEnemy().hp         // error: the enemy dies with the statement; write 'let hp = makeEnemy().hp'
-var pick = mutable &enemies[1]
-ref var target = pick                // reborrows: 'target' names enemies[1], and 'pick' stays usable after it
+var pick = mutable enemies[1]
+ref var target = mutable pick        // reborrows: 'target' names enemies[1], and 'pick' stays usable after it
 target.hp = 0
+ref var other = pick                 // error: write 'mutable pick'
+ref let look = &pick                 // a shared reborrow: 'look' names enemies[1], read-only
+ref let peek = pick                  // error: write '&pick'
 ```
 
 ## Bindings that own a value
@@ -81,7 +85,7 @@ target.hp = 0
 **A `let` or `var` declaration owns the value it holds**, as a binding of a call's result does, and a reference is a value like any other. So it can move its value on, and a `let` still can't change it. A condition's `let` or `var` owns an optional's payload by the same rules ([below](#conditions)).
 
 - **A `let` or `var` given a place writes a mark before it** ([above](#bindings)). Leaving it out is a compile error that names the marks that fit, since the place's value already has an owner. An annotation that is a `&T`, or an optional, a result or a static type of one, is the exception, and lends the place ([05](../05-protocols-generics-and-closures/implicit-conversions.md#places-lent-where-a-reference-is-expected)). That holds as well for an expression the initializer hands its position to: the last expression of an `if` or `when` arm or of an `unsafe` block ([below](#if-and-when-as-values)), or an operand of `??` ([04](../04-types/enums.md#optionals)).
-- **A `let` or `var` given `&p` or `mutable &p` holds the reference**, which borrows `p` as its kind says until the binding's last use ([References](references.md#making-a-reference)).
+- **A `let` or `var` given `&p` or `mutable p` holds the reference**, which borrows `p` as its kind says until the binding's last use ([References](references.md#making-a-reference)).
 - **Writing through a reference that a `let` or `var` holds follows the rule for writing through any reference**, which only a `var` holding a `mutable &T` meets ([References](references.md#forwarding-through-a-reference)).
 - **An assignment from a place writes a mark**, as every position does, unless the place it assigns holds a `&T`, or an optional, a result or a static type of one, which lends it ([Moves](moves-copies-destruction.md#moves), [05](../05-protocols-generics-and-closures/implicit-conversions.md#places-lent-where-a-reference-is-expected)).
 
@@ -116,7 +120,7 @@ func hit(_ e: mutable &Enemy, _ d: Float) {
     let dead = e.isDead            // computed: the Bool it returned, which 'dead' owns
     ref let gone = &e.isDead       // error: 'isDead' is computed, so '&' lends a temporary; write 'let'
     save(dead)                     // fine: a Bool is implicitly copyable
-    let hp = consume e.hp          // error: 'e' is a 'mutable &' parameter, so e.hp can't move out of it
+    let hp = consume e.hp          // error: 'e' is a 'mutable &Enemy' parameter, so e.hp can't move out of it
 }
 ```
 
@@ -207,7 +211,7 @@ func report(_ count: UInt) {
 if let job = queue.pop() { done.append(consume job) }      // owns the job that pop moved out
 if var job = queue.pop() { job.priority += 1 }             // owns it, and may change it
 if ref let e = &world.enemies[h] { print("hp \(e.hp)") }   // names the enemy where it lies in the pool
-if ref var e = mutable &world.enemies[h] { e.hp = 0 }      // names it for change
+if ref var e = mutable world.enemies[h] { e.hp = 0 }       // names it for change
 while let job = queue.pop() { run(consume job) }           // each job in turn, until pop returns nil
 guard ref let e = &world.enemies[h] else { return }        // names the enemy to the end of the scope
 ```
@@ -233,7 +237,7 @@ if ref let e = &enemies[0] { … }                  // error: 'enemies[0]' isn't
 **A condition list's subjects are held together, under the law of exclusivity, as one call's arguments are** ([Evaluation order](parameters.md#evaluation-order-and-when-a-calls-borrows-begin)). Each binding's borrow or take is checked against every other one's in the list. So two bindings can't borrow overlapping places when either lends its place for change:
 
 ```swift
-if ref var a = mutable &world.enemies[h1], ref var b = mutable &world.enemies[h2] { … }   // error: both lend 'world.enemies' for change; write 'ref var (a, b) = mutable &world.enemies[h1, h2]'
+if ref var a = mutable world.enemies[h1], ref var b = mutable world.enemies[h2] { … }     // error: both lend 'world.enemies' for change; write 'ref var (a, b) = mutable world.enemies[h1, h2]'
 ```
 
 **A `Bool` test that checks an optional against `nil` may narrow it instead of binding it** ([below](#unwrapping-an-optional)).
@@ -250,30 +254,30 @@ when &state {
 
 ### `for` and `when` names
 
-**A `for` name and a `when` payload name are bare, and what each one is follows from the subject.** A loop or a match binds all its names from one subject, so the subject says once what they all are. A subject is `&s`, `mutable &s`, `consume s`, or a value, such as a call's result or a range. A bare place is a compile error, unless its type is implicitly copyable, in which case the loop or the `when` takes a copy ([References](references.md#places-given-to-a-position), [05](../05-protocols-generics-and-closures/implicit-conversions.md#places-lent-where-a-reference-is-expected)).
+**A `for` name and a `when` payload name are bare, and what each one is follows from the subject.** A loop or a match binds all its names from one subject, so the subject says once what they all are. A subject is `&s`, `mutable s`, `consume s`, or a value, such as a call's result or a range. A bare place is a compile error, unless its type is implicitly copyable, in which case the loop or the `when` takes a copy ([References](references.md#places-given-to-a-position), [05](../05-protocols-generics-and-closures/implicit-conversions.md#places-lent-where-a-reference-is-expected)).
 
 | Subject | Each name |
 | --- | --- |
 | A shared reference: `for e in &enemies`, or a place or a call that holds or returns a `&[T]` | A `ref let` of the element or part |
-| A mutable reference: `for e in mutable &enemies`, `mutable &r` of a place `r` that holds a `mutable &[T]`, or a call that returns one | A `ref var` of the element or part |
+| A mutable reference: `for e in mutable enemies`, `mutable r` of a place `r` that holds a `mutable &[T]`, or a call that returns one | A `ref var` of the element or part |
 | `consume` of a place: `for job in consume jobs` | Owns each element or part |
 | Any other value: `for i in 0..<n`, `for job in queue.drain()`, or a copy of an implicitly copyable place | Owns each element or part |
 
-**A subject whose value is a reference is iterated or matched as that reference**, however it is written, so a place that holds a `mutable &[T]` gives `ref var` names once it is reborrowed with `mutable &r` ([Reborrowing](references.md#reborrowing)). For a `for` name, the iterator each form picks says whether each element lies in storage or is a value the sequence makes ([04](../04-types/collections.md#iteration)).
+**A subject whose value is a reference is iterated or matched as that reference**, however it is written, so a place that holds a `mutable &[T]` gives `ref var` names once it is reborrowed with `mutable r` ([Reborrowing](references.md#reborrowing)). For a `for` name, the iterator each form picks says whether each element lies in storage or is a value the sequence makes ([04](../04-types/collections.md#iteration)).
 
 **A sequence's elements may be tuples that hold references**, as `enumerated()` hands out a `(UInt, &Item)` and `mutableEnumerated()` a `(UInt, mutable &Item)`. A loop name owns each tuple, so `e.order = i` through a `mutable &Item` element writes the item.
 
-- **A name that owns its value may change it, but is never assigned as a whole.** It takes no `let` or `var`, and nothing points it at another value, so `job = Job()` below is a compile error. Otherwise it is a [changeable place](#changeable-places). So `job.priority += 1` changes the job, a `mutating` method may be called on it, and `mutable &job` lends it. A mutable reference it owns, such as a chunk, writes through itself.
+- **A name that owns its value may change it, but is never assigned as a whole.** It takes no `let` or `var`, and nothing points it at another value, so `job = Job()` below is a compile error. Otherwise it is a [changeable place](#changeable-places). So `job.priority += 1` changes the job, a `mutating` method may be called on it, and `mutable job` lends it. A mutable reference it owns, such as a chunk, writes through itself.
 - **A `ref var` name writes through to its element or part**, as a `ref var` binding does, so `r *= 2` below changes `shape`.
 - **A `ref` name can't be consumed**, since what it names has another owner. A name that owns its value can be, as a `let` can.
 - **A `when` name takes its part out of a value subject only once its arm is chosen**, since patterns and guards run under a borrow of the subject until then ([04](../04-types/enums.md#matching-with-when-and-choosing-with-if)).
 - **A `deinit` on the path keeps a value subject whole.** This holds in an arm where any of its patterns has, on the path to a part, a type that declares a `deinit`, whichever pattern matched. The value stays whole in a hidden local until the arm ends, as a `for` loop's sequence does. The arm's names then name its parts, read-only, or for change where the subject is a mutable reference. So the `deinit` runs on the changed value, and nothing moves out of it.
-- **A temporary subject lent with `&` or `mutable &` is kept whole the same way**, as a loop keeps `mutable &makeEnemies()` ([04](../04-types/collections.md#iteration)), so its names name its parts until the arm ends.
+- **A temporary subject lent with `&` or `mutable` is kept whole the same way**, as a loop keeps `mutable makeEnemies()` ([04](../04-types/collections.md#iteration)), so its names name its parts until the arm ends.
 - **In a type's own `deinit`, that type's `deinit` keeps nothing whole**, since it is already running. So `when consume self` takes an enum `self`'s payload apart there ([What can be moved from](moving-values-out.md#what-can-be-moved-from)).
 - **A subject in a temporary's own storage that can't be moved out is kept whole the same way**, with the whole temporary in that hidden local, as `connect().state` is where `Conn` declares a `deinit`.
 
 ```swift
-when mutable &shape {
+when mutable shape {
     .circle(r) { r *= 2 }                  // a 'ref var' of the radius: doubles it inside 'shape'
     else {}
 }
@@ -281,9 +285,9 @@ when consume event {
     .message(m) { inbox.append(consume m) }   // 'event' is moved out: 'm' owns the message
     else {}
 }
-for e in &enemies { e.hp = 0 }             // error: 'e' is a 'ref let'; write 'mutable &enemies' to change the elements
-for e in mutable &enemies { e.hp -= 1 }    // fine: 'e' is a 'ref var' of each enemy
-for e in enemies { … }                     // error: write '&enemies', 'mutable &enemies' or 'consume enemies'
+for e in &enemies { e.hp = 0 }             // error: 'e' is a 'ref let'; write 'mutable enemies' to change the elements
+for e in mutable enemies { e.hp -= 1 }     // fine: 'e' is a 'ref var' of each enemy
+for e in enemies { … }                     // error: write '&enemies', 'mutable enemies' or 'consume enemies'
 for job in queue.drain() {
     job.priority += 1                      // fine: 'job' owns the job
     job = Job()                            // error: a loop name is never assigned as a whole
@@ -348,7 +352,7 @@ func report() {
 
 ```swift
 ref let e = if first { &enemies[0] } else { &enemies[1] }          // names one of the two
-var t = if left { mutable &a } else { mutable &b }                 // holds a mutable reference to one
+var t = if left { mutable a } else { mutable b }                   // holds a mutable reference to one
 let v = if c { consume p } else { consume q }                      // moves from the one chosen
 let w = if c { p } else { q }                                      // error: write 'copy', 'consume' or '&' before 'p'
 ```
@@ -387,7 +391,7 @@ var d: &any Drawable = sprite               // refers to 'sprite', and may later
 
 ## Changeable places
 
-**Only a changeable place can be changed, or lent with `mutable &`**, so a shared borrow never becomes a write. A place is **changeable** when it is:
+**Only a changeable place can be changed, or lent with `mutable`**, so a shared borrow never becomes a write. A place is **changeable** when it is:
 
 - a `var`;
 - a temporary, which its statement owns ([02](../02-views-and-dependencies/dependency-projection-and-results.md#temporaries));
@@ -402,8 +406,8 @@ var d: &any Drawable = sprite               // refers to 'sprite', and may later
 
 ```swift
 let x = makeEnemy()
-ref var y = mutable &x             // error: a let is read-only, even one that owns its value
-heal(mutable &x)                   // error: the same
+ref var y = mutable x              // error: a let is read-only, even one that owns its value
+heal(mutable x)                    // error: the same
 ```
 
 **There are four exceptions, each with its own way of keeping exclusivity**, the first two checked at run time:

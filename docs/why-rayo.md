@@ -50,7 +50,7 @@ Six principles decide Rayo's trade-offs.
 | The allocator API for std collections is unstable | Allocators are stable values that every owning collection records, every construction that allocates says `alloc`, and arena resets are memory-safe. | [06](spec/06-memory-and-allocators.md) |
 | A hash map built at compile time needs an external crate, such as `phf` | A `const` `Map` that names `FixedHashing` is built by ordinary code in the compiler and frozen into read-only data. The default hashing is still seeded for each map, as `RandomState` is. | [04](spec/04-types/collections.md#hash-maps-and-sets) |
 | Portable SIMD is unstable | SIMD vectors of up to 64 lanes are built in, with shuffles, swizzles, masks and reductions. | [04](spec/04-types/numbers-and-math.md#simd-and-math), [08](spec/08-c-interop.md) |
-| Steep learning curve for large, mixed teams | Swift-shaped syntax and three tiers instead of lifetimes, variance and pinned self-references, with one derived `Sendable` marker where Rust has `Send` and `Sync`. Each move, copy and borrow for change of a place is written where it happens: `let b = consume a` moves, `let b = copy a` copies, and `f(mutable &a)` borrows for change. A bare place is only ever lent shared, as `f(a)` lends it to a `&T` parameter, or copied, where its type is implicitly copyable, such as an `Int`, so nothing a reader needs is hidden. C# marks a borrow for change with `ref` too. | [01](spec/01-values-and-ownership.md), [05](spec/05-protocols-generics-and-closures/implicit-conversions.md#places-lent-where-a-reference-is-expected) |
+| Steep learning curve for large, mixed teams | Swift-shaped syntax and three tiers instead of lifetimes, variance and pinned self-references, with one derived `Sendable` marker where Rust has `Send` and `Sync`. Each move, copy and borrow for change of a place is written where it happens: `let b = consume a` moves, `let b = copy a` copies, and `f(mutable a)` borrows for change. A bare place is only ever lent shared, as `f(a)` lends it to a `&T` parameter, or copied, where its type is implicitly copyable, such as an `Int`, so nothing a reader needs is hidden. C# marks a borrow for change with `ref` too. | [01](spec/01-values-and-ownership.md), [05](spec/05-protocols-generics-and-closures/implicit-conversions.md#places-lent-where-a-reference-is-expected) |
 
 ### Swift's problems
 
@@ -140,8 +140,8 @@ func main() {
     while true {
         let now = unsafe plat.time_seconds()
         world.clock += Duration.seconds(now - last)
-        steer(mutable &world, dt: Float(now - last))   // 'mutable &' lends the world for change
-        scripts.step(mutable &world)        // runs each woken script to its next await that isn't done
+        steer(mutable world, dt: Float(now - last))    // 'mutable' lends the world for change
+        scripts.step(mutable world)         // runs each woken script to its next await that isn't done
         last = consume now
     }
 }

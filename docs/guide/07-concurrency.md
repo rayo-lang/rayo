@@ -31,10 +31,10 @@ func totalHp(_ enemies: &List<Enemy>) -> Float {
 ## Lending work to other threads
 
 ```swift
-join({ integrate(mutable &world.enemies, dt: dt) },     // may run both closures at once, and returns when both are done
-     { mix(mutable &world.audio) })                     // fine: each closure writes a different field
+join({ integrate(mutable world.enemies, dt: dt) },      // may run both closures at once, and returns when both are done
+     { mix(mutable world.audio) })                      // fine: each closure writes a different field
 
-join({ integrate(mutable &world.enemies, dt: dt) },
+join({ integrate(mutable world.enemies, dt: dt) },
      { drawRadar(world.enemies) })                      // error: one closure reads 'world.enemies' while the other writes it
 ```
 
@@ -65,8 +65,8 @@ The job system's own `unsafe` code promises to call each closure only as its kin
 
 ```swift
 ThreadScope.run { s in
-    s.spawn { integrate(mutable &world.enemies, dt: dt) }   // runs on another thread
-    mix(mutable &world.audio)                               // runs on this thread meanwhile
+    s.spawn { integrate(mutable world.enemies, dt: dt) }    // runs on another thread
+    mix(mutable world.audio)                                // runs on this thread meanwhile
     print(world.enemies.count)                               // error: 's' borrows 'world.enemies' exclusively until the block returns
 }                                                            // every spawned thread has finished here
 ```
@@ -243,7 +243,7 @@ _ = Thread.start { [copy m, copy clip] in                         // '_ =' detac
 func startRenderer() -> (Thread<Void>, Sender<Shared<Snapshot>>) {
     let (tx, rx) = alloc Channel<Shared<Snapshot>>.make(capacity: 3)
     let render: Thread<Void> = Thread.start(name: "render") { [move rx] in   // the thread owns the receiver
-        for snapshot in mutable &rx { draw(snapshot) }                      // waits for each snapshot in turn
+        for snapshot in mutable rx { draw(snapshot) }                       // waits for each snapshot in turn
     }
     return (consume render, consume tx)                                      // the simulation keeps the sender
 }
@@ -251,14 +251,14 @@ func startRenderer() -> (Thread<Void>, Sender<Shared<Snapshot>>) {
 
 **A `Channel` hands items from one thread to another through two owned ends, a `Sender` and a `Receiver`** ([07](../spec/07-concurrency/synchronization.md#queues-and-channels)).
 
-**The render thread owns the `Receiver`, and takes one item at a time from it in a loop.** Each pass calls `receive()`, which **parks** the thread between items: it sleeps until the next item comes. The loop lends `rx` with `mutable &` because receiving changes the `Receiver`, and each snapshot it hands out is the loop's own, which `draw(snapshot)` lends to the drawing code.
+**The render thread owns the `Receiver`, and takes one item at a time from it in a loop.** Each pass calls `receive()`, which **parks** the thread between items: it sleeps until the next item comes. The loop lends `rx` with `mutable` because receiving changes the `Receiver`, and each snapshot it hands out is the loop's own, which `draw(snapshot)` lends to the drawing code.
 
 **The loop ends once every `Sender` is gone**, after the render thread has drawn every snapshot sent before. The channel is then **disconnected**, and `receive()` returns `nil` instead of parking for ever ([07](../spec/07-concurrency/synchronization.md#disconnected-channels)). So the simulation stops the render thread by dropping its sender, and then joins it:
 
 ```swift
 var (render, tx) = startRenderer()
 while running {
-    step(mutable &world)
+    step(mutable world)
     _ = tx.send(alloc Shared(world.snapshot()))  // '_ =': if the render thread is gone, the snapshot is dropped
 }
 _ = consume tx                                   // drops the sender: the render loop ends
@@ -323,7 +323,7 @@ task func openDoor(_ door: Handle<Door>) with (game: mutable &Game) {
 
 var scripts = TaskSet<Game>(capacity: 512)
 _ = scripts.start(openDoor(frontDoor))                     // calling openDoor runs nothing: it returns the task
-scripts.step(mutable &game)                                // steps each task that has been woken since the last step
+scripts.step(mutable game)                                 // steps each task that has been woken since the last step
 ```
 
 **A `task func` can suspend at `await`, and continues once what it waits on wakes it and its owner steps it** ([07](../spec/07-concurrency/tasks.md#task-functions-coroutines-that-wait-without-a-thread)). It suits a script that spans frames, or any work that spends its time waiting, and it never runs on its own.
@@ -346,7 +346,7 @@ scripts.step(mutable &game)                                // steps each task th
 let quitLoading = Atomic(false)                                  // a global, which the main thread sets
 var loads = TaskSet<Loader>(capacity: 64)
 _ = loads.start(streamZone(consume next))                        // its reads go through an I/O library, which wakes it as each completes
-loads.run(mutable &loader, until: { _ in quitLoading.load(.acquire) })   // parks the thread whenever no task is woken
+loads.run(mutable loader, until: { _ in quitLoading.load(.acquire) })    // parks the thread whenever no task is woken
 ```
 
 **`run` steps the set each time a task is woken, and parks the thread in between**, so a loading thread sleeps while its reads are under way. It returns once its condition holds after a step, or once no task is left ([07](../spec/07-concurrency/tasks.md#waiting-for-wakes-run-and-blockon)).

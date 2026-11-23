@@ -13,7 +13,7 @@ func splitLines(_ text: &Text, into out: mutable &List<&Text>) { ... }
 
 var source = alloc "first\nsecond"
 var lines = alloc List<&Text>()
-splitLines(source, into: mutable &lines)
+splitLines(source, into: mutable lines)
 source.append("x")                               // error: source is borrowed by 'lines' (used below)
 print("\(lines.count) lines")
 ```
@@ -29,9 +29,9 @@ A view can keep several places borrowed:
 ```swift
 func visible(_ items: mutable &List<Sprite>, in cells: &[Cell]) -> mutable &[Sprite] { ... }
 
-var vis = visible(mutable &sprites, in: grid.cells)
+var vis = visible(mutable sprites, in: grid.cells)
 grid.cells.append(Cell())                          // error: grid.cells is borrowed by 'vis' (used below)
-cull(mutable &vis)
+cull(mutable vis)
 ```
 
 `vis` is a mutable reference to elements of `sprites`, but `visible` also received a reference to the elements of `grid.cells`. It therefore depends on `sprites` exclusively and `grid.cells` shared. Because `cull` uses `vis` after the attempted append, growing `grid.cells` conflicts with that shared borrow.

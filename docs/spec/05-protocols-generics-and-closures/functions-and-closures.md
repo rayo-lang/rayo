@@ -191,7 +191,7 @@ _ = r.value?.submit(mesh)         // a Void?: nil if the object was gone and 'su
 _ = try? save(level)              // a Void?: nil if the save failed
 
 let zone = profiler.zone("physics")   // kept only so its deinit records the time
-step(mutable &world, dt: dt)
+step(mutable world, dt: dt)
 _ = consume zone                  // the zone ends here, and this line moves it out
 
 func adopt(_ item: Item) {
@@ -267,14 +267,14 @@ A closure's type says what it does with its captures, and the compiler infers th
 - **Non-`mutating`.** Its function types accept only closures that only read their captures, shared-borrowed or owned. So a job system may run one on many threads at once ([07](../07-concurrency/thread-work.md#lending-work-to-other-threads)), and a `sort(by:)` comparator can't write the pool it reads.
 - **`mutating`.** A literal captures a place **exclusively** when its body makes any mutable access to it:
     - assigning it;
-    - lending it with `mutable &`, wherever `mutable &` may appear ([01](../01-values-and-ownership/references.md#making-a-reference));
+    - lending it with `mutable`, wherever `mutable` may lend a place ([01](../01-values-and-ownership/references.md#making-a-reference));
     - calling a `mutating` method on it;
     - writing through a mutable reference it holds;
     - capturing it exclusively in a nested literal.
 
   **Writing through a reference is a mutable access to the place that holds it**, since the write needs that place changeable ([01](../01-values-and-ownership/references.md#forwarding-through-a-reference)). So a literal that writes through a `var` holding a `mutable &[T]` captures the `var` exclusively. One that writes through a `let`'s reference is a compile error, as writing through it outside the literal is. A non-`mutating` literal that captures a mutable reference only reads through it, so parallel work never calls a `mutating` requirement through a captured `mutable &any P`.
 
-  A `mutating` function value is move-only, and calling it mutates the closure itself. So a place holding one is lent with `mutable &` or moved with `consume`, and it runs on one thread at a time.
+  A `mutating` function value is move-only, and calling it mutates the closure itself. So a place holding one is lent with `mutable` or moved with `consume`, and it runs on one thread at a time.
 - **`consuming`.** A literal whose body moves out of a capture owns that capture. The body moves out with `consume input`, or by taking the capture anywhere a value is taken ([01](../01-values-and-ownership/moves-copies-destruction.md#moves)). The capture moves in when the closure is created, as `[move input]` would. Calling the closure consumes it, so the compiler checks it is called at most once. Copying a capture with `copy` doesn't make it `consuming`, and neither does taking an implicitly copyable one, which copies it ([01](../01-values-and-ownership/moves-copies-destruction.md#implicit-copies)).
 
   A literal checked against a `consuming` function type, or a `some F` whose `F` is one, is `consuming` whatever its body does. Its concrete type satisfies only `consuming` function types, and it is called at most once.
@@ -284,15 +284,15 @@ A closure's type says what it does with its captures, and the compiler infers th
 ```swift
 var n = 0
 particles.forEachInParallel { _ in n += 1 }   // error: writes 'n', so it is mutating, but the loop runs it on many threads
-var lives = mutable &particles.life
+var lives = mutable particles.life
 times(3) { lives[0] += 1 }                    // fine: captures 'lives' exclusively, and writes through it
 lives[0] = 0                                  // fine: the literal's last use is above, so 'lives' is free again
 ```
 
 **A parameter of function type, or of `some F`, owns its function value or closure, as every `x: T` parameter owns its argument** ([01](../01-values-and-ownership/parameters.md#parameters)). So its body may call it whatever its kind: a `mutating` one from a changeable place, and a `consuming` one once. How a closure gets there depends on the parameter's type:
 
-- **A closure passed for a function-type parameter is converted first** ([below](#function-typed-values)). So a local holding a `mutating` closure is passed as `mutable &f`, and stays usable after the call. A local holding a `consuming` closure is passed as `consume f`, and the conversion consumes it.
-- **A closure passed for a `some F` parameter moves in**: a literal, or `consume f` of a local. A `mutable &some F` parameter borrows the caller's closure for change instead, as `mutable &f` lends it, and a `&some F` parameter borrows it shared.
+- **A closure passed for a function-type parameter is converted first** ([below](#function-typed-values)). So a local holding a `mutating` closure is passed as `mutable f`, and stays usable after the call. A local holding a `consuming` closure is passed as `consume f`, and the conversion consumes it.
+- **A closure passed for a `some F` parameter moves in**: a literal, or `consume f` of a local. A `mutable &some F` parameter borrows the caller's closure for change instead, as `mutable f` lends it, and a `&some F` parameter borrows it shared.
 
 **`Mutex`'s `lock` is one such function**: its parameter owns the function value, which it calls once:
 
@@ -300,7 +300,7 @@ lives[0] = 0                                  // fine: the literal's last use is
 func lock<R: ~Scoped>(_ body: consuming (mutable &T) -> R) -> R { … }   // Mutex<T>'s: 'body' owns its function value
 ```
 
-**The kinds nest.** A non-`mutating` value is accepted where a `mutating` or `consuming` one is expected, and a `mutating` one where a `consuming` one is. That holds for values only, never for what a `mutable &` refers to ([Implicit conversions](implicit-conversions.md#conversions-through-a-mutable-reference)), and it never adds ownership ([below](#function-typed-values)).
+**The kinds nest.** A non-`mutating` value is accepted where a `mutating` or `consuming` one is expected, and a `mutating` one where a `consuming` one is. That holds for values only, never for what a mutable reference refers to ([Implicit conversions](implicit-conversions.md#conversions-through-a-mutable-reference)), and it never adds ownership ([below](#function-typed-values)).
 
 ## What a closure may keep from its parameters
 
@@ -386,8 +386,8 @@ enum PadButton: Int32 { case start, back }      // crosses as its raw type, Int3
 
 **The `unsafe` code that makes such a conversion promises both of these:**
 
-- every call through the pointer passes values valid for the function's own types, and a pointer for a `mutable &` parameter meets what 08 asks of one ([08](../08-c-interop/c-contract-and-embedding.md#what-c-must-uphold));
-- every value the function returns, or writes through a `mutable &` parameter or a pointer, is valid for the pointer type's types, as 08 asks of C.
+- every call through the pointer passes values valid for the function's own types, and a pointer for a `mutable &T` parameter meets what 08 asks of one ([08](../08-c-interop/c-contract-and-embedding.md#what-c-must-uphold));
+- every value the function returns, or writes through a `mutable &T` parameter or a pointer, is valid for the pointer type's types, as 08 asks of C.
 
 **`@c noalloc (Int32) -> Int32` is a C function pointer whose calls allocate nothing**, so `@noalloc` code may call one ([06](../06-memory-and-allocators/allocation-lifecycle.md#allocation-failure)). Only what allocates nothing converts to it:
 
@@ -422,7 +422,7 @@ func mk() -> () -> Int { let x = 5; return { [copy x] in x } }     // error: the
 
 **A value of function type is a view of a closure's storage**, where all its captures, owned ones included, live. Converting a closure to a function type makes such a view. A closure here is any value of a closure's concrete type, such as a literal, a local, parameter or field of a literal's anonymous type, or a `some F` parameter. The view depends on the storage and on what the closure carries ([02](../02-views-and-dependencies/dependency-projection-and-results.md#closure-calls)). A non-`mutating` function value is a copyable shared view; a `mutating` or `consuming` one is move-only. None is implicitly copyable, so a place holding one writes a mark wherever it is given ([01](../01-values-and-ownership/moves-copies-destruction.md#implicitly-copyable-types)).
 
-- **A non-`consuming` closure is borrowed as its kind needs** ([Implicit conversions](implicit-conversions.md#function-values-of-closures-in-places)). A non-`mutating` one is borrowed shared, whatever the function type, so the place holding it is lent with `&`, as in `each(xs, &show)`. A `mutating` one is borrowed exclusively, so the place holding it is lent with `mutable &`, as in `run(mutable &grow)`, and is usable again after the view's last use.
+- **A non-`consuming` closure is borrowed as its kind needs** ([Implicit conversions](implicit-conversions.md#function-values-of-closures-in-places)). A non-`mutating` one is borrowed shared, whatever the function type, so the place holding it is lent with `&`, as in `each(xs, &show)`. A `mutating` one is borrowed exclusively, so the place holding it is lent with `mutable`, as in `run(mutable grow)`, and is usable again after the view's last use.
 - **A `consuming` closure is handed over.** The conversion consumes the source place, written `consume f` ([01](../01-values-and-ownership/moving-values-out.md#moving-values-out)), and the value takes over the captures but not their memory, so it still can't outlive that memory. Calling it moves out of the captures and destroys the rest; dropping it uncalled destroys them all.
 - **Converting a function value never adds ownership.** A value accepted where a stronger kind is expected views the same storage the same way: called through a `consuming` type, a borrowed closure runs with the access it was lent, and dropping the value destroys nothing.
 - **Named functions and operators are function values too.** A named function other than `ptr(to:)` ([10](../10-errors-and-safety/unsafe-code.md#taking-an-address)), a static method or an operator, such as `max` or the `+` in `combine: +`, converts to each of these, with parameter types lining up as a witness's do ([01](../01-values-and-ownership/parameters.md#parameters)):

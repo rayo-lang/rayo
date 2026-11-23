@@ -52,7 +52,7 @@
 func f(_ a: mutable &Int, _ b: &Int) { … }
 
 items.append(items.count)     // fine: items.count is read, and done, before append borrows items
-f(mutable &x, x)              // error: two borrows of x overlap for the whole call
+f(mutable x, x)               // error: two borrows of x overlap for the whole call
 ```
 
 **An optional chain or `!` reads the optional, so its borrow begins there.** An assignment through an optional chain works out the rest of its place after its right side, whose accesses have then ended.
@@ -65,7 +65,7 @@ f(mutable &x, x)              // error: two borrows of x overlap for the whole c
 
 **Which arguments these are follows from the signature alone, and conversions keep parameter types.** So a call through a function value passes its arguments as a direct call does.
 
-**A `mutable &` argument's changes reach the caller's place**, through a written-back temporary too ([01](../../spec/01-values-and-ownership/parameters.md#parameters)).
+**A `mutable` argument's changes reach the caller's place**, through a written-back temporary too ([01](../../spec/01-values-and-ownership/parameters.md#parameters)).
 
 **Only a changeable place is written** ([01](../../spec/01-values-and-ownership/bindings.md#changeable-places)), so a shared borrow never becomes a write. Each exception brings its own exclusivity:
 

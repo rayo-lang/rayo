@@ -78,8 +78,8 @@ show(makeEnemy())                 // lends a temporary, which lives to the end o
 func push<T>(_ list: mutable &List<T>, _ x: T) { … }
 var picks = alloc List<&Enemy>()
 
-push(mutable &picks, boss)        // error: 'picks' binds T to '&Enemy', and 'boss' binds it to Enemy
-push(mutable &picks, &boss)       // T is '&Enemy', and 'boss' is lent
+push(mutable picks, boss)         // error: 'picks' binds T to '&Enemy', and 'boss' binds it to Enemy
+push(mutable picks, &boss)        // T is '&Enemy', and 'boss' is lent
 picks.append(boss)                // the receiver binds Element to '&Enemy', so 'boss' is lent
 ```
 
@@ -95,9 +95,9 @@ picks.append(boss)                // the receiver binds Element to '&Enemy', so 
 
 **The conversion has three limits, each where lending would hide what the code does:**
 
-- **It never lends for change.** A `mutable &T` is expected only where code may change the place, and `mutable &` is what shows a reader that it may. So a bare place given to a `mutable &T` parameter is a compile error that says to write `mutable &` ([01](../01-values-and-ownership/references.md#places-given-to-a-position)).
+- **It never lends for change.** A `mutable &T` is expected only where code may change the place, and `mutable` is what shows a reader that it may. So a bare place given where a `mutable &T` is expected is the compile error that names `mutable p` ([01](../01-values-and-ownership/references.md#every-lend-for-change-is-marked)).
 - **It applies only where a `&T`, or an optional, a result or a static type of one, is expected** ([above](#places-lent-where-a-reference-is-expected)). A `let` or `var` with no annotation, a `ref let`, and a loop's or a `when`'s subject expect no type, so each writes `&` to lend a place ([01](../01-values-and-ownership/bindings.md#bindings)). A function type is no reference either, so a closure in a place given where one is expected writes the mark its kind needs ([below](#function-values-of-closures-in-places)).
-- **It never moves or copies the place.** It makes the borrow `&p` makes, which the law of exclusivity checks as it checks any other, so `f(mutable &x, x)` is a compile error, as `f(mutable &x, &x)` is ([01](../01-values-and-ownership/exclusivity.md#the-law-of-exclusivity)).
+- **It never moves or copies the place.** It makes the borrow `&p` makes, which the law of exclusivity checks as it checks any other, so `f(mutable x, x)` is a compile error, as `f(mutable x, &x)` is ([01](../01-values-and-ownership/exclusivity.md#the-law-of-exclusivity)).
 
 **A bare place given for a parameter whose type is a type parameter binds the type parameter to the place's own type**, since nothing expects a `&T` until the type parameter is bound. A `some P` parameter counts, since it is an anonymous type parameter ([Protocols and generics](protocols-and-generics.md#protocols-and-generics)). Such a parameter owns its argument, so the place writes `consume` or `copy`, unless its type is implicitly copyable. Written with `&`, the place binds the type parameter to a reference.
 
@@ -119,42 +119,42 @@ let best = largest(scores)        // the parameter is a reference, so 'scores' i
 
 ## Conversions through a mutable reference
 
-**What a mutable reference refers to converts only to an unsized type.** A `mutable &List<T>` converts to a `mutable &[T]`, a `mutable &T` to a `mutable &any P`, and a `mutable &any P` to a `mutable &any Q` of an implied protocol (above). No other conversion changes what a `mutable &` refers to: no widening, no `T` → `T?` and no stronger closure kind. Otherwise the callee could store a value of its own type in the caller's place, such as a `mutating` closure into a variable the caller still sees as a non-`mutating` one, which a job system may call on many threads.
+**What a mutable reference refers to converts only to an unsized type.** A `mutable &List<T>` converts to a `mutable &[T]`, a `mutable &T` to a `mutable &any P`, and a `mutable &any P` to a `mutable &any Q` of an implied protocol (above). No other conversion changes what a mutable reference refers to: no widening, no `T` → `T?` and no stronger closure kind. Otherwise the callee could store a value of its own type in the caller's place, such as a `mutating` closure into a variable the caller still sees as a non-`mutating` one, which a job system may call on many threads.
 
-**The conversions to unsized types are safe through `mutable &`, since a place of unsized type is never assigned as a whole** ([01](../01-values-and-ownership/references.md#unsized-types)). So the callee can't store a value of another type there:
+**The conversions to unsized types are safe through a mutable reference, since a place of unsized type is never assigned as a whole** ([01](../01-values-and-ownership/references.md#unsized-types)). So the callee can't store a value of another type there:
 
 - through a `mutable &[T]`, it changes elements, each a `T`, and can't add or remove one, since the run's storage belongs to what owns it, such as the list, which alone can resize it ([04](../04-types/collections.md#runs-of-elements));
 - through a `mutable &any P`, it calls requirements, which change the value but never its type ([`any P`: explicit dynamic dispatch](protocols-and-generics.md#what-an-existential-may-call)).
 
 ```swift
-func clear(_ xs: mutable &[Int]) { for x in mutable &xs { x = 0 } }
+func clear(_ xs: mutable &[Int]) { for x in mutable xs { x = 0 } }
 func widen(_ x: mutable &Int64) { x = .max }
 
-clear(mutable &scores)     // fine: a 'mutable &List<Int>' converts to a 'mutable &[Int]'
-widen(mutable &count)      // error: 'count' is an Int32, and 'widen' takes 'mutable &Int64'
+clear(mutable scores)      // fine: a 'mutable &List<Int>' converts to a 'mutable &[Int]'
+widen(mutable count)       // error: 'count' is an Int32, and 'widen' takes 'mutable &Int64'
 ```
 
-**`&r` or `mutable &r` of a place that holds a reference is a reborrow, not a conversion**, so `mutable &r` of a place holding a `mutable &T` passes as a `mutable &T` argument however often the code lends it ([01](../01-values-and-ownership/references.md#reborrowing)).
+**`&r` or `mutable r` of a place that holds a reference is a reborrow, not a conversion**, so `mutable r` of a place holding a `mutable &T` passes as a `mutable &T` argument however often the code lends it ([01](../01-values-and-ownership/references.md#reborrowing)).
 
 ## Function values of closures in places
 
 **Where a function type is expected, a mark before a place holding a closure makes a function value of it, and the closure's kind says which mark** ([Function-typed values](functions-and-closures.md#function-typed-values)):
 
 - `&f` of a non-`mutating` closure or `Closure`, which borrows `f` shared;
-- `mutable &f` of a `mutating` one, which borrows `f` exclusively, and needs `f` changeable;
+- `mutable f` of a `mutating` one, which borrows `f` exclusively, and needs `f` changeable;
 - `consume f` of a `consuming` one, which takes it ([Closure kinds](functions-and-closures.md#closure-kinds)).
 
-**A mark before a place holding a function value lends a new view of the same closure**, as a reborrow lends a new reference ([01](../01-values-and-ownership/references.md#reborrowing)). `&f` of a non-`mutating` function value carries what `f` carries, the same view a `copy f` would give. `mutable &f` of a changeable place holding a `mutating` function value keeps `f` borrowed exclusively until the new view's last use. Only where the expected type is a reference to the function value's own type does the mark refer to the place `f` itself.
+**A mark before a place holding a function value lends a new view of the same closure**, as a reborrow lends a new reference ([01](../01-values-and-ownership/references.md#reborrowing)). `&f` of a non-`mutating` function value carries what `f` carries, the same view a `copy f` would give. `mutable f` of a changeable place holding a `mutating` function value keeps `f` borrowed exclusively until the new view's last use. Only where the expected type is a reference to the function value's own type does the mark refer to the place `f` itself.
 
 **So a function that takes a `mutating` callback can pass it on twice**, lending a new view of it each time:
 
 ```swift
 func eachMut(_ xs: mutable &[Enemy], _ body: mutating (mutable &Enemy) -> Void) {
-    for x in mutable &xs { body(mutable &x) }
+    for x in mutable xs { body(mutable x) }
 }
 
 func both(_ a: mutable &[Enemy], _ b: mutable &[Enemy], _ body: mutating (mutable &Enemy) -> Void) {
-    eachMut(mutable &a, mutable &body)   // a new view of the callback 'body', lent to this call
-    eachMut(mutable &b, mutable &body)   // and another, after the first view's last use
+    eachMut(mutable a, mutable body)     // a new view of the callback 'body', lent to this call
+    eachMut(mutable b, mutable body)     // and another, after the first view's last use
 }
 ```

@@ -19,7 +19,7 @@
 ```swift
 func splitLines(_ text: &Text, into out: mutable &List<&Text>) { ... }
 
-splitLines(source, into: mutable &lines)                     // the helper appends to the caller's list
+splitLines(source, into: mutable lines)                      // the helper appends to the caller's list
 for entry in &table.entries { names.append(entry.name) }    // a loop over a collection
 for line in src.lines() { collected.append(line) }          // a SharedIterator over the text's lines
 print(lines.count)
@@ -32,14 +32,14 @@ The caller has to know which text the list views. Changing that text, as `source
 The criteria below also use these patterns:
 
 ```swift
-work.append(mutable &data[0..<n])              // a quicksort's worklist: the first pending range, as a 'mutable &[Int]'
+work.append(mutable data[0..<n])               // a quicksort's worklist: the first pending range, as a 'mutable &[Int]'
 while var s = work.popLast() { … }             // each pass pops the next pending range
-lexer.lex(into: mutable &tokens)               // appends tokens that view the lexer's source
-fill(mutable &keys, mutable &values)           // fills two lists of references
+lexer.lex(into: mutable tokens)                // appends tokens that view the lexer's source
+fill(mutable keys, mutable values)             // fills two lists of references
 let texts = alloc t.map { $0.text }            // 't' is a '&[Token]'
 let labels = alloc entries.map { &$0.name }    // a reference to each entry's name
 for row in &rows { runs.append(row[..<4]) }    // 'rows' is a List<[4 of Float]>
-copyAll(from: src, into: mutable &dst)         // copies the references that 'src' holds into 'dst'
+copyAll(from: src, into: mutable dst)          // copies the references that 'src' holds into 'dst'
 ```
 
 - **Must accept** the helper, the loop and the iterator in the first block, and a user-defined sequence, such as a lexer used as a `for` sequence, whose elements are collected the same way, with no fallback to index loops.
@@ -101,26 +101,26 @@ A `ref var` cursor names one place for good, so `=` writes the node it names. A 
 **Code needs two *computed* places of one value mutably at once**: place properties with a `mutate`, not stored fields ([02](../../spec/02-views-and-dependencies/place-and-value-properties.md#place-properties-borrow-and-mutate)).
 
 ```swift
-ref var p = mutable &world.physics     // a place property's mutate
-ref var r = mutable &world.render      // another one, on the same world
-step(mutable &p, mutable &r)
+ref var p = mutable world.physics      // a place property's mutate
+ref var r = mutable world.render       // another one, on the same world
+step(mutable p, mutable r)
 ```
 
 The criteria below also use these patterns:
 
 ```swift
-var lives = mutable &particles.life                          // an SoA column, taken as a 'mutable &[Float]'
+var lives = mutable particles.life                           // an SoA column, taken as a 'mutable &[Float]'
 
 node.next = nil                                              // through a place property that hands out a stored optional field
 _ = node.next.take()                                         // takes the value out through the same property, and drops it
 pool[a]?.hp = pool[b]!.hp                                    // one element's field, assigned from another's
-world.enemies[h]?.hp -= reinforce(mutable &world.enemies)    // the right side lends the whole pool for change
+world.enemies[h]?.hp -= reinforce(mutable world.enemies)     // the right side lends the whole pool for change
 let hp = target?.hp                                          // a copy through an optional chain
 if ref let c = &h?.cell { use(c.tag.span) }                  // a reference through an optional chain
 ```
 
 - State whether this compiles. If it doesn't, give the idiom and its cost. Rust has the same limitation, so "same as Rust, and here is the workaround" is an acceptable answer.
-- **Must accept** a user container, such as a ring buffer over raw memory, whose subscript's `mutate` hands out an element, and a function that takes the container as a `mutable &` parameter and returns a reference to that element.
+- **Must accept** a user container, such as a ring buffer over raw memory, whose subscript's `mutate` hands out an element, and a function that takes the container as a `mutable &T` parameter and returns a reference to that element.
 - **Must accept** an `SoA<T>` column, the buffer that holds one field of `T`, taken as a `mutable &[F]` of that field's type `F`, as `lives` is a `mutable &[Float]` above. It is then moved into a struct of references, into a closure, or into a parameter that owns it.
 - **Must accept** the optional chains through place properties above, the first two through one that hands out a stored optional field.
 
@@ -322,14 +322,14 @@ give(makeLoot().item)                                    // a field moved out of
 upload(builder.finish(builder.count))                    // 'finish' is consuming
 adopt(consume list, list.count)                          // 'adopt' owns its first parameter
 when connect().state { .open(buf) { … } … }              // matches part of a temporary whose type has a deinit
-when mutable &connect() { .open(b) { b.append(0) } … }   // changes a payload in place
+when mutable connect() { .open(b) { b.append(0) } … }    // changes a payload in place
 for s in consume tags { names.append(consume s) }        // 'tags' is an inline array of Strings
 ref let e = if c { &enemies[0] } else { &makeEnemy() }   // a place on one path, a temporary on the other
 ref let b = &attr ?? &Bounds(lo: 0, hi: 1)               // the same, through ??
 ```
 
 - **Must accept** moving it without cloning. If the values live in a pool and the containers hold handles, show that instead, and state which is idiomatic.
-- **Must accept** the same moves through `replace(mutable &slot, with:)`, `swap`, an `Optional` field's `take()` or `remove(at:)`.
+- **Must accept** the same moves through `replace(mutable slot, with:)`, `swap`, an `Optional` field's `take()` or `remove(at:)`.
 - **Must accept** moving a field out of an owned local, or out of a call result as `give` does above, whose type has no `deinit`. The rest is destroyed at the scope's or statement's end.
 - **Must accept** a `deinit` handing a field, or a `List` in its enum's own payload, to another owner.
 - **Must accept** `close` above on a file whose `deinit` closes it, closing it once on every path, and a wrapper's `intoItems` above, which moves its field out.

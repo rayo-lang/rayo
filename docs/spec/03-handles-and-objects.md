@@ -49,7 +49,7 @@ struct Node(var parent: WeakPointer<Node>?, var children: List<UniquePointer<Nod
 
 renderer.value.beginFrame()                    // through the owner: the object itself, no optional
 _ = r.value?.submit(mesh)                      // optional place property: nil once the object is destroyed
-if ref var rd = mutable &r.value { rd.beginFrame(); rd.submit(mesh) }    // one modify access, held while 'rd' is used
+if ref var rd = mutable r.value { rd.beginFrame(); rd.submit(mesh) }     // one modify access, held while 'rd' is used
 r.value!.stats.drawCalls += 1                  // '!' panics if the object is gone
 ```
 
@@ -73,7 +73,7 @@ r.value!.stats.drawCalls += 1                  // '!' panics if the object is go
 
 **The law of exclusivity holds for an object's value too, checked at run time** ([01](01-values-and-ownership/exclusivity.md#the-law-of-exclusivity)), since the static checker can't see which weak pointers name one object. Every access to the value, through the owner or any weak pointer, is checked:
 
-- **Marks.** A **read access** is any shared use of the value, such as a `ref let` binding of `&place`, an argument lent to a `&T` parameter or a plain method call, and holds a shared mark. A **modify access** is any change, such as an assignment, a `ref var` binding of `mutable &place`, a `mutable &` argument or a `mutating` call, and holds an exclusive mark. Each mark lasts until the last use of every value that depends on the access (rule 6 in [02](02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-6-dynamic-accesses)), so the check covers each view of the value for its whole life. The language then releases the mark itself, since `value` is a place property that runs no code after an access ([02](02-views-and-dependencies/place-and-value-properties.md#places-behind-a-run-time-check)).
+- **Marks.** A **read access** is any shared use of the value, such as a `ref let` binding of `&place`, an argument lent to a `&T` parameter or a plain method call, and holds a shared mark. A **modify access** is any change, such as an assignment, a `ref var` binding of `mutable place`, a `mutable` argument or a `mutating` call, and holds an exclusive mark. Each mark lasts until the last use of every value that depends on the access (rule 6 in [02](02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-6-dynamic-accesses)), so the check covers each view of the value for its whole life. The language then releases the mark itself, since `value` is a place property that runs no code after an access ([02](02-views-and-dependencies/place-and-value-properties.md#places-behind-a-run-time-check)).
 - **Conflicts.** A conflicting access panics before it touches the value. So an observer that calls back into the object that is notifying it panics when either access changes the object: the observer's or the notifying method's. Destroying the object while any access to it is live panics too ([below](#destroying-an-object)).
 - **Counts never wrap.** An access that would take the reader count past its limit panics, in every build, as every count kept for safety does ([10](10-errors-and-safety/panics.md#what-panics)). So does creating an object when no generation is left, since each object needs a generation that no other object of the run gets ([below](#destroying-an-object)).
 

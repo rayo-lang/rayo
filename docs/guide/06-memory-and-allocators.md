@@ -9,7 +9,7 @@ let frameArena = Allocator.register(Arena(size: 64.mb))          // scratch data
 while running {
     do {
         var visible = frameArena.alloc List<Handle<Mesh>>()      // the list's storage comes from the arena
-        cull(world, into: mutable &visible)
+        cull(world, into: mutable visible)
         submit(visible)
     }                                                            // 'visible' is destroyed: freeing into an arena does nothing
     frameArena.reset()                                           // the frame's scratch memory is freed at once
@@ -195,7 +195,7 @@ extension Crate: Damageable {
 var targets = alloc List<Box<any Damageable>>()
 targets.append(alloc Box(Enemy(pos: [0, 0, 5])))  // a Box<Enemy> becomes a Box<any Damageable>, allocated once
 targets.append(alloc Box(Crate(pos: [4, 0, 2])))
-for t in mutable &targets { t.value.takeDamage(10) }   // dynamic dispatch, on each target in place
+for t in mutable targets { t.value.takeDamage(10) }    // dynamic dispatch, on each target in place
 ```
 
 **Both costs show in the code.** `any` marks the dynamic dispatch, and `alloc Box` the allocation, since `any P` never allocates on its own.

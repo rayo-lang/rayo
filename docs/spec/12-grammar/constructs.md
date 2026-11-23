@@ -66,14 +66,14 @@ condition     = expression                                         (* a Bool tes
               | ('let' | 'var' | 'ref' 'let' | 'ref' 'var') pattern '=' expression ;
                                                                    (* an optional binding: the expression is an optional, whose payload the pattern binds;
                                                                       each word means what it means in a declaration, so 'ref var' takes a mutable reference
-                                                                      to an optional, such as 'mutable &p' (01) *)
-when-expr     = 'when' expression? '{' when-arm+ '}' ;             (* 'when &s': payload names are ref lets of s's parts; 'when mutable &s': ref vars;
+                                                                      to an optional, such as 'mutable p' (01) *)
+when-expr     = 'when' expression? '{' when-arm+ '}' ;             (* 'when &s': payload names are ref lets of s's parts; 'when mutable s': ref vars;
                                                                       'when consume s': they own them (01) *)
 when-arm      = (match-pattern (',' match-pattern)* ('where' expression)? | 'else') block ;
                                                                    (* with no subject, an arm's test is one Bool expression, with no ',' list and no 'where' *)
                                                                    (* an arm ends with its block's '}', so arms need no separator *)
 for-stmt      = 'for' pattern 'in' expression ('where' expression)? block ;
-                                                                   (* 'for x in mutable &s' names each element for change (04); the subject says what each name is (01) *)
+                                                                   (* 'for x in mutable s' names each element for change (04); the subject says what each name is (01) *)
 while-stmt    = 'while' condition (',' condition)* block ;
 repeat-stmt   = 'repeat' block 'while' expression ;
 do-stmt       = 'do' block catch-clause* ;
@@ -96,7 +96,7 @@ static-for-stmt = 'static' 'for' identifier 'in' expression ('where' expression)
 | 5 | `..< ...` |
 | 6 | `+ - &+ &- +\| -\| \| ^` |
 | 7 | `* / % &* *\| & << >> &<< &>>` |
-| 8 | prefix `- ! ~ & ..< ... try try? try! await consume copy unsafe` and `mutable &`, then `alloc` and `a.alloc` |
+| 8 | prefix `- ! ~ & mutable ..< ... try try? try! await consume copy unsafe`, then `alloc` and `a.alloc` |
 | 9 | postfix `?` `!` `...` `.member` `(args)` `[index]` `{trailing-closure}` |
 
 ```ebnf
@@ -108,15 +108,15 @@ binary-op     = '??' | '||' | '&&' | '==' | '!=' | '<' | '<=' | '>' | '>=' | '..
               | '+' | '-' | '&+' | '&-' | '+|' | '-|' | '|' | '^' | '*' | '/' | '%' | '&*' | '*|' | '&' | '<<' | '>>' | '&<<' | '&>>' ;   (* levels in the table above *)
 cast-op       = 'as' ;                                             (* level 4; the right-hand side is a type, not an expression (05) *)
 literal       = int-literal | float-literal | string-lit | 'true' | 'false' ;
-prefix-op     = '-' | '!' | '~' | '&' | 'mutable' '&' | '..<' | '...' | 'try' | 'try?' | 'try!' | 'await' | 'consume' | 'copy' | 'unsafe' ;
-                                                                   (* '&p' makes a shared reference, 'mutable &p' a mutable one (01) *)
+prefix-op     = '-' | '!' | '~' | '&' | 'mutable' | '..<' | '...' | 'try' | 'try?' | 'try!' | 'await' | 'consume' | 'copy' | 'unsafe' ;
+                                                                   (* '&p' makes a shared reference, 'mutable p' a mutable one (01) *)
 postfix-expr  = primary postfix* ;
 postfix       = '.' (identifier generic-args? | keyword | int-literal)  (* keywords other than 'alloc' allowed after '.': T.self, .init(…); alloc gameplay.Box<Int>(x) *)
               | '?' | '!' | '...' | call-suffix | '[' argument-list ']' ;
 call-suffix   = '(' argument-list? ')' trailing-closures? | trailing-closures ;
 trailing-closures = trailing-closure (identifier ':' trailing-closure)* ;   (* catchPanic { … } recover: { … }; labels are identifiers *)
 argument-list = argument (',' argument)* ','? ;
-argument      = (arg-label ':')? (expression | operator) ;         (* show(boss), heal(mutable &boss); combine: + passes the operator as a function value *)
+argument      = (arg-label ':')? (expression | operator) ;         (* show(boss), heal(mutable boss); combine: + passes the operator as a function value *)
 primary       = identifier generic-args? | literal | 'self' | 'Self' | 'nil'
               | '(' operator ')'                                    (* operator as a function value: (+), (<) *)
               | '.' (identifier | keyword)                          (* implicit member: .zero, .opening, .init *)

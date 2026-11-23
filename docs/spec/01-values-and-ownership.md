@@ -14,14 +14,14 @@ ref let seen = &b                  // a borrow: a read-only name for 'b', nothin
 print("hp \(seen.hp)")
 
 func heal(_ e: mutable &Enemy) { e.hp = 100 }
-heal(mutable &b)                   // lends 'b' to heal, which changes it in place: no copy
+heal(mutable b)                    // lends 'b' to heal, which changes it in place: no copy
 ```
 
 In this example, `a` hands its enemy to `b`, `copy b` makes a separate value in `c`, and `hp` gets a copy of `b.hp` with nothing written, since a `Float` is implicitly copyable. `seen` names `b` where it lies, and `heal` changes `b` through a mutable reference. The following rules explain why each operation leaves a different set of names usable.
 
 A **place** is storage that holds a value: a local, a global, a parameter or a temporary, or a part of one, such as `enemy.hp` or `list[i]`.
 
-**Every value has one owner**, which decides when the value is destroyed. The exception is reference counting: `Shared<T>` lets several owners share one value, and the last owner to let go destroys it ([06](06-memory-and-allocators/owning-values.md#sharedt-data-with-many-owners)). Code that uses a value without owning it **borrows** it, through a reference: `&b` lends `b` shared, and `mutable &b` lends it for change ([References](01-values-and-ownership/references.md#references)).
+**Every value has one owner**, which decides when the value is destroyed. The exception is reference counting: `Shared<T>` lets several owners share one value, and the last owner to let go destroys it ([06](06-memory-and-allocators/owning-values.md#sharedt-data-with-many-owners)). Code that uses a value without owning it **borrows** it, through a reference: `&b` lends `b` shared, and `mutable b` lends it for change ([References](01-values-and-ownership/references.md#references)).
 
 **A second value exists only where the code or the value's type asks for one:**
 

@@ -147,7 +147,7 @@ if let key = Name(existing: line.key), key == jump { … }    // a key read from
 
 **`[T]` is a run of elements: `T`s laid end to end, in storage that something else owns.** Its count isn't part of its type, so it is unsized, and code reaches it only through a reference: a `&[T]` reads the elements, and a `mutable &[T]` may change them ([01](../01-values-and-ownership/references.md#unsized-types)). Each reference is a pointer and a count ([01](../01-values-and-ownership/references.md#layout)). So one function that takes a `&[T]` serves a list, a range of one and a column alike.
 
-**These hand out their elements as a `[T]` place**, which `&` and `mutable &` lend as any place is lent ([Shared and mutable views of one collection](#shared-and-mutable-views-of-one-collection)):
+**These hand out their elements as a `[T]` place**, which `&` and `mutable` lend as any place is lent ([Shared and mutable views of one collection](#shared-and-mutable-views-of-one-collection)):
 
 - `list.span`, a place property with a `borrow` and a `mutate`;
 - a range subscript, such as `list[a..<b]`, `a[..<n]` of an inline array, or `s[a..<b]` of a run itself, which is a `[T]` place with both accessors too;
@@ -178,7 +178,7 @@ average(samples[0..<64])            // the first 64 of them
 | `chunks(n)`, `enumerated()`, `zip(other)`, and their mutable forms | Sequences that hand out references to parts or elements ([below](#shared-and-mutable-views-of-one-collection)) |
 
 ```swift
-var some = mutable &hits[0..<4]           // a 'mutable &[Int]' of the first four hits
+var some = mutable hits[0..<4]            // a 'mutable &[Int]' of the first four hits
 some.sort()                               // sorts the four where they lie
 var (lo, hi) = some.mutableSplit(at: 2)   // two 'mutable &[Int]'s: 'some' stays borrowed while either is used
 lo[0] = hi[0]
@@ -273,7 +273,7 @@ A program may declare its own, such as one that holds a secret seed it read at s
 
 ```swift
 log("hp \(hp)")                                   // written into the log's sink: no allocation
-"pos \(p.x), \(p.y)".format(into: mutable &buf)   // written into 'buf': no allocation
+"pos \(p.x), \(p.y)".format(into: mutable buf)    // written into 'buf': no allocation
 let title = "Rayo"                                // a static &Text: a reference to the literal's own bytes
 let label = alloc "hp \(hp)"                      // formats into a new String: allocates, visibly
 let bad: String = "hp \(hp)"                      // error: an interpolated literal is never a String
@@ -505,13 +505,13 @@ protocol ExpressibleByInternedLiteral where InternedEntry: ~Scoped {        // a
 ```swift
 var total: Float = 0
 for e in &enemies { total += e.hp }                        // 'e' is a 'ref let' of each element
-for e in mutable &enemies { e.hp -= 1 }                    // 'e' is a 'ref var' of each element
+for e in mutable enemies { e.hp -= 1 }                     // 'e' is a 'ref var' of each element
 for job in consume jobs { run(consume job) }               // takes the list: 'job' owns each job
 for (i, e) in items.mutableEnumerated() { e.order = i }    // 'i' is a UInt, and 'e' a 'mutable &Item'
 for (v, f) in vels.mutableZip(forces) { v += f * dt }      // two sequences in lockstep
 ```
 
-**A subject writes its mark, or is a value, and what each name is follows from it** ([01](../01-values-and-ownership/bindings.md#for-and-when-names)). So iterating a place never copies it: `&s` and `mutable &s` lend it to the loop, and `consume s` moves it in.
+**A subject writes its mark, or is a value, and what each name is follows from it** ([01](../01-values-and-ownership/bindings.md#for-and-when-names)). So iterating a place never copies it: `&s` and `mutable s` lend it to the loop, and `consume s` moves it in.
 
 ```swift
 protocol Sequence { associatedtype Iterator: IteratorProtocol; func makeIterator() -> Iterator }
@@ -521,7 +521,7 @@ protocol SharedIterator: IteratorProtocol {     // elements outlive the iteratio
 }
 protocol Collection: Sequence where Iterator: SharedIterator { var count: UInt { get } }   // what generic algorithms take
 
-protocol MutableSequence {                      // what 'for x in mutable &s' iterates
+protocol MutableSequence {                      // what 'for x in mutable s' iterates
     associatedtype MutableIterator: IteratorProtocol   // a collection's hands out mutable references; a Receiver's, owned items
     mutating func makeMutableIterator() -> MutableIterator
 }
@@ -545,15 +545,15 @@ A reference reaches an element without moving it, so move-only elements iterate 
 | Subject | Iterator | Each pass |
 | --- | --- | --- |
 | A shared reference: `&s`, or a value of type `&S` | `var it = S.makeIterator()`, through the reference | `while let b = it.next()`: bind the pattern to `b′`, then run the body |
-| A mutable reference: `mutable &s`, or a value of type `mutable &S` | `var it = S.makeMutableIterator()`, through the reference | `while var r = it.next()`: bind the pattern to `r′`, then run the body |
+| A mutable reference: `mutable s`, or a value of type `mutable &S` | `var it = S.makeMutableIterator()`, through the reference | `while var r = it.next()`: bind the pattern to `r′`, then run the body |
 | Any other value whose type conforms to `ConsumingSequence`, such as `consume s` | `var it = S.makeConsumingIterator()` | `while let b = it.next()`: bind the pattern to `b′`, then run the body |
 | Any other value | `var it = S.makeIterator()` | `while let b = it.next()`: bind the pattern to `b′`, then run the body |
 
-- **A loop over `&s` holds `s` borrowed shared, and one over `mutable &s` holds it exclusively, until the loop ends.** The mark picks the form, as it picks the reference an argument passes ([01](../01-values-and-ownership/references.md#making-a-reference)). So a loop that changes elements in place writes `mutable &`.
-- **`mutable &` on a subject needs a changeable place, as it does anywhere** ([01](../01-values-and-ownership/bindings.md#changeable-places)). That may be a temporary, such as a call's result. A place property with a `borrow` and no `mutate` can't be lent this way.
-- **A subject lent from a place property changes the storage its place lies in**, as `mutable &hits.span` changes the elements of `hits`. A temporary that owns its elements, such as `mutable &makeEnemies()`, is destroyed with its changes when the loop ends.
+- **A loop over `&s` holds `s` borrowed shared, and one over `mutable s` holds it exclusively, until the loop ends.** The mark picks the form, as it picks the reference an argument passes ([01](../01-values-and-ownership/references.md#making-a-reference)). So a loop that changes elements in place writes `mutable`.
+- **`mutable` on a subject needs a changeable place, as it does anywhere** ([01](../01-values-and-ownership/bindings.md#changeable-places)). That may be a temporary, such as a call's result. A place property with a `borrow` and no `mutate` can't be lent this way.
+- **A subject lent from a place property changes the storage its place lies in**, as `mutable hits.span` changes the elements of `hits`. A temporary that owns its elements, such as `mutable makeEnemies()`, is destroyed with its changes when the loop ends.
 - **A loop over a whole value whose type conforms to `ConsumingSequence`** gives it to the iterator. So a loop over `consume jobs` hands each job over, and the iterator's `deinit` destroys the elements a `break`, `return` or `throw` leaves. `[N of T]` conforms to `ConsumingSequence`, as std's owning collections do.
-- **Through a reference subject, an element that is itself a reference is bound in place.** A name bound to the whole of `b` is a `ref let` of what `b` refers to, as `ref let x = b` would be. One bound to `r` is a `ref var`, as `ref var x = r` reborrows through it ([01](../01-values-and-ownership/bindings.md#bindings-that-refer-to-a-place)).
+- **Through a reference subject, an element that is itself a reference is bound in place.** A name bound to the whole of `b` is a `ref let` of what `b` refers to, as `ref let x = b` would be. One bound to `r` is a `ref var`, as `ref var x = mutable r` reborrows through it ([01](../01-values-and-ownership/bindings.md#bindings-that-refer-to-a-place)).
 - **Any other element is a value the iterator hands out**, such as a range's `Int`, a chunk or an `enumerated()` tuple. Then `b′` is `consume b` and `r′` is `consume r`, and the name owns it for the iteration, as `i` does below.
 
 ```swift
@@ -571,7 +571,7 @@ for (i, e) in makeEnemies().mutableEnumerated() { … }   // the new list is a h
 
 **What each name of the pattern binds decides whether it can change** ([01](../01-values-and-ownership/bindings.md#for-and-when-names)):
 
-- **A name bound in place is a `ref let` through `&`, and a `ref var` through `mutable &`.** So a loop that changes its elements writes `mutable &` on the subject, or iterates a sequence that hands out mutable references, such as `mutableEnumerated()`. It writes nothing on the pattern, as a loop that reads them writes nothing there either.
+- **A name bound in place is a `ref let` through `&`, and a `ref var` through `mutable`.** So a loop that changes its elements writes `mutable` on the subject, or iterates a sequence that hands out mutable references, such as `mutableEnumerated()`. It writes nothing on the pattern, as a loop that reads them writes nothing there either.
 - **A value the iterator hands out is owned by its name**, such as a range's `Int`, a handle or a chunk. The name may change what it owns, as a chunk is written through, but is never assigned as a whole.
 
 **A `where c` after the sequence runs the body as `if c { body }`**, with the pattern bound, as in the `enemies` loop above.
@@ -581,10 +581,10 @@ for (i, e) in makeEnemies().mutableEnumerated() { … }   // the new list is a h
 **Which elements outlive the iteration follows from the dependency rules** ([02](../02-views-and-dependencies.md#dependencies)):
 
 ```swift
-func scale(_ s: mutable &[Float]) { for x in mutable &s { x *= 2 } }
+func scale(_ s: mutable &[Float]) { for x in mutable s { x *= 2 } }
 var names = alloc List<&Text>()
 for s in &table.entries { names.append(s.name) }                // fine: each element depends on 'table', not the iterator
-for chunk in data.mutableChunks(64) { scale(mutable &chunk) }   // one 'mutable &[Float]' at a time: 'chunk' owns it, and lends 'scale' a reborrow
+for chunk in data.mutableChunks(64) { scale(mutable chunk) }    // one 'mutable &[Float]' at a time: 'chunk' owns it, and lends 'scale' a reborrow
 ```
 
 **An iterator that hands out mutable references lends.** Its `mutating` `next()` makes each element depend exclusively on the iterator until the next call, so two are never live at once. Keeping a chunk past its iteration, or holding two, is a compile error. `mutableSplit(at:)` gives two at once ([Runs of elements](#runs-of-elements)).
@@ -599,7 +599,7 @@ for (x, y) in consume z { … }       // 'z' holds a mutableZip: its only iterat
 
 ### Shared and mutable views of one collection
 
-**A place property or subscript with a `borrow` and a `mutate` serves both kinds of reference under one name** ([02](../02-views-and-dependencies/place-and-value-properties.md#place-properties-borrow-and-mutate)). `&x.p` and a read through `x.p` use the `borrow`. `mutable &x.p`, a write through `x.p` and a `mutating` call on it use the `mutate`. So a collection's elements, a range of them and an `SoA`'s column each have one name:
+**A place property or subscript with a `borrow` and a `mutate` serves both kinds of reference under one name** ([02](../02-views-and-dependencies/place-and-value-properties.md#place-properties-borrow-and-mutate)). `&x.p` and a read through `x.p` use the `borrow`. `mutable x.p`, a write through `x.p` and a `mutating` call on it use the `mutate`. So a collection's elements, a range of them and an `SoA`'s column each have one name:
 
 ```swift
 var span: [T] { borrow { … } mutate { … } }                     // a list's elements, as a place
@@ -608,12 +608,12 @@ subscript(r: Range<UInt>) -> [T] { borrow { … } mutate { … } }  // a range o
 
 ```swift
 let all = &hits.span                      // a '&[Int]', through the borrow
-var some = mutable &hits[0..<4]           // a 'mutable &[Int]', through the mutate
+var some = mutable hits[0..<4]            // a 'mutable &[Int]', through the mutate
 particles.life.sort()                     // a mutating method, through the column's mutate: sorts it in place
-func lives(_ p: mutable &SoA<Particle>) -> mutable &[Float] { mutable &p.life }   // a result of one
+func lives(_ p: mutable &SoA<Particle>) -> mutable &[Float] { mutable p.life }    // a result of one
 ```
 
-**`mutable &` of a member with only a `borrow` is a compile error**, since nothing lends that place for change ([01](../01-values-and-ownership/references.md#making-a-reference)). So a member whose place must never change through it, such as a range of a `String`, declares only a `borrow` ([Strings](#strings)).
+**`mutable` of a member with only a `borrow` is a compile error**, since nothing lends that place for change ([01](../01-values-and-ownership/references.md#making-a-reference)). So a member whose place must never change through it, such as a range of a `String`, declares only a `borrow` ([Strings](#strings)).
 
 **A method with a shared and a mutable form has two names**, since a call's result is a value, and a mark before the call would lend that value rather than pick a form. The mutable form is a `mutating` method whose name puts `mutable` before the shared one's:
 
