@@ -38,12 +38,13 @@ struct Signature: CustomStringConvertible {
         }
     }
 
-    /// Whether the function takes each argument with no conversion, where `areLent` says of each in turn whether it
-    /// counts as a `&` of a place: one that does goes to a parameter that borrows it, and one that doesn't to a
-    /// parameter that owns it, since lending a bare place to a parameter that borrows it is a conversion.
-    func takesUnconverted(_ areLent: [Bool]) -> Bool {
-        parameters.count == areLent.count && zip(parameters, areLent).allSatisfy { parameter, isLent in
-            (parameter.convention == .borrowed) == isLent
+    /// Whether the function takes each argument with no conversion, where `areReferences` says of each in turn whether
+    /// it counts as a reference, as a `&` of a place or a place that holds a reference does: one that does goes to a
+    /// parameter that borrows it, and one that doesn't to a parameter that owns it, since lending a bare place that
+    /// holds a value to a parameter that borrows it is a conversion.
+    func takesUnconverted(_ areReferences: [Bool]) -> Bool {
+        parameters.count == areReferences.count && zip(parameters, areReferences).allSatisfy { parameter, isReference in
+            (parameter.convention == .borrowed) == isReference
         }
     }
 
@@ -78,7 +79,8 @@ struct Signature: CustomStringConvertible {
 
 extension Signature {
     /// The signature of a built-in function, under the name a call writes to reach it. A built-in that borrows its
-    /// argument is lent any value, as `print` is, so a call's result or a literal is lent as a temporary.
+    /// argument is lent any value written with no `&`, as `print` is, so a call's result or a literal is lent as a
+    /// temporary.
     init(of builtin: Builtin) {
         let parameters = builtin.parameters.map { Parameter($0, borrowsTemporaries: true) }
         self.init(name: builtin.name.spelling, target: .callee(.builtin(builtin)), parameters: parameters,

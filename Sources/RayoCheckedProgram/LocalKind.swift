@@ -20,6 +20,15 @@ public enum LocalKind: Equatable, Sendable {
         }
     }
 
+    /// Whether the local holds a reference to a place, not a value of its own: a `ref let`, or a parameter that borrows
+    /// its argument, for change or not. The local's own type is then a reference to the type of what it refers to.
+    package var holdsReference: Bool {
+        switch self {
+        case .refLet, .parameter(.borrowed), .parameter(.mutable): true
+        case .let, .var, .parameter(.owned): false
+        }
+    }
+
     /// `type` as the source declares the local with it: after the reference a parameter takes where the local is one
     /// that borrows its argument, and on its own otherwise.
     package func spelling(of type: RayoType) -> String {

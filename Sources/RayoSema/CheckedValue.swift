@@ -32,8 +32,7 @@ enum CheckedValue {
         }
     }
 
-    /// Whether the source writes the value as a `&` of a place, which a parameter that borrows its argument takes. A
-    /// typed value is written without one.
+    /// Whether the source writes the value as a `&` of a place. A typed value is written without one.
     var lendsPlace: Bool {
         switch self {
         case .typed: false

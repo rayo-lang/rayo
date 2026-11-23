@@ -8,6 +8,7 @@ private let declarations = """
     func none(_ a: &[0 of Bool]) {}
     func pick(_ a: &[2 of Int]) {}
     func pick(_ a: &[3 of Int]) {}
+    func one(_ a: &[2 of Int]) {}
     func made() -> [2 of Int] { .init(repeating: 1) }
     func returned() -> [2 of Bool] { return .init(repeating: true) }
     struct Holder(var hits: [2 of Hit])
@@ -185,6 +186,10 @@ struct ArrayInitializerTests {
         ("let a: [2 of Int] = .init(repeating: true)", "2:38: error[E0213]: expected Int, found Bool"),
         ("let a: [2 of UInt] = .init(repeating: -1)", "2:39: error[E0217]: the literal doesn't fit in a UInt"),
         ("pick(.init(repeating: 1))", "2:1: error[E0260]: the call fits more than one 'pick'"),
+        (
+            "one(.init(repeating: 1))",
+            "2:5: error[E0286]: lending a value that no local holds isn't supported; put it in a 'let' and lend that",
+        ),
         ("print(.init(repeating: 1))", "2:7: error[E0267]: the implicit member '.init' needs a type"),
     ])
     func `.init(repeating:) with no array type, or with the wrong member, label or value, is an error`(

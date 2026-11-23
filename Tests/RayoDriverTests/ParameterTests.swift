@@ -28,6 +28,24 @@ struct ParameterTests {
         #expect(run(source) == CommandResult(exitCode: 0, output: "11\n21\n", errors: ""))
     }
 
+    // A `ref let` and a parameter that borrows its argument each hold a reference, which the function that borrows
+    // takes as it is, while a place that holds a value reaches the function that owns it.
+    @Test func `a place that holds a reference, given bare, reaches the function that borrows it`() {
+        let source = """
+            func main() {
+                let a = 1
+                ref let r = &a
+                show(a)
+                show(r)
+                relay(a)
+            }
+            func relay(_ n: &Int) { show(n) }
+            func show(_ n: Int) { print(n + 10) }
+            func show(_ n: &Int) { print(n + 20) }
+            """
+        #expect(run(source) == CommandResult(exitCode: 0, output: "11\n21\n21\n", errors: ""))
+    }
+
     @Test func `a place given to a '&T' parameter without '&' is lent, and stays its caller's`() {
         let source = """
             func main() {

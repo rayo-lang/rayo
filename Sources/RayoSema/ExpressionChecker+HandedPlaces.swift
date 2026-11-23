@@ -77,12 +77,10 @@ extension ExpressionChecker {
     }
 
     /// `lent`, a `&` of a place, as the argument of `parameter`, of the type `expected` names. A parameter that
-    /// borrows takes the place itself, where a local holds it or the parameter borrows a temporary. One that owns its
-    /// argument reports the `&`, since nothing written says whether the call copies the place's value or moves it.
+    /// borrows takes the place itself, where a local holds it. One that owns its argument reports the `&`, since
+    /// nothing written says whether the call copies the place's value or moves it.
     private func lent(_ lent: LentPlace, to parameter: ArgumentParameter, _ expected: Expectation) -> CheckedExpr? {
         switch parameter.convention {
-        case .borrowed where parameter.borrowsTemporaries:
-            typeFitted(lent.placeExpression, to: expected)
         case .borrowed:
             heldPlace(of: lent, fitting: expected)
         case .owned:
@@ -106,8 +104,8 @@ extension ExpressionChecker {
     }
 
     /// The place that `lent` lends, as a value of the type `expected` names, where a local holds it. A place in a
-    /// temporary, such as the one that holds `e.slots.count`, is reported as unsupported, since rayoc lends no value
-    /// that no local holds.
+    /// temporary, such as the one that holds `e.slots.count`, is reported as unsupported, since rayoc lends a value
+    /// that no local holds only to a built-in, and only where the source writes it with no `&`.
     private func heldPlace(of lent: LentPlace, fitting expected: Expectation) -> CheckedExpr? {
         guard lent.place.local != nil else { return refused(.unsupportedLentValue, at: lent.range) }
         return typeFitted(lent.placeExpression, to: expected)

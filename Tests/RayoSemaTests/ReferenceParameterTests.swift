@@ -55,7 +55,8 @@ struct ReferenceParameterTests {
         ("read(makeEnemy().stats.hp)", [10]), ("show(if c { makeEnemy() } else { copy e })", [17, 38]),
         ("show(if c { &e } else { makeEnemy() })", [29]), ("count(&e.slots.count)", [11]),
         ("count(if c { &i } else { &g[0].slots.count })", [30]), ("show(&makeEnemy())", [10]),
-        ("read(&makeEnemy().stats.hp)", [10]),
+        ("read(&makeEnemy().stats.hp)", [10]), ("print(&makeEnemy().stats.hp)", [11]),
+        ("print(&e.slots.count)", [11]),
     ])
     func `lending a value that no local or parameter holds to a '&T' parameter is reported as unsupported`(
         statement: String, columns: [Int],
@@ -73,13 +74,14 @@ struct ReferenceParameterTests {
         #expect(messages(of: statement) == [])
     }
 
-    // `print` borrows its argument, and is lent any value, as a temporary that lives to the end of its statement.
+    // `print` borrows its argument, and is lent any value written with no `&`, as a temporary that lives to the end
+    // of its statement. A `&` of such a value is unsupported, as it is for any `&T` parameter.
     @Test(arguments: [
         "print(a)", "print(&a)", "print(e.stats.hp)", "print(&g[i].slots[0])", "print(i)", "print(c)", "print(1)",
-        "print(a + 1)", "print(copy a)", "print(makeEnemy().stats.hp)", "print(&makeEnemy().stats.hp)",
-        "print(e.slots.count)", "print(if c { a } else { 1 })", "print(UInt(a))",
+        "print(a + 1)", "print(copy a)", "print(makeEnemy().stats.hp)", "print(e.slots.count)",
+        "print(if c { a } else { 1 })", "print(UInt(a))",
     ])
-    func `'print' is lent a place, and a value that no local holds`(statement: String) {
+    func `'print' is lent a place, and a value that no local holds written with no '&'`(statement: String) {
         #expect(messages(of: statement) == [])
     }
 

@@ -8,7 +8,8 @@ struct ArgumentParameter {
     /// The name the call writes for what it calls, such as `show`, `Enemy` or `.init`, for an error to name it by.
     var callee: String
     var convention: ParameterConvention
-    /// Whether the call may lend the parameter, where it borrows its argument, a value that no local holds, such as
-    /// a call's result, as a temporary that lives to the end of the call's statement.
+    /// Whether the call may lend the parameter, where it borrows its argument, a value that no local holds and the
+    /// source writes with no `&`, such as a call's result, as a temporary that lives to the end of the call's
+    /// statement.
     var borrowsTemporaries: Bool
 }

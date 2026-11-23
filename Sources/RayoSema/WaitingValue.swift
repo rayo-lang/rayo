@@ -15,7 +15,7 @@ protocol WaitingValue {
     /// Whether the value can settle to `type`, where `declarations` gives the members an implicit member names.
     func fits(_ type: RayoType, in declarations: Declarations) -> Bool
 
-    /// Whether the source writes the value as a `&` of a place, which a parameter that borrows its argument takes.
+    /// Whether the source writes the value as a `&` of a place.
     var lendsPlace: Bool { get }
 
     /// Settles the value toward `type`: to `type` where it can, and otherwise as it would where its position gives

@@ -60,12 +60,17 @@ struct ParameterTests {
     // An argument written with a `&` reaches the function that borrows it, and one written without reaches the one
     // that owns it. A bare argument that only a function that borrows it takes is lent, and one that every function
     // its type fits borrows counts as written with a `&`, so it tells none of them apart. Where several still fit,
-    // each lending a different argument or the same one, the call is ambiguous. Where none takes a `&` written for an
-    // argument, the one its type fits reports how to write it.
+    // each lending a different argument or the same one, the call is ambiguous. A place that holds a reference, such
+    // as a `ref let`, is of a reference type already, and an owning parameter takes its value. Where none takes a `&`
+    // written for an argument, the one its type fits reports how to write it, and where they take the arguments in
+    // different ways, the call fits none of them, which spells each `&` it writes.
     @Test(arguments: [
         ("f(&a)", [ErrorCode]()), ("f(a)", []), ("f(1)", []), ("g(a)", []), ("k(a, a)", []), ("k(a, &a)", []),
+        ("ref let r = &a\n    h(r)", []),
         ("h(&a)", [.referenceToOwnedParameter(name: "h", type: "Int")]),
         ("u(1)", [.ambiguousCall(name: "u")]), ("v(1, 2)", [.ambiguousCall(name: "v")]),
+        ("w(&a, &a)", [.noMatchingFunction(name: "w", arguments: "&Int, &Int")]),
+        ("g(&b)", [.noMatchingFunction(name: "g", arguments: "&UInt")]),
     ])
     func `an overload is picked by how each argument is written, where its type fits several`(
         call: String, expected: [ErrorCode],
@@ -83,8 +88,11 @@ struct ParameterTests {
             func v(_ x: UInt, _ y: &UInt) {}
             func k(_ x: &Int, _ y: Int) {}
             func k(_ x: &Int, _ y: &Int) {}
+            func w(_ x: Int, _ y: &Int) {}
+            func w(_ x: &Int, _ y: Int) {}
             """
-        #expect(errors("func main() {\n    let a = 1\n    \(call)\n}\n\(declarations)") == expected)
+        let locals = "let a = 1\n    let b: UInt = 1"
+        #expect(errors("func main() {\n    \(locals)\n    \(call)\n}\n\(declarations)") == expected)
     }
 
     @Test("a function the file declares hides every prelude function of its name")

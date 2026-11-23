@@ -9,8 +9,9 @@ struct CallChecker {
     /// A function that a call reaches, and the call's arguments, checked against its parameters.
     private typealias Match = (signature: Signature, arguments: [CheckedExpr])
 
-    /// An argument's label and the type of its value, which choose among overloads.
-    private typealias TypedArgument = (label: String?, type: RayoType)
+    /// An argument's label, the type of its value, and whether the source writes it as a `&` of a place, as an error
+    /// that names the call's arguments spells it.
+    private typealias TypedArgument = (label: String?, type: RayoType, isReference: Bool)
 
     let expressions: ExpressionChecker
 
@@ -328,17 +329,28 @@ struct CallChecker {
         guard !takingReferences.isEmpty else { return (typesFit, false) }
 
         // Where some candidates take each argument with no conversion, the others, which lend a bare place, drop out.
-        let areLent = countedAsLent(values, by: takingReferences)
-        let unconverted = takingReferences.filter { $0.takesUnconverted(areLent) }
+        let areReferences = countedAsReferences(values, by: takingReferences)
+        let unconverted = takingReferences.filter { $0.takesUnconverted(areReferences) }
         return (unconverted.isEmpty ? takingReferences : unconverted, true)
     }
 
-    /// Whether each of `values`, in turn, counts as a `&` of a place among `candidates`: one the source writes so,
-    /// and a bare one that every candidate borrows, since lending it then tells none of them apart.
-    private func countedAsLent(_ values: [CheckedValue], by candidates: [Signature]) -> [Bool] {
+    /// Whether each of `values`, in turn, counts as a reference among `candidates`: a `&` of a place, a place whose
+    /// own type is a reference already, and a bare place that every candidate borrows, since lending it then tells
+    /// none of them apart.
+    private func countedAsReferences(_ values: [CheckedValue], by candidates: [Signature]) -> [Bool] {
         values.indices.map { index in
-            values[index].lendsPlace || candidates.allSatisfy { $0.parameters[index].convention == .borrowed }
+            values[index].lendsPlace || holdsReference(values[index])
+                || candidates.allSatisfy { $0.parameters[index].convention == .borrowed }
         }
+    }
+
+    /// Whether `value` names, with no step into it, a local that holds a reference, such as a `ref let` or a parameter
+    /// that borrows its argument, so that the value's own type is a reference to the type of what the local refers
+    /// to.
+    private func holdsReference(_ value: CheckedValue) -> Bool {
+        guard case .typed(let typed) = value, case .place(let place) = typed.kind, place.steps.isEmpty,
+              let local = place.local else { return false }
+        return expressions.names[local].kind.holdsReference
     }
 
     /// Reports `values`, which several of `candidates`, the functions the call names as `name`, fit by type, though
@@ -366,16 +378,24 @@ struct CallChecker {
     private func reportNoMatch(of name: String, labels: [String?], values: [CheckedValue], in range: SourceRange) {
         // Each untyped argument takes its default type, which the error names it by.
         let reportedBefore = errors.list.count
-        let settled = values.compactMap { expressions.settled($0, toward: nil) }
+        let types = values.compactMap { spelledType(of: $0) }
 
         // An argument that reports an error as it settles, such as a literal its default type can't hold, is the
         // error in place of the mismatch. The call still fails, so its body is tainted.
-        guard settled.count == values.count, errors.list.count == reportedBefore else {
+        guard types.count == values.count, errors.list.count == reportedBefore else {
             errors.taints.taint()
             return
         }
-        let typed = zip(labels, settled).map { (label: $0, type: $1.type) }
+        let typed = values.indices.map { (label: labels[$0], type: types[$0], isReference: values[$0].lendsPlace) }
         errors.report(.noMatchingFunction(name: name, arguments: spelling(of: typed)), at: range)
+    }
+
+    /// The type of `value` that an error naming the call's arguments spells it by, or nil where it fails to settle,
+    /// which is reported. A `&` of a place takes the place's type, since no parameter takes the reference that would
+    /// settle it, and any other value the type it settles to where its position gives none.
+    private func spelledType(of value: CheckedValue) -> RayoType? {
+        if value.lendsPlace, let type = value.type { return type }
+        return expressions.settled(value, toward: nil)?.type
     }
 
     /// Checks the values of `arguments` for their own errors, where no function's parameters take them.
@@ -385,11 +405,12 @@ struct CallChecker {
         }
     }
 
-    /// The arguments as an error writes them, such as `Int, by: Bool`.
+    /// The arguments as an error writes them, such as `Int, by: &Bool`.
     private func spelling(of arguments: [TypedArgument]) -> String {
         let written = arguments.map { argument in
             let label = argument.label.map { "\($0): " } ?? ""
-            return label + "\(expressions.typeName(of: argument.type))"
+            let reference = argument.isReference ? ParameterConvention.borrowed.reference : ""
+            return label + reference + "\(expressions.typeName(of: argument.type))"
         }
         return written.joined(separator: ", ")
     }

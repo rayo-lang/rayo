@@ -8,10 +8,11 @@ struct Parameter {
     var convention: ParameterConvention
     /// The type, or nil when the declaration names no type or names Void, which was reported there.
     var type: RayoType?
-    /// The type as the declaration writes it, after its reference where it has one, such as `&Enemy`.
+    /// The type as the declaration writes it, with the `&` of a parameter that borrows, such as `&Enemy`.
     var spelledType: String
-    /// Whether a call may lend the parameter, where it borrows its argument, a value that no local holds, such as a
-    /// call's result, as a temporary that lives to the end of the call's statement.
+    /// Whether a call may lend the parameter, where it borrows its argument, a value that no local holds and the
+    /// source writes with no `&`, such as a call's result, as a temporary that lives to the end of the call's
+    /// statement.
     var borrowsTemporaries: Bool
 }
 
