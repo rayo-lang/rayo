@@ -31,10 +31,16 @@ private func grouped(_ expression: Expr) -> String {
     // A postfix binds tighter than any operator, so it is written as the source writes it.
     case .member(let base, let name, _): "\(grouped(base)).\(name)"
     case .element(let base, let index): "\(grouped(base))[\(grouped(index))]"
-    case .call(let callee, let arguments): "\(grouped(callee))(\(arguments.map { grouped($0.value) }.joined()))"
+    case .call(let callee, let arguments): "\(grouped(callee))(\(arguments.map(grouped).joined(separator: ", ")))"
     // The tests write no other expression.
     default: "\(expression.kind)"
     }
+}
+
+/// `argument` as source text, its label before its value where it has one, with the value's operators grouped.
+private func grouped(_ argument: Argument) -> String {
+    let value = grouped(argument.value)
+    return if let label = argument.label { "\(label): \(value)" } else { value }
 }
 
 struct PrecedenceTests {
@@ -64,6 +70,7 @@ struct PrecedenceTests {
         ("!false && false", "((! false) && false)"), ("consume a + 1", "((consume a) + 1)"), ("&a + 1", "((& a) + 1)"),
         ("mutable &a + 1", "((mutable & a) + 1)"), ("&make().x + 1", "((& make().x) + 1)"),
         ("mutable &make(2)[0] * 3", "((mutable & make(2)[0]) * 3)"),
+        ("&make(1 + 2, by: a).x - 1", "((& make((1 + 2), by: a).x) - 1)"),
     ])
     func `prefix operators, 'copy', 'consume', '&' and 'mutable &' bind tighter than binary operators`(
         expression: String, expected: String,
