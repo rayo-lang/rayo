@@ -48,29 +48,20 @@ struct DependencyState: DataflowState {
 
         // An access depends on what its place's value depends on, since the code reaches that value through it.
         case .begin(let id, let access):
-            accessDependencies.update(at: id.index, to: dependencies(of: access.place.root))
+            accessDependencies[id.index] = dependencies(of: access.place.root)
 
         // A value stored in a whole local replaces the old one and what it depended on; one stored in a part of it
         // leaves what the rest of the local's value depends on.
         case .store(let destination) where destination.place.steps.isEmpty:
-            localDependencies.update(at: destination.place.root.index, to: [])
+            localDependencies[destination.place.root.index] = []
 
         // A declaration starts a local's life without a value, and a retirement ends it, so the local depends on
         // nothing.
         case .declare(let local), .retire(let local):
-            localDependencies.update(at: local.index, to: [])
+            localDependencies[local.index] = []
 
         case .read, .move, .store, .use, .end, .exit:
             break
         }
-    }
-}
-
-private extension PersistentArray {
-    /// Sets the element at `index` to `element`, unless it holds it already: a write copies the nodes on its path that
-    /// other arrays share.
-    mutating func update(at index: Int, to element: Element) {
-        guard self[index] != element else { return }
-        self[index] = element
     }
 }

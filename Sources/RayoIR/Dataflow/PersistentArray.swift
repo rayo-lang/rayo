@@ -102,7 +102,8 @@ package struct PersistentArray<Element: Equatable>: Equatable {
             }
         }
         set {
-            precondition(0 <= index && index < count, "index out of range")
+            // A write that changes nothing is skipped, since it would copy nodes that other copies share.
+            guard self[index] != newValue else { return }
             Self.replace(at: index, with: newValue, in: &root, shift: rootShift)
         }
     }

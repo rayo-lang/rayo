@@ -323,14 +323,14 @@ struct AccessExtentTests {
             """))
     }
 
-    @Test func `checking eight times as many loops in a row takes under twenty times as long`() throws {
+    @Test func `checking sixteen times as many loops in a row takes under thirty-two times as long`() throws {
         let short = try program(of: [loopingFunction(loops: 50)] + callees, from: .lowering)
-        let long = try program(of: [loopingFunction(loops: 400)] + callees, from: .lowering)
+        let long = try program(of: [loopingFunction(loops: 800)] + callees, from: .lowering)
 
-        // This check takes about eight times as long. One that carries every access through every block takes about
-        // twenty-five, as its work that grows only with the length dilutes the square's sixty-four.
+        // This check takes about seventeen times as long. One that carries every access through every block takes
+        // over eighty.
         let times = try fastestTimes(over: short, long, runs: 3, measuring: timeToCheckExclusivity)
-        #expect(times.long < times.short * 20)
+        #expect(times.long < times.short * 32)
     }
 }
 
