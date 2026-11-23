@@ -38,6 +38,13 @@ struct ParserErrorTests {
         ("struct 1 {\n    func f() { copy }\n}", [
             .missingStructName(found: .token("1")), .missingCopiedName(found: .token("}")),
         ]),
+        ("func f(x: Int = (1 +), y) {\n    copy\n}", [
+            .missingExpression(found: .token(")")), .missingParameterType(found: .token(")")),
+            .missingCopiedName(found: .newline),
+        ]),
+        ("struct S(var a: Int = (1 +), var b: Int) {\n    func f() { copy }\n}", [
+            .missingExpression(found: .token(")")), .missingCopiedName(found: .token("}")),
+        ]),
     ])
     func `an error in a declaration's header leaves the parser reporting the errors after it`(
         source: String, expected: [ErrorCode],

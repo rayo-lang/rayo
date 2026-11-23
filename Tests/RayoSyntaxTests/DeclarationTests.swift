@@ -7,7 +7,11 @@ private func summary(of declaration: Declaration) -> String {
     return switch declaration {
     case .function: "func" + name
     case .structure: "struct" + name
-    case .failed(let failed): (failed.kind == .function ? "failed func" : "failed struct") + name
+    case .failed(let failed):
+        switch failed.parts {
+        case .function: "failed func" + name
+        case .structure: "failed struct" + name
+        }
     }
 }
 

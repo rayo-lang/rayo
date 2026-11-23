@@ -53,16 +53,17 @@ extension Parser {
     /// After the `(` of a declaration's header: parses its comma-separated parameters or fields into `items`, and the
     /// `)`. An item that fails is kept as a failed one, and the parser goes on to the next.
     mutating func parseHeaderList<T: Sendable>(
-        into items: inout [FailedDecl.HeaderItem<T>], ifUnclosed unclosed: ErrorCase,
+        into items: inout [HeaderItem<T>], ifUnclosed unclosed: ErrorCase,
         _ item: (inout Parser) throws(ParseFailure) -> T,
     ) throws(ParseFailure) {
         while !current.isPunct(.rparen) {
+            let start = position
             do {
                 items.append(.parsed(try item(&self)))
             } catch {
-                // A failed item is skipped up to the comma or `)` after it. Where it stops anywhere else, such as at
-                // the `{` of a body, the list fails with the item's error alone.
-                recover(upTo: [.comma, .rparen, .lbrace])
+                // A failed item is skipped up to the comma or `)` after it, outside the brackets it opened. Where it
+                // stops anywhere else, such as at the `{` of a body, the list fails with the item's error alone.
+                recover(upTo: [.comma, .rparen, .lbrace], insideBrackets: bracketsLeftOpen(since: start))
                 items.append(.failed)
                 guard current.isPunct(.comma) || current.isPunct(.rparen) else { throw error }
             }
@@ -77,9 +78,9 @@ extension Parser {
     }
 
     /// Skips the rest of an item that failed, up to the newline or `;` that ends it, the `}` after it, the end of the
-    /// file, or one of `stops` outside the item's brackets.
-    mutating func recover(upTo stops: [Punct] = []) {
-        var depth = 0
+    /// file, or one of `stops` outside the item's brackets. `open` counts those it opened before it failed.
+    mutating func recover(upTo stops: [Punct] = [], insideBrackets open: Int = 0) {
+        var depth = open
         loop: while !atEnd {
             // A stop ends the item only outside its brackets.
             if depth == 0, case .punct(let punct) = current.kind, stops.contains(punct) { break }

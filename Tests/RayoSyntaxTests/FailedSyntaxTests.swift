@@ -7,31 +7,25 @@ private func covered(by declaration: FailedDecl, in source: String) -> String {
     return String(decoding: bytes[declaration.range.start.offset..<declaration.range.end.offset], as: UTF8.self)
 }
 
-/// The name of a parameter in a failed declaration's header, or `failed` where the parameter failed.
-private func summary(of parameter: FailedDecl.HeaderItem<Param>) -> String {
-    switch parameter {
-    case .parsed(let parameter): parameter.name
-    case .failed: "failed"
-    }
-}
-
-/// The name of a field in a failed declaration's header, or `failed` where the field failed.
-private func summary(of field: FailedDecl.HeaderItem<FieldDecl>) -> String {
-    switch field {
-    case .parsed(let field): field.name
-    case .failed: "failed"
+/// The names of the items in a failed declaration's header, with `failed` for each item that failed.
+private func names<Item>(of items: [HeaderItem<Item>], _ name: KeyPath<Item, String>) -> [String] {
+    items.map { item in
+        switch item {
+        case .parsed(let parsed): parsed[keyPath: name]
+        case .failed: "failed"
+        }
     }
 }
 
 struct FailedSyntaxTests {
     @Test(arguments: [
-        ("func f(x) {\n    print(1)\n}", FailedDecl.Kind.function, "f" as String?, "func f(x) {\n    print(1)\n}"),
-        ("func (", .function, nil, "func ("),
-        ("struct S(var x Int)", .structure, "S", "struct S(var x Int)"),
-        ("struct", .structure, nil, "struct"),
+        ("func f(x) {\n    print(1)\n}", false, "f" as String?, "func f(x) {\n    print(1)\n}"),
+        ("func (", false, nil, "func ("),
+        ("struct S(var x Int)", true, "S", "struct S(var x Int)"),
+        ("struct", true, nil, "struct"),
     ])
     func `a declaration that fails to parse stays in the tree, with its kind and the name it reached`(
-        source: String, kind: FailedDecl.Kind, name: String?, coveredText: String,
+        source: String, declaresType: Bool, name: String?, coveredText: String,
     ) throws {
         let text = "func g() {}\n" + source
         let file = Parser.parse(text).file
@@ -40,7 +34,7 @@ struct FailedSyntaxTests {
             Issue.record("expected a failed declaration, found \(file.declarations[1])")
             return
         }
-        #expect((failed.kind, failed.name) == (kind, name))
+        #expect((file.declarations[1].declaresType, failed.name) == (declaresType, name))
         #expect(covered(by: failed, in: text) == coveredText)
         // The declaration before it is parsed as usual.
         guard case .function(let function) = file.declarations[0] else {
@@ -58,7 +52,7 @@ struct FailedSyntaxTests {
             Issue.record("expected a failed function, found \(file.declarations)")
             return
         }
-        #expect(parameters.map(summary(of:)) == ["a", "failed", "c"])
+        #expect(names(of: parameters, \.name) == ["a", "failed", "c"])
         #expect(result?.spelling == "Int")
         let statements = try #require(body).statements
         try #require(statements.count == 2)
@@ -76,7 +70,7 @@ struct FailedSyntaxTests {
             Issue.record("expected a failed struct, found \(file.declarations)")
             return
         }
-        #expect(fields.map(summary(of:)) == ["a", "failed", "c"])
+        #expect(names(of: fields, \.name) == ["a", "failed", "c"])
         #expect(members.map(\.name) == ["f"])
     }
 

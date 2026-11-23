@@ -11,7 +11,8 @@ package struct Parser: ~Copyable {
     /// The source, as UTF-8.
     let bytes: [UInt8]
     let tokens: [Token]
-    private var position = 0
+    /// The index of the current token.
+    private(set) var position = 0
     private var diagnostics: [Diagnostic]
 
     /// A parser of `bytes`, held as UTF-8, which lex to `tokens`, at the first token, with the lexer's errors,
@@ -56,6 +57,19 @@ package struct Parser: ~Copyable {
 
     /// The range from the start of `start` to the end of the token before the current one.
     func range(from start: SourceRange) -> SourceRange { SourceRange(start.start, previousRange.end) }
+
+    /// How many brackets the tokens from the one at `start` up to the current one open and leave unclosed.
+    func bracketsLeftOpen(since start: Int) -> Int {
+        var depth = 0
+        for token in tokens[start..<position] {
+            switch token.kind {
+            case .punct(.lparen), .punct(.lbrace), .punct(.lbracket): depth += 1
+            case .punct(.rparen), .punct(.rbrace), .punct(.rbracket): depth -= 1
+            default: break
+            }
+        }
+        return depth
+    }
 
     /// Moves past the current token, unless it ends the file, and returns it.
     @discardableResult

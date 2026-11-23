@@ -186,21 +186,20 @@ extension Parser {
 /// What the parser read of a function's header, from its name to its result type.
 private struct FunctionHeader {
     var name: (text: String, range: SourceRange)?
-    var parameters: [FailedDecl.HeaderItem<Param>] = []
+    var parameters: [HeaderItem<Param>] = []
     var result: TypeExpr?
     /// Whether the parser read the header to its end, rather than skipping the rest of it after an error.
     var readToEnd = false
 
     /// The function that the header and `body` declare, or nil where any part of either failed.
     func declaration(body: Block?) -> FuncDecl? {
-        let parsed = parameters.compactMap(\.parsed)
-        guard readToEnd, let name, let body, parsed.count == parameters.count else { return nil }
-        return FuncDecl(name: name.text, nameRange: name.range, parameters: parsed, result: result, body: body)
+        guard readToEnd, let name, let body, let parameters = parameters.allParsed() else { return nil }
+        return FuncDecl(name: name.text, nameRange: name.range, parameters: parameters, result: result, body: body)
     }
 
     /// The failure of a function whose header or `body` failed, with what the parser read of them.
     func failure(body: Block?) -> DeclarationFailure {
-        let parts = FailedDecl.Parts.function(parameters: parameters, result: result, body: body)
+        let parts = FailedDeclParts.function(parameters: parameters, result: result, body: body)
         return DeclarationFailure(parts: parts, name: name?.text, nameRange: name?.range)
     }
 }
@@ -208,30 +207,31 @@ private struct FunctionHeader {
 /// What the parser read of a struct's header: its name and its fields.
 private struct StructHeader {
     var name: (text: String, range: SourceRange)?
-    var fields: [FailedDecl.HeaderItem<FieldDecl>] = []
+    var fields: [HeaderItem<FieldDecl>] = []
     /// Whether the parser read the header to its end, rather than skipping the rest of it after an error.
     var readToEnd = false
 
     /// The struct that the header and `members` declare, or nil where any part of either failed.
     func declaration(members: [Declaration]?) -> StructDecl? {
-        let parsed = fields.compactMap(\.parsed)
-        guard readToEnd, let name, let members, parsed.count == fields.count else { return nil }
-        return StructDecl(name: name.text, nameRange: name.range, fields: parsed, members: members)
+        guard readToEnd, let name, let members, let fields = fields.allParsed() else { return nil }
+        return StructDecl(name: name.text, nameRange: name.range, fields: fields, members: members)
     }
 
     /// The failure of a struct whose header or body failed, with what the parser read of them.
     func failure(members: [Declaration]?) -> DeclarationFailure {
-        let parts = FailedDecl.Parts.structure(fields: fields, members: members ?? [])
+        let parts = FailedDeclParts.structure(fields: fields, members: members ?? [])
         return DeclarationFailure(parts: parts, name: name?.text, nameRange: name?.range)
     }
 }
 
-private extension FailedDecl.HeaderItem {
-    /// The item, or nil where it failed.
-    var parsed: Item? {
-        switch self {
-        case .parsed(let item): item
-        case .failed: nil
+private extension Array {
+    /// The items of a header's list, or nil where any of them failed.
+    func allParsed<Item>() -> [Item]? where Element == HeaderItem<Item> {
+        var parsed: [Item] = []
+        for element in self {
+            guard case .parsed(let item) = element else { return nil }
+            parsed.append(item)
         }
+        return parsed
     }
 }
