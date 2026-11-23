@@ -44,8 +44,8 @@ struct PassModeTests {
               end a0
               return
             }
-            func "first(_: Trio)"(_: Trio) -> Int {
-              param %0 t: Trio @1:1-1:1
+            func "first(_: Trio)"(_: &Trio) -> Int {
+              param %0 t: &Trio @1:1-1:1
               temp %1: Int
             bb0:
               %1 @1:1-1:2 = operand read %0.0 @1:1-1:2 @1:1-1:2
@@ -196,8 +196,8 @@ struct PassModeTests {
               \(printUInt("%2"))
               return
             }
-            func "f(_: [4000000000 of E])"(_: [4000000000 of E]) -> UInt {
-              param %0 a: [4000000000 of E] @1:1-1:1
+            func "f(_: [4000000000 of E])"(_: &[4000000000 of E]) -> UInt {
+              param %0 a: &[4000000000 of E] @1:1-1:1
             bb0:
               return UInt 4000000000
             }
@@ -238,9 +238,9 @@ struct PassModeTests {
           var a: Int
           var b: Int
         }
-        init "Trio(a: Int, b: Int, c: Bool)"(a: owned Int, b: owned Int, c: owned Bool) -> Trio
-        init "Holder(trio: Trio, flag: Bool)"(trio: owned Trio, flag: owned Bool) -> Holder
-        init "Ints(a: Int, b: Int)"(a: owned Int, b: owned Int) -> Ints
+        init "Trio(a: Int, b: Int, c: Bool)"(a: Int, b: Int, c: Bool) -> Trio
+        init "Holder(trio: Trio, flag: Bool)"(trio: Trio, flag: Bool) -> Holder
+        init "Ints(a: Int, b: Int)"(a: Int, b: Int) -> Ints
 
         """
 
@@ -252,8 +252,8 @@ struct PassModeTests {
     private func relaying(_ type: String) -> String {
         """
 
-        func "relay(_: \(type))"(_: \(type)) -> \(type) {
-          param %0 value: \(type) @1:1-1:2
+        func "relay(_: \(type))"(_: &\(type)) -> \(type) {
+          param %0 value: &\(type) @1:1-1:2
         bb0:
           return read %0 @1:1-1:2
         }

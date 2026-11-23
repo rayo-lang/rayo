@@ -66,10 +66,10 @@ struct IRTextTests {
               return
             }
 
-            func "f(_: Int, by: Int, into: Int)"(_: Int, by: owned Int, into: mutable Int) -> Void {
-              param %0 x: Int @1:8-1:9
-              param %1 y: owned Int @1:20-1:21
-              param %2 z: mutable Int @1:36-1:37
+            func "f(_: &Int, by: Int, into: mutable &Int)"(_: &Int, by: Int, into: mutable &Int) -> Void {
+              param %0 x: &Int @1:8-1:9
+              param %1 y: Int @1:20-1:21
+              param %2 z: mutable &Int @1:36-1:37
               let %3 k: Int @2:7-2:8
               temp %4: Int
             bb0:

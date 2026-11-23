@@ -111,6 +111,20 @@ struct ErrorContainmentTests {
         #expect(errors("func main() {\n    \(declaration)\n    print(a)\n}") == expected)
     }
 
+    // Nothing written says whether the call copies the place or moves it, so the call takes neither.
+    @Test func `a '&' given to a parameter that owns its argument reports nothing more of the place`() {
+        let source = """
+            func main() {
+                let s = Stats(hp: 1)
+                let e = Enemy(stats: &s)
+                print(s.hp + e.stats.hp)
+            }
+            struct Enemy(var stats: Stats)
+            struct Stats(var hp: Int)
+            """
+        #expect(errors(source) == [.referenceToOwnedParameter(name: "Enemy", type: "Stats")])
+    }
+
     @Test func `a function that calls one whose body is tainted is checked as any other`() {
         let source = "func main() {\n\(ownershipErrors)\n    tainted()\n}\nfunc tainted() {\n    let = 1\n}"
         #expect(errors(source) == [.usedUninitialized(name: "x"), .missingBindingName(found: .token("="))])

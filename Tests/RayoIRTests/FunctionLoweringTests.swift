@@ -13,21 +13,22 @@ struct FunctionLoweringTests {
     }
 
     @Test func `a borrowed argument is a read access, begun as the call begins, which lowering never ends`() throws {
-        // Both arguments are computed before either access begins, and the accesses begin in their order.
+        // The computed argument is computed before either access begins, and the accesses begin in their order.
         let source = """
             func main() {
                 let x = 1
-                add(x, x + 1, 2)
+                let y = 2
+                add(&x, x + 1, &y)
             }
-            func add(_ a: Int, _ b: Int, _ c: Int) {}
+            func add(_ a: &Int, _ b: Int, _ c: &Int) {}
             """
         try expectLowering(of: source, toMatch: "borrowed-arguments")
     }
 
     @Test func `a mutable argument is a modify access to the place it names, begun as the call begins`() throws {
-        // Checking rejects a `mutable` parameter that the source writes, so the test makes `bump`'s parameter mutable
-        // in the checked program, and passes `x` to it as a mutable place.
-        let source = "func main() {\n    var x = 1\n    bump(x)\n    print(x)\n}\nfunc bump(_ n: Int) {}"
+        // Checking rejects a `mutable &` parameter that the source writes, so the test makes `bump`'s parameter
+        // mutable in the checked program, and passes `x` to it as a mutable place.
+        let source = "func main() {\n    var x = 1\n    bump(&x)\n    print(x)\n}\nfunc bump(_ n: &Int) {}"
         let (file, _) = Parser.parse(source)
         var checked = Checker.check(file).program
         let bump = FunctionID(index: 1)
@@ -41,15 +42,15 @@ struct FunctionLoweringTests {
         #expect(IRVerifier.verify(program, from: .lowering) == nil)
     }
 
-    @Test func `a copied argument is made in a temporary where the source writes it, and the call borrows that`()
+    @Test func `a copied argument is made in a temporary where the source writes it, and the call takes that`()
         throws {
-        // The copied local is read once, for the copy, and the call borrows only the local it is given bare.
+        // The copied local is read once, for the copy, and the call borrows only the local it lends.
         let source = """
             func main() {
                 let x = 1
-                add(copy x, x)
+                add(copy x, &x)
             }
-            func add(_ a: Int, _ b: Int) {}
+            func add(_ a: Int, _ b: &Int) {}
             """
         try expectLowering(of: source, toMatch: "copied-argument")
     }
@@ -63,10 +64,10 @@ struct FunctionLoweringTests {
                 let y = (copy x) + if true { x = 10; 1 } else { 2 }
                 print(y)
                 var p = P(hp: 1)
-                show(copy p, if true { p.hp = 7; 0 } else { 0 })
+                show(copy p.hp, if true { p.hp = 7; 0 } else { 0 })
                 print(p.hp)
             }
-            func show(_ a: P, _ b: Int) {}
+            func show(_ a: Int, _ b: Int) {}
             struct P(var hp: Int)
             """
         try expectLowering(of: source, toMatch: "copy-before-change")
@@ -131,8 +132,8 @@ struct FunctionLoweringTests {
     @Test func `a body's one expression, and a 'return' of a field, move their place out as the result`() throws {
         let source = """
             func main() {}
-            func given(_ s: Stats) -> Stats { s }
-            func stats(_ e: Enemy) -> Stats {
+            func given(_ s: &Stats) -> Stats { s }
+            func stats(_ e: &Enemy) -> Stats {
                 let f = copy e
                 return f.stats
             }

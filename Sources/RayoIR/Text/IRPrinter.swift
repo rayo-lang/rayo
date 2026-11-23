@@ -4,8 +4,9 @@ import RayoSource
 /// Writes Rayo IR as text, which `IRParser` reads back into the same program.
 ///
 /// The text gives the program's structs, then the function it starts at, then each function, in the order of their
-/// IDs. A function's parameters are written as the source writes them, each with its label and its convention, which a
-/// borrowed parameter leaves out. A struct's primary initializer is declared with `init`, and has no body:
+/// IDs. A function's parameters are written as the source writes them, each with its label and its type, after `&` or
+/// `mutable &` where the parameter borrows its argument. A struct's primary initializer is declared with `init`, and
+/// has no body:
 ///
 /// ```
 /// struct Pair {
@@ -15,7 +16,7 @@ import RayoSource
 ///
 /// main "main()"
 ///
-/// init "Pair(count: Int, flag: Bool)"(count: owned Int, flag: owned Bool) -> Pair
+/// init "Pair(count: Int, flag: Bool)"(count: Int, flag: Bool) -> Pair
 ///
 /// func "main()"() -> Void {
 ///   var %0 x: Int @2:9-2:10
@@ -74,7 +75,7 @@ public enum IRPrinter {
         return "\(header) {\n\(locals)\(blocks.joined())}\n"
     }
 
-    /// A local's declaration, such as `param %0 x: owned Int @1:8-1:9` or `temp %1: Bool`.
+    /// A local's declaration, such as `param %0 x: &Int @1:8-1:9` or `temp %1: Bool`.
     private static func text(of local: IRLocal, id: Int) -> String {
         switch local {
         case .source(let name, let kind, let type, let range):

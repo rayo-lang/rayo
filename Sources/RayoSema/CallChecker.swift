@@ -212,13 +212,13 @@ struct CallChecker {
         }
 
         // Check every argument, so each one's errors are reported, before any failure fails the call.
-        let checked = zip(arguments, parameters).map { check($0, against: $1) }
+        let checked = zip(arguments, parameters).map { check($0, against: $1, of: name) }
         let values = checked.compactMap { $0 }
         return values.count == arguments.count ? values : nil
     }
 
-    /// Checks `argument`'s label and value against `parameter`.
-    private func check(_ argument: some CallArgument, against parameter: Parameter) -> CheckedExpr? {
+    /// Checks `argument`'s label and value against `parameter`, of the function the call names as `name`.
+    private func check(_ argument: some CallArgument, against parameter: Parameter, of name: String) -> CheckedExpr? {
         // A label other than the parameter's is reported, and fails the argument once its value is checked.
         let isLabeledRight = argument.label == parameter.label
         if !isLabeledRight {
@@ -227,11 +227,11 @@ struct CallChecker {
         }
 
         // A parameter whose type isn't known was reported where it is declared; the value is checked on its own.
-        guard let type = parameter.type else {
+        guard let expected = parameter.expectation(calledAs: name) else {
             argument.reportErrors(by: expressions)
             return nil
         }
-        let value = argument.checked(expecting: Expectation(type), by: expressions)
+        let value = argument.checked(expecting: expected, by: expressions)
         return isLabeledRight ? value : nil
     }
 
@@ -252,10 +252,16 @@ struct CallChecker {
 
         // Pick the one candidate that the arguments' labels and values fit.
         let labels = arguments.map(\.label)
-        let remaining = remaining(of: candidates, passing: labels, values)
+        let (remaining, areTakenAsWritten) = remaining(of: candidates, passing: labels, values)
         // No candidate fits, which is reported with the arguments' types.
         guard !remaining.isEmpty else {
             reportNoMatch(of: name, labels: labels, values: values, in: range)
+            return nil
+        }
+        // Several fit by type, and none takes the arguments as they are written. A candidate that failed was
+        // reported where it is declared, and is left to `chosen` to pass over.
+        if !areTakenAsWritten, remaining.count > 1, !remaining.contains(where: \.hasFailed) {
+            reportMiswritten(values, among: remaining, named: name, labels: labels, in: range)
             return nil
         }
         // Where several fit and none of them is the call's, the arguments' literals are settled for their own errors.
@@ -264,11 +270,16 @@ struct CallChecker {
             return nil
         }
 
-        // The chosen candidate's parameters settle the untyped arguments, and take each argument as it fits them.
-        let settled = zip(values, chosen.parameters).compactMap { value, parameter in
-            parameter.type.map { expressions.settled(value, expecting: Expectation($0)) }
-                ?? expressions.settled(value, toward: nil)
+        // A parameter whose type isn't known was reported where it is declared, and takes any argument, so the
+        // arguments report only their own errors, as they do where the call has one candidate.
+        let expectations = chosen.parameters.compactMap { $0.expectation(calledAs: name) }
+        guard expectations.count == values.count else {
+            expressions.reportSettlingErrors(of: values)
+            return nil
         }
+
+        // The chosen candidate's parameters settle the untyped arguments, and take each argument as it fits them.
+        let settled = zip(values, expectations).compactMap { expressions.settled($0, expecting: $1) }
         // An argument that failed to settle to its parameter's type was reported.
         guard settled.count == values.count else { return nil }
         return (chosen, settled)
@@ -299,9 +310,10 @@ struct CallChecker {
         return nil
     }
 
-    /// The candidates that a call passing arguments with `labels` and `values`, in order, can reach.
+    /// The candidates that a call passing arguments with `labels` and `values`, in order, can reach, and whether they
+    /// take each argument as it is written.
     private func remaining(of candidates: [Signature], passing labels: [String?],
-                           _ values: [CheckedValue]) -> [Signature] {
+                           _ values: [CheckedValue]) -> (candidates: [Signature], areTakenAsWritten: Bool) {
         // Keep the candidates whose labels the arguments match, in order.
         let labeled = candidates.filter { $0.takesLabels(labels) }
         // Keep those that the typed arguments fit, so that an untyped argument is offered only the parameters of the
@@ -309,7 +321,31 @@ struct CallChecker {
         let typedFit = labeled.filter { $0.takes(values, in: declarations, where: { $0.type != nil }) }
         // Each untyped argument takes each remaining candidate's parameter type, and a candidate it doesn't fit drops
         // out.
-        return typedFit.filter { $0.takes(values, in: declarations, where: { $0.type == nil }) }
+        let typesFit = typedFit.filter { $0.takes(values, in: declarations, where: { $0.type == nil }) }
+        // Where some candidates take each argument as it is written, with or without a `&`, the others drop out.
+        // Where none does, those the types fit stay, so the one the call reaches reports how to write its arguments.
+        let writtenFit = typesFit.filter { $0.takesWritten(values) }
+        return writtenFit.isEmpty ? (typesFit, false) : (writtenFit, true)
+    }
+
+    /// Reports `values`, which several of `candidates`, the functions the call names as `name`, fit by type, though
+    /// none takes each of them as it is written. Where every candidate takes each argument the same way, each
+    /// argument reports what any of them would report of it; otherwise the call fits none of them as written.
+    private func reportMiswritten(_ values: [CheckedValue], among candidates: [Signature], named name: String,
+                                  labels: [String?], in range: SourceRange) {
+        let conventions = candidates[0].parameters.map(\.convention)
+        guard candidates.allSatisfy({ $0.parameters.map(\.convention) == conventions }) else {
+            reportNoMatch(of: name, labels: labels, values: values, in: range)
+            return
+        }
+
+        // The candidates differ only in types the arguments fit, so the first stands for them all. The call still
+        // fails, so its body is tainted, whatever the arguments report.
+        let expectations = candidates[0].parameters.compactMap { $0.expectation(calledAs: name) }
+        for (value, expected) in zip(values, expectations) {
+            _ = expressions.settled(value, expecting: expected)
+        }
+        errors.taints.taint()
     }
 
     /// Reports a call of `name` whose arguments, with `labels` and `values`, fit none of its functions, unless an

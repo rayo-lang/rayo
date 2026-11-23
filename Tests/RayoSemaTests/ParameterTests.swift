@@ -15,10 +15,10 @@ struct ParameterTests {
         #expect(coveredText(reported, in: source) == covered)
     }
 
-    @Test("a parameter is borrowed: it can't change, and an expression reads it", arguments: [
-        ("func f(x: Int) { x = 1 }", [ErrorCode.assignToParameter(name: "x")]),
-        ("func f(x: Int) { x += 1 }", [.assignToParameter(name: "x")]),
-        ("func f(x: Int) { x(1) }", [.notAFunction(name: "x")]),
+    @Test("a '&T' parameter is borrowed: it can't change, and an expression reads it", arguments: [
+        ("func f(x: &Int) { x = 1 }", [ErrorCode.assignToParameter(name: "x")]),
+        ("func f(x: &Int) { x += 1 }", [.assignToParameter(name: "x")]),
+        ("func f(x: &Int) { x(1) }", [.notAFunction(name: "x")]),
     ])
     func borrowed(declaration: String, expected: [ErrorCode]) {
         #expect(errors("func main() {}\n" + declaration) == expected)
@@ -50,16 +50,51 @@ struct ParameterTests {
         #expect(errors(source) == [.functionDeclaredTwice(signature: "f(_: Int, y: Bool)")])
     }
 
+    @Test func `functions whose parameters differ only in how they take their arguments are declared once each`() {
+        #expect(errors("func main() {}\nfunc f(_ x: &Int) {}\nfunc f(_ x: Int) {}") == [])
+        #expect(errors("func main() {}\nfunc f(_ x: &Int) {}\nfunc f(_ y: &Int) {}") == [
+            .functionDeclaredTwice(signature: "f(_: &Int)"),
+        ])
+    }
+
+    // An argument written with a `&` reaches the function that borrows it, and one written without reaches the one
+    // that owns it. Where none takes an argument as it is written, the one its type fits reports how to write it.
+    // Where its type fits several, each of which takes each argument the same way, the argument reports what any of
+    // them would, and where they take the arguments in different ways, the call fits none of them as written.
+    @Test(arguments: [
+        ("f(&a)", [ErrorCode]()), ("f(a)", []), ("f(1)", []),
+        ("g(a)", [.unlentPlace(name: "g", type: "Int", place: "a")]),
+        ("h(&a)", [.referenceToOwnedParameter(name: "h", type: "Int")]),
+        ("u(1)", [.unsupportedLentValue]),
+        ("v(1, 2)", [.noMatchingFunction(name: "v", arguments: "Int, Int")]),
+    ])
+    func `an overload is picked by how each argument is written, where its type fits several`(
+        call: String, expected: [ErrorCode],
+    ) {
+        let declarations = """
+            func f(_ x: &Int) {}
+            func f(_ x: Int) {}
+            func g(_ x: &Int) {}
+            func g(_ x: &Bool) {}
+            func h(_ x: Int) {}
+            func h(_ x: Bool) {}
+            func u(_ x: &Int) {}
+            func u(_ x: &UInt) {}
+            func v(_ x: &Int, _ y: Int) {}
+            func v(_ x: UInt, _ y: &UInt) {}
+            """
+        #expect(errors("func main() {\n    let a = 1\n    \(call)\n}\n\(declarations)") == expected)
+    }
+
     @Test("a function the file declares hides every prelude function of its name")
     func shadowsPrint() {
         #expect(errors("func main() { print(1) }\nfunc print(_ b: Bool) {}") ==
             [.typeMismatch(expected: "Bool", found: "Int")])
     }
 
-    @Test("'owned' and 'mutable' parameters and default values aren't supported", arguments: [
-        ("func f(_ x: owned Int) { print(x) }", [ErrorCode.unsupportedConvention(convention: "owned")],
-         ["_ x: owned Int"]),
-        ("func f(x: mutable Int) {}", [.unsupportedConvention(convention: "mutable")], ["x: mutable Int"]),
+    @Test("'mutable &' parameters and default values aren't supported", arguments: [
+        ("func f(x: mutable &Int) {}", [ErrorCode.unsupportedConvention(convention: "mutable &")],
+         ["x: mutable &Int"]),
         ("func f(x: Int = 1 + 2) {}", [.defaultArgument], ["1 + 2"]),
     ])
     func unsupported(declaration: String, expected: [ErrorCode], covered: [String]) {

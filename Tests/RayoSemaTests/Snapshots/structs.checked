@@ -9,9 +9,9 @@ struct Hit {
 
 main "main()"
 
-init "Shot(range: Int, hit: Hit)"(range: owned Int, hit: owned Hit) -> Shot
+init "Shot(range: Int, hit: Hit)"(range: Int, hit: Hit) -> Shot
 
-init "Hit(damage: Int)"(damage: owned Int) -> Hit
+init "Hit(damage: Int)"(damage: Int) -> Hit
 
 func "main()"() -> Void {
   let %0 damage: Int @4:9-4:15
@@ -21,13 +21,10 @@ func "main()"() -> Void {
     integer 7: Int @4:18-4:19
   bind %1 @5:9-5:10
     call "Shot(range: Int, hit: Hit)": Shot @5:13-5:53
-      owned
-        integer 4: Int @5:25-5:26
-      owned
-        call "Hit(damage: Int)": Hit @5:33-5:52
-          owned
-            value: Int @5:45-5:51
-              place %0 @5:45-5:51
+      integer 4: Int @5:25-5:26
+      call "Hit(damage: Int)": Hit @5:33-5:52
+        value: Int @5:45-5:51
+          place %0 @5:45-5:51
   assign
     place %1 @6:5-6:6 .1 @6:5-6:10 .0 @6:5-6:17
     integer 9: Int @6:20-6:21
@@ -47,6 +44,5 @@ func "main()"() -> Void {
       value: Int @10:11-10:32
         place temporary .0 @10:11-10:32
           call "Hit(damage: Int)": Hit @10:11-10:25
-            owned
-              integer 3: Int @10:23-10:24
+            integer 3: Int @10:23-10:24
 }

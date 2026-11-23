@@ -27,7 +27,7 @@ enum UnusedValueChecker {
                 guard case .source(let name, .parameter(let convention), _, let range) = body.locals[index],
                       convention.isStoredAtEntry, !state.values.reads(Place(root: LocalID(index: index)))
                 else { return nil }
-                return Diagnostic(.unreadValue(name: name), at: range)
+                return Diagnostic(.unreadParameter(name: name), at: range)
             }
         }
         return unread

@@ -69,8 +69,8 @@ struct ElementTests {
               \(printInt("%1[1]"))
               return
             }
-            func "total(_: [2 of Int])"(_: [2 of Int]) -> Int {
-              param %0 a: [2 of Int] @1:1-1:1
+            func "total(_: [2 of Int])"(_: &[2 of Int]) -> Int {
+              param %0 a: &[2 of Int] @1:1-1:1
               temp %1: Int
             bb0:
               %1 @1:1-1:2 = add checked read %0[0] @1:1-1:2, read %0[1] @1:1-1:2 @1:1-1:2

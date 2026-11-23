@@ -62,7 +62,7 @@ private func indexing(_ local: String, after store: String) -> String {
       _ = operand read %0[%1] @1:1-1:2 @1:1-1:2
       return
     }
-    func "change(_: UInt)"(_: mutable UInt) -> Void
+    func "change(_: UInt)"(_: mutable &UInt) -> Void
     """
 }
 

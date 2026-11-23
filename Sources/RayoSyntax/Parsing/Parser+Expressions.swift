@@ -19,7 +19,7 @@ extension Parser {
         return left
     }
 
-    /// `'-' int-literal`, `('copy' | 'consume') identifier ('.' member | '[' expression ']')*`,
+    /// `'-' int-literal`, `('copy' | 'consume' | '&') identifier ('.' member | '[' expression ']')*`,
     /// `('-' | '!') unary`, or a postfix expression.
     private mutating func parseUnary() throws(ParseFailure) -> Expr {
         let start = current.range
@@ -41,6 +41,12 @@ extension Parser {
         if consume(.consume) {
             let place = try parseNamedPlace(else: ErrorCode.missingConsumedName)
             return Expr(kind: .consume(place), range: range(from: start))
+        }
+
+        // A `&` takes the local it lends, or a part of it at any depth.
+        if consume(.ampersand) {
+            let place = try parseNamedPlace(else: ErrorCode.missingLentName)
+            return Expr(kind: .reference(place), range: range(from: start))
         }
 
         // An expression without a `-` or `!` in front is a postfix one.

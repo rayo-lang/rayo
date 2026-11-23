@@ -72,7 +72,7 @@ struct CompilerTests {
     }
 
     @Test func `'--emit=ir' prints the IR the emitter receives, with each access and local ended after its last use`() {
-        let source = "func main() {\n    let x = 1\n    print(x)\n}"
+        let source = "func main() {\n    let x = 1\n    show(&x)\n}\nfunc show(_ n: &Int) {}"
         let compiled = compile(["--emit=ir", "a.rayo"], files: ["a.rayo": source])
         #expect(compiled.result.standardOutput == """
             main "main()"
@@ -82,10 +82,16 @@ struct CompilerTests {
             bb0:
               declare %0
               %0 @2:9-2:10 = operand 1 @2:13-2:14
-              begin a0 read %0 @3:11-3:12
-              _ = call builtin "print(_: Int)"(a0) @3:5-3:13
+              begin a0 read %0 @3:10-3:12
+              _ = call "show(_: &Int)"(a0) @3:5-3:13
               end a0
               retire %0
+              return
+            }
+
+            func "show(_: &Int)"(_: &Int) -> Void {
+              param %0 n: &Int @5:13-5:14
+            bb0:
               return
             }
 

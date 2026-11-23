@@ -37,8 +37,8 @@ struct IllTypedIRTests {
 
     @Test func `a retirement of a parameter, whose place the call keeps until it returns, is a violation`() throws {
         let program = try IRParser.program(from: main("bb0:\n  return", after: """
-            func "f(_: Int)"(_: Int) -> Void {
-              param %0 n: Int @1:1-1:2
+            func "f(_: Int)"(_: &Int) -> Void {
+              param %0 n: &Int @1:1-1:2
             bb0:
               retire %0
               return
@@ -51,7 +51,7 @@ struct IllTypedIRTests {
 
     @Test func `a primary initializer with a body, or that makes another type than its struct, is a violation`()
         throws {
-        let text = main("bb0:\n  return", after: "init \"Pair(count: Int)\"(count: owned Int) -> Pair")
+        let text = main("bb0:\n  return", after: "init \"Pair(count: Int)\"(count: Int) -> Pair")
         let program = try IRParser.program(from: text)
         let initializer = FunctionID(index: 1)
         let pair = StructID(index: 0, name: "Pair")
@@ -295,7 +295,7 @@ private let illTypedIR = [
     IllTypedIR(
         testDescription: "a call given one argument too few",
         text: main("bb0:\n  _ = call \"f(_:_:)\"(1) @1:1-1:2\n  return", after: """
-            func "f(_:_:)"(_: Int, _: Int) -> Void {
+            func "f(_:_:)"(_: &Int, _: &Int) -> Void {
               temp %0: Int
               temp %1: Int
             bb0:
@@ -356,49 +356,49 @@ private let illTypedIR = [
         testDescription: "a primary initializer that takes fewer values than its struct has fields",
         text: main("bb0:\n  return", after: "init \"Pair()\"() -> Pair"),
         function: "Pair()",
-        message: "the IR's primary initializer of 'Pair' takes (), where it takes (count: owned Int)",
+        message: "the IR's primary initializer of 'Pair' takes (), where it takes (count: Int)",
     ),
     IllTypedIR(
         testDescription: "a primary initializer that takes a value of another type than its struct's field",
-        text: main("bb0:\n  return", after: "init \"Pair(count: Bool)\"(count: owned Bool) -> Pair"),
+        text: main("bb0:\n  return", after: "init \"Pair(count: Bool)\"(count: Bool) -> Pair"),
         function: "Pair(count: Bool)",
-        message: "the IR's primary initializer of 'Pair' takes (count: owned Bool), where it takes (count: owned Int)",
+        message: "the IR's primary initializer of 'Pair' takes (count: Bool), where it takes (count: Int)",
     ),
     IllTypedIR(
         testDescription: "a primary initializer that borrows its struct's field",
-        text: main("bb0:\n  return", after: "init \"Pair(count: Int)\"(count: Int) -> Pair"),
+        text: main("bb0:\n  return", after: "init \"Pair(count: Int)\"(count: &Int) -> Pair"),
         function: "Pair(count: Int)",
-        message: "the IR's primary initializer of 'Pair' takes (count: Int), where it takes (count: owned Int)",
+        message: "the IR's primary initializer of 'Pair' takes (count: &Int), where it takes (count: Int)",
     ),
     IllTypedIR(
         testDescription: "a parameter whose local borrows, where the function owns its argument",
         text: main("bb0:\n  return", after: """
-            func "f(_: Int)"(_: owned Int) -> Void {
-              param %0 n: Int @1:1-1:2
+            func "f(_: Int)"(_: Int) -> Void {
+              param %0 n: &Int @1:1-1:2
             bb0:
               return
             }
             """),
         function: "f(_: Int)",
-        message: "the IR declares %0 as a parameter of Int, where its function declares a parameter of owned Int",
+        message: "the IR declares %0 as a parameter of &Int, where its function declares a parameter of Int",
     ),
     IllTypedIR(
         testDescription: "a local that is no parameter, where the function declares one",
         text: main("bb0:\n  return", after: """
-            func "f(_: Int)"(_: Int) -> Void {
+            func "f(_: Int)"(_: &Int) -> Void {
               var %0 n: Int @1:1-1:2
             bb0:
               return
             }
             """),
         function: "f(_: Int)",
-        message: "the IR declares %0 as no parameter, where its function declares a parameter of Int",
+        message: "the IR declares %0 as no parameter, where its function declares a parameter of &Int",
     ),
     IllTypedIR(
         testDescription: "a declaration of a parameter, whose argument holds its value from the start",
         text: main("bb0:\n  return", after: """
-            func "f(_: Int)"(_: Int) -> Void {
-              param %0 n: Int @1:1-1:2
+            func "f(_: Int)"(_: &Int) -> Void {
+              param %0 n: &Int @1:1-1:2
             bb0:
               declare %0
               return
@@ -409,19 +409,19 @@ private let illTypedIR = [
     ),
     IllTypedIR(
         testDescription: "a call that passes an access to an owned parameter",
-        text: passing("begin a0 read %0 @1:1-1:2", "a0", to: "owned Int"),
+        text: passing("begin a0 read %0 @1:1-1:2", "a0", to: "Int"),
         function: "main()",
         message: "the IR passes 'f(_: Int)' a read access, where it takes a value",
     ),
     IllTypedIR(
         testDescription: "a call that passes a value to a mutable parameter",
-        text: passing("", "read %0 @1:1-1:2", to: "mutable Int"),
+        text: passing("", "read %0 @1:1-1:2", to: "mutable &Int"),
         function: "main()",
         message: "the IR passes 'f(_: Int)' a value, where it takes a modify access",
     ),
     IllTypedIR(
         testDescription: "a call that passes a modify access to a borrowed parameter",
-        text: passing("begin a0 modify %0 @1:1-1:2", "a0", to: "Int"),
+        text: passing("begin a0 modify %0 @1:1-1:2", "a0", to: "&Int"),
         function: "main()",
         message: "the IR passes 'f(_: Int)' a modify access, where it takes a value or a read access",
     ),
@@ -432,7 +432,7 @@ private let illTypedIR = [
               var count: Int
             }
             main "Pair(count: Int)"
-            init "Pair(count: Int)"(count: owned Int) -> Pair
+            init "Pair(count: Int)"(count: Int) -> Pair
             """,
         function: "Pair(count: Int)",
         message: "the IR starts a run at the primary initializer of 'Pair', which has no body",

@@ -24,25 +24,22 @@ extension IRParser {
         return type
     }
 
-    /// Reads a parameter's type, after the convention where the parameter doesn't borrow, and returns both.
+    /// Reads a parameter's type, after the reference the parameter takes where it borrows its argument, and returns
+    /// the convention the reference says, and the type.
     mutating func conventionAndType() throws(IRTextError) -> (ParameterConvention, RayoType) {
-        guard let convention = writtenConvention() else { return (.borrowed, try type()) }
-        advance()
+        let convention = convention()
         return (convention, try type())
     }
 
-    /// The convention the current token writes before a parameter's type, or nil where it writes none, as for a
-    /// parameter that borrows, which names no convention.
-    private func writtenConvention() -> ParameterConvention? {
-        guard case .word(let word) = current.kind, word != ParameterConvention.borrowed.rawValue else { return nil }
-        // A word is a convention only where a type follows it, so `owned` can still name a struct when nothing does.
-        guard nextStartsType else { return nil }
-        return ParameterConvention(rawValue: word)
-    }
-
-    /// Whether the token after the current one starts a type: a name, or the `[` of an array type.
-    private var nextStartsType: Bool {
-        if case .word = next.kind { true } else { next.kind == .symbol("[") }
+    /// Reads the reference before a parameter's type: `&` where the parameter borrows, `mutable &` where it borrows
+    /// for change, and nothing where it owns its argument.
+    private mutating func convention() -> ParameterConvention {
+        if consume("&") { return .borrowed }
+        // `mutable` is a word, which names a convention only where `&` follows it, and a struct otherwise.
+        guard current.kind == .word("mutable"), next.kind == .symbol("&") else { return .owned }
+        advance()
+        advance()
+        return .mutable
     }
 
     /// The integer type the prelude declares as `name`, or nil where it declares none.

@@ -4,7 +4,7 @@ struct S {
 
 main "main()"
 
-init "S(a: Int)"(a: owned Int) -> S
+init "S(a: Int)"(a: Int) -> S
 
 func "main()"() -> Void {
   var %0 print: Int @2:9-2:14

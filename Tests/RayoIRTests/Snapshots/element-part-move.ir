@@ -4,7 +4,7 @@ struct Stats {
 
 main "main()"
 
-init "Stats(hp: Int)"(hp: owned Int) -> Stats
+init "Stats(hp: Int)"(hp: Int) -> Stats
 
 func "main()"() -> Void {
   let %0 a: [1 of Stats] @2:9-2:10

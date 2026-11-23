@@ -108,7 +108,7 @@ struct LocalRetirementTests {
               declare %0
               %0 @1:1-1:1 = operand 1 @1:1-1:1
               begin a0 read %0 @1:1-1:1
-              _ = call builtin "print(_: Int)"(a0) @1:1-1:1
+              _ = call "g(_: Int, _: Int)"(a0, 2) @1:1-1:1
               return
             """
         #expect(try ended(blocks) == body(of: """
@@ -116,7 +116,7 @@ struct LocalRetirementTests {
               declare %0
               %0 @1:1-1:1 = operand 1 @1:1-1:1
               begin a0 read %0 @1:1-1:1
-              _ = call builtin "print(_: Int)"(a0) @1:1-1:1
+              _ = call "g(_: Int, _: Int)"(a0, 2) @1:1-1:1
               end a0
               retire %0
               return

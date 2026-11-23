@@ -33,9 +33,10 @@ struct BorrowTests {
     @Test func `a 'ref let' of a borrowed parameter or a part of one borrows it`() {
         let source = """
             func main() {
-                print(total(Enemy(stats: Stats(hp: 1), slots: [2, 3]), 4))
+                let e = Enemy(stats: Stats(hp: 1), slots: [2, 3])
+                print(total(&e, 4))
             }
-            func total(_ e: Enemy, _ n: Int) -> Int {
+            func total(_ e: &Enemy, _ n: Int) -> Int {
                 ref let s = e.stats
                 ref let first = e.slots[0]
                 ref let m = n

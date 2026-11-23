@@ -20,8 +20,8 @@ public enum LocalKind: Equatable, Sendable {
         }
     }
 
-    /// `type` as the program's text declares the local with it: after the convention where the local is a parameter
-    /// that doesn't borrow, and on its own otherwise.
+    /// `type` as the source declares the local with it: after the reference a parameter takes where the local is one
+    /// that borrows its argument, and on its own otherwise.
     package func spelling(of type: RayoType) -> String {
         guard case .parameter(let convention) = self else { return "\(type)" }
         return convention.spelling(of: type)

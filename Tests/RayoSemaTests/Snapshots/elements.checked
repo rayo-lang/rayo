@@ -4,7 +4,7 @@ struct Hit {
 
 main "main()"
 
-init "Hit(damage: Int)"(damage: owned Int) -> Hit
+init "Hit(damage: Int)"(damage: Int) -> Hit
 
 func "main()"() -> Void {
   let %0 hits: [2 of [1 of Hit]] @3:9-3:13
@@ -14,12 +14,10 @@ func "main()"() -> Void {
     array: [2 of [1 of Hit]] @3:16-3:52
       array: [1 of Hit] @3:17-3:33
         call "Hit(damage: Int)": Hit @3:18-3:32
-          owned
-            integer 1: Int @3:30-3:31
+          integer 1: Int @3:30-3:31
       array: [1 of Hit] @3:35-3:51
         call "Hit(damage: Int)": Hit @3:36-3:50
-          owned
-            integer 2: Int @3:48-3:49
+          integer 2: Int @3:48-3:49
   bind %1 @4:9-4:10
     integer 1: UInt @4:19-4:20
   expression

@@ -186,10 +186,10 @@ struct ReturnTests {
               \(printBool("%2.2"))
               return
             }
-            func "pick(_: Bool, _: Trio, _: Trio)"(_: Bool, _: Trio, _: Trio) -> Trio {
-              param %0 first: Bool @1:1-1:1
-              param %1 t: Trio @1:1-1:1
-              param %2 u: Trio @1:1-1:1
+            func "pick(_: Bool, _: Trio, _: Trio)"(_: &Bool, _: &Trio, _: &Trio) -> Trio {
+              param %0 first: &Bool @1:1-1:1
+              param %1 t: &Trio @1:1-1:1
+              param %2 u: &Trio @1:1-1:1
             bb0:
               branch read %0 @1:1-1:2, bb1, bb2
             bb1:
@@ -215,8 +215,8 @@ struct ReturnTests {
               \(printBool("%0.2"))
               return
             }
-            func "make(_: Bool)"(_: Bool) -> Trio {
-              param %0 flag: Bool @1:1-1:1
+            func "make(_: Bool)"(_: &Bool) -> Trio {
+              param %0 flag: &Bool @1:1-1:1
               var %1 t: Trio @1:1-1:1
             bb0:
               %1.0 @1:1-1:2 = operand 5 @1:1-1:2

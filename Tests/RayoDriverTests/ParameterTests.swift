@@ -15,6 +15,19 @@ struct ParameterTests {
         #expect(run(source) == CommandResult(exitCode: 0, output: "7\n20\n", errors: ""))
     }
 
+    @Test func `a lent argument reaches the function that borrows it, and a bare one the function that owns it`() {
+        let source = """
+            func main() {
+                let a = 1
+                show(a)
+                show(&a)
+            }
+            func show(_ n: Int) { print(n + 10) }
+            func show(_ n: &Int) { print(n + 20) }
+            """
+        #expect(run(source) == CommandResult(exitCode: 0, output: "11\n21\n", errors: ""))
+    }
+
     @Test("functions recurse, directly and through each other, in debug and in release",
           arguments: [["--debug"], ["--release"]])
     func recursion(mode: [String]) {

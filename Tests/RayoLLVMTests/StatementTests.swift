@@ -200,20 +200,24 @@ struct OwnershipStatementTests {
             bb0:
               %0 @1:1-1:2 = operand 4 @1:1-1:2
               begin a0 read %0 @1:1-1:2
-              _ = call builtin "print(_: Int)"(a0) @1:1-1:2
+              _ = call "show(_: &Int)"(a0) @1:1-1:2
               end a0
               %0 @1:1-1:2 = operand 5 @1:1-1:2
               begin a1 modify %0 @1:1-1:2
-              _ = call "show(_: Int)"(a1) @1:1-1:2
+              _ = call "change(_: mutable &Int)"(a1) @1:1-1:2
               end a1
               return
             }
-            func "show(_: Int)"(_: mutable Int) -> Void {
-              param %0 n: mutable Int @1:1-1:1
+            func "show(_: &Int)"(_: &Int) -> Void {
+              param %0 n: &Int @1:1-1:1
             bb0:
-              begin a0 read %0 @1:1-1:2
-              _ = call builtin "print(_: Int)"(a0) @1:1-1:2
-              end a0
+              \(printInt("%0"))
+              return
+            }
+            func "change(_: mutable &Int)"(_: mutable &Int) -> Void {
+              param %0 n: mutable &Int @1:1-1:1
+            bb0:
+              \(printInt("%0"))
               return
             }
             """

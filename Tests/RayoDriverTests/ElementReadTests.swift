@@ -16,10 +16,10 @@ struct ElementReadTests {
                 let e = Enemy(slots: [5, 6], party: [Stats(hp: 7), Stats(hp: 8)])
                 print(e.slots[1])
                 print(e.party[i - 1].hp)
-                print(sum(a))
+                print(sum(&a))
                 if a[1] > 15 { print(true) }
             }
-            func sum(_ a: [3 of Int]) -> Int { a[0] + a[1] + a[2] }
+            func sum(_ a: &[3 of Int]) -> Int { a[0] + a[1] + a[2] }
             struct Stats(var hp: Int)
             struct Enemy(var slots: [2 of Int], var party: [2 of Stats])
             """

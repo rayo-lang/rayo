@@ -10,24 +10,24 @@ func main() {
 
     // The goblin sizes the troll up on copies, which leave the troll as it is: the troll's health after one blow,
     // how many such blows it can take, and how many once its armor is cracked.
-    let blow = hit(from: goblin, on: troll, in: 1)
+    let blow = hit(from: &goblin, on: &troll, in: 1)
     var left = troll.stats.hp
     left -= blow
     print(left)
     print(hitsToFell(troll.stats.hp, by: blow))
     var cracked = copy troll
     cracked.stats.armor /= 2
-    print(hitsToFell(troll.stats.hp, by: hit(from: goblin, on: cracked, in: 1)))
+    print(hitsToFell(troll.stats.hp, by: hit(from: &goblin, on: &cracked, in: 1)))
 
     // Lighter armor lets the troll's hits land harder, so the copy falls where the goblin won.
     var light = copy goblin
     light.stats.armor = 4
-    print(fight(between: goblin, and: troll))
-    print(fight(between: light, and: troll))
+    print(fight(between: &goblin, and: &troll))
+    print(fight(between: &light, and: &troll))
 }
 
 // Fights `goblin` and `troll` until one of them falls, and gives the number of rounds the fight took.
-func fight(between goblin: Enemy, and troll: Enemy) -> Int {
+func fight(between goblin: &Enemy, and troll: &Enemy) -> Int {
     // The fight changes copies of its fighters, and leaves the ones it is given as they are.
     var g = copy goblin
     var t = copy troll
@@ -51,13 +51,13 @@ func fight(between goblin: Enemy, and troll: Enemy) -> Int {
         }
 
         // The goblin hits first, and a troll it fells ends the fight without hitting back.
-        let byGoblin = hit(from: g, on: t, in: round)
+        let byGoblin = hit(from: &g, on: &t, in: round)
         print(-byGoblin)
         t.stats.hp -= byGoblin
         print(t.stats.hp)
         if t.stats.hp <= 0 { break }
 
-        let byTroll = hit(from: t, on: g, in: round)
+        let byTroll = hit(from: &t, on: &g, in: round)
         print(-byTroll)
         fatigue += byTroll
         g.stats.hp -= byTroll
@@ -82,7 +82,7 @@ func fight(between goblin: Enemy, and troll: Enemy) -> Int {
 }
 
 // Gives the damage that `attacker`'s hit in `round` deals `defender`.
-func hit(from attacker: Enemy, on defender: Enemy, in round: Int) -> Int {
+func hit(from attacker: &Enemy, on defender: &Enemy, in round: Int) -> Int {
     // The hit lands twice as hard on every third round, and on every round once the attacker is enraged.
     var damage = attacker.strength
     if round % 3 == 0 || attacker.enraged { damage *= 2 }

@@ -31,8 +31,8 @@ struct ExpressionChecker {
         return settled(value, expecting: expected)
     }
 
-    /// Checks `expr` on its own, leaving it to wait for its position's type where it is an untyped value, an array
-    /// literal, an implicit member, or an `if`.
+    /// Checks `expr` on its own, leaving it to wait for its position where it is an untyped value, an array literal,
+    /// an implicit member, an `if`, or a `&`.
     func value(of expr: Expr) -> CheckedValue? {
         switch expr.kind {
         // An integer literal is untyped until its position settles it.
@@ -86,6 +86,10 @@ struct ExpressionChecker {
                 .typed(CheckedExpr(kind: .consume($0.place), type: $0.type, range: expr.range))
             }
 
+        // A `&` lends the place it names, and waits for its position to say whether it takes the place lent.
+        case .reference(let lent):
+            place(lent, under: self).map { .waiting(LentPlace(place: $0.place, placeType: $0.type, range: expr.range)) }
+
         // An `if` read for its value gives the value of the branch that runs, so its branches' values wait for its
         // position as the `if` does.
         case .if(let ifExpr):
@@ -121,12 +125,22 @@ struct ExpressionChecker {
         }
     }
 
-    /// Makes `value` stand where a position expects the type `expected` names, reporting its mismatch where it can't.
+    /// Makes `value` stand where a position expects what `expected` names, reporting its mismatch where it can't, and
+    /// reporting it where it is given, without a `&`, to a parameter that borrows it.
     func fitted(_ value: CheckedExpr, to expected: Expectation) -> CheckedExpr? {
-        // A value that fits stands there as the fit gives it.
-        if let fitted = TypeFit.fitted(value, to: expected.type) { return fitted }
-        reportMismatch(of: value.type, at: value.range, expected)
-        return nil
+        guard let fitted = typeFitted(value, to: expected) else { return nil }
+        reportUnlent(fitted, to: expected)
+        return fitted
+    }
+
+    /// `value` as a value of the type `expected` names, or nil, with its mismatch reported, where it is of another
+    /// type.
+    func typeFitted(_ value: CheckedExpr, to expected: Expectation) -> CheckedExpr? {
+        guard let fitted = TypeFit.fitted(value, to: expected.type) else {
+            reportMismatch(of: value.type, at: value.range, expected)
+            return nil
+        }
+        return fitted
     }
 
     /// Whether a value of `type`, which the source gives at `range` but no expression holds, such as the Void a

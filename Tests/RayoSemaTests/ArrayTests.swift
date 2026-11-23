@@ -4,10 +4,10 @@ import RayoDiagnostics
 /// A struct, and functions that take and give arrays, which the bodies below use.
 private let declarations = """
     struct Hit(var damage: Int)
-    func sum(_ a: [2 of Int]) -> Int { 0 }
-    func none(_ a: [0 of Bool]) {}
-    func pick(_ a: [2 of Int]) {}
-    func pick(_ a: [3 of Int]) {}
+    func sum(_ a: &[2 of Int]) -> Int { 0 }
+    func none(_ a: &[0 of Bool]) {}
+    func pick(_ a: &[2 of Int]) {}
+    func pick(_ a: &[3 of Int]) {}
     func made() -> [2 of Int] { .init(repeating: 1) }
     func returned() -> [2 of Bool] { return .init(repeating: true) }
     struct Holder(var hits: [2 of Hit])
@@ -15,9 +15,9 @@ private let declarations = """
 
 struct ArrayTypeTests {
     @Test(arguments: [
-        "func f(_ a: [2 of Int]) -> [2 of Int] { copy a }",
-        "func f(_ a: [0 of Bool]) -> [0 of Bool] { copy a }",
-        "func f(_ a: [2 of [3 of S]]) {}\nstruct S(var a: [4 of Bool], let b: [1 of [0 of Int]])",
+        "func f(_ a: &[2 of Int]) -> [2 of Int] { copy a }",
+        "func f(_ a: &[0 of Bool]) -> [0 of Bool] { copy a }",
+        "func f(_ a: &[2 of [3 of S]]) {}\nstruct S(var a: [4 of Bool], let b: [1 of [0 of Int]])",
         "func f() {\n    var a: [2 of S]\n    let b: [1 of Int]\n}\nstruct S",
     ])
     func `an array type may be a local's, a parameter's, a result's, a field's or an element's`(source: String) {
@@ -25,16 +25,16 @@ struct ArrayTypeTests {
     }
 
     @Test(arguments: [
-        ("func f(_ a: [2 of Q]) {}", ErrorCode.notAType(name: "Q"), "Q"),
-        ("func f(_ a: [2 of ()]) {}", .voidElement(type: "Void"), "()"),
-        ("func f(_ a: [2 of [1 of Void]]) {}", .voidElement(type: "Void"), "Void"),
-        ("func f(_ a: [9223372036854775808 of Bool]) {}", .arrayTooLarge, "[9223372036854775808 of Bool]"),
-        ("func f(_ a: [1152921504606846976 of Int]) {}", .arrayTooLarge, "[1152921504606846976 of Int]"),
+        ("func f(_ a: &[2 of Q]) {}", ErrorCode.notAType(name: "Q"), "Q"),
+        ("func f(_ a: &[2 of ()]) {}", .voidElement(type: "Void"), "()"),
+        ("func f(_ a: &[2 of [1 of Void]]) {}", .voidElement(type: "Void"), "Void"),
+        ("func f(_ a: &[9223372036854775808 of Bool]) {}", .arrayTooLarge, "[9223372036854775808 of Bool]"),
+        ("func f(_ a: &[1152921504606846976 of Int]) {}", .arrayTooLarge, "[1152921504606846976 of Int]"),
         (
             "func f() {\n    var a: [2 of [576460752303423488 of Int]]\n}",
             .arrayTooLarge, "[2 of [576460752303423488 of Int]]",
         ),
-        ("func f(_ a: [2 of S]) {}\nstruct S(var a: [576460752303423488 of Int])", .arrayTooLarge, "[2 of S]"),
+        ("func f(_ a: &[2 of S]) {}\nstruct S(var a: [576460752303423488 of Int])", .arrayTooLarge, "[2 of S]"),
         ("struct S(var a: Int, let b: [1152921504606846976 of Int])", .arrayTooLarge, "[1152921504606846976 of Int]"),
     ])
     func `an array's element type names a type that isn't Void, and its size in bytes fits in an Int`(
@@ -54,7 +54,7 @@ struct ArrayTypeTests {
             func main() {}
             struct S(var a: [576460752303423488 of Int], var b: [576460752303423488 of Int])
             struct T(var s: S)
-            func f(_ t: T) {}
+            func f(_ t: &T) {}
             """
         let reported = diagnostics(source)
         #expect(reported.map(\.code) == [.structTooLarge(name: "S")])
@@ -93,13 +93,13 @@ struct ArrayTypeTests {
 
 struct ArrayLiteralTests {
     @Test(arguments: [
-        "let a: [2 of Int] = [1, -2]\n_ = sum(a)",
-        "_ = sum([1, 2])",
-        "let a: [0 of Bool] = []\nnone(a)\nnone([])",
+        "let a: [2 of Int] = [1, -2]\n_ = sum(&a)",
+        "_ = Holder(hits: [Hit(damage: 1), Hit(damage: 2)])",
+        "let a: [0 of Bool] = []\nnone(&a)",
         "var a = [[1, 2], [3, 4]]\n_ = a\na = [[5, 6], [7, 8]]\n_ = a",
         "let h = Hit(damage: 1)\n_ = [h, Hit(damage: 2)]",
         "let n = 3\n_ = [1, n]",
-        "pick([1, 2, 3])",
+        "let a: [3 of Int] = [1, 2, 3]\npick(&a)",
         "let a: [2 of UInt] = [1, 2]\n_ = a\nlet b: [1 of [2 of UInt]] = [[3, 4]]\n_ = b",
         "_ = [if true { 1 } else { 2 }, 3]",
     ])
@@ -145,8 +145,8 @@ struct ArrayInitializerTests {
     @Test(arguments: [
         "var a: [3 of Int] = .init(repeating: 0)\n_ = a",
         "let a: [2 of UInt] = .init(repeating: 7)\n_ = a",
-        "_ = sum(.init(repeating: 1))",
-        "none(.init(repeating: true))",
+        "let a: [2 of Int] = .init(repeating: 1)\n_ = sum(&a)",
+        "let a: [0 of Bool] = .init(repeating: true)\nnone(&a)",
         "var a: [2 of Int] = [1, 2]\n_ = a\na = .init(repeating: 3)\n_ = a",
         "_ = Holder(hits: .init(repeating: Hit(damage: 1)))",
         "let a: [2 of [2 of Int]] = [.init(repeating: 1), [2, 3]]\n_ = a",
@@ -184,7 +184,10 @@ struct ArrayInitializerTests {
         ("let a: [2 of Int] = .make(repeating: 0)", "2:21: error[E0270]: [2 of Int] has no member 'make'"),
         ("let a: [2 of Int] = .init(repeating: true)", "2:38: error[E0213]: expected Int, found Bool"),
         ("let a: [2 of UInt] = .init(repeating: -1)", "2:39: error[E0217]: the literal doesn't fit in a UInt"),
-        ("pick(.init(repeating: 1))", "2:1: error[E0260]: the call fits more than one 'pick'"),
+        (
+            "pick(.init(repeating: 1))",
+            "2:6: error[E0286]: lending a value that no local holds isn't supported; put it in a 'let' and lend that",
+        ),
         ("print(.init(repeating: 1))", "2:7: error[E0267]: the implicit member '.init' needs a type"),
     ])
     func `.init(repeating:) with no array type, or with the wrong member, label or value, is an error`(

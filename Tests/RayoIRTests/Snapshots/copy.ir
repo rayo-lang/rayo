@@ -4,7 +4,7 @@ struct Hit {
 
 main "main()"
 
-init "Hit(damage: Int)"(damage: owned Int) -> Hit
+init "Hit(damage: Int)"(damage: Int) -> Hit
 
 func "main()"() -> Void {
   let %0 a: Hit @2:9-2:10

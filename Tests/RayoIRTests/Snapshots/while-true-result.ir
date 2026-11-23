@@ -5,8 +5,7 @@ func "main()"() -> Void {
 bb0:
   declare %0
   %0 @2:11-2:23 = call "firstOver(_: Int)"(2) @2:11-2:23
-  begin a0 read %0 @2:11-2:23
-  _ = call builtin "print(_: Int)"(a0) @2:5-2:24
+  _ = call builtin "print(_: Int)"(read %0 @2:11-2:23) @2:5-2:24
   return
 }
 

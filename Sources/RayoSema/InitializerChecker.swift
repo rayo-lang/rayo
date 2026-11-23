@@ -45,7 +45,7 @@ struct InitializerChecker {
 
         // Match each argument to its field, and check its value against the field's type.
         let given = fieldsGiven(by: arguments, among: fields, of: id)
-        let values = values(of: arguments, givenTo: given, among: fields)
+        let values = values(of: arguments, givenTo: given, among: fields, of: id)
         let hasEveryField = reportLeftOut(of: fields, given: given, in: range)
         let isInOrder = reportOutOfOrder(given, by: arguments, among: fields)
 
@@ -106,20 +106,21 @@ struct InitializerChecker {
         errors.report(code, at: argument.range)
     }
 
-    /// Checks each argument's value against the type of the field it gives; the struct takes the value as its own.
-    /// Returns the checked values, or nil when any value has a mistake or gives no field.
+    /// Checks each argument's value against the type of the field it gives, of the struct `id`; the struct takes the
+    /// value as its own. Returns the checked values, or nil when any value has a mistake or gives no field.
     private func values(
-        of arguments: [some CallArgument], givenTo given: [GivenField], among fields: [Field],
+        of arguments: [some CallArgument], givenTo given: [GivenField], among fields: [Field], of id: StructID,
     ) -> [CheckedExpr]? {
         // Check every argument, so each one's errors are reported, before any failure fails the call.
         var values: [CheckedExpr] = []
+        let owner = ArgumentParameter(callee: id.name, convention: .owned)
         for (argument, given) in zip(arguments, given) {
             // An argument that gives no field was reported, and its value is checked on its own for its own errors.
             guard let field = given.field else {
                 argument.reportErrors(by: expressions)
                 continue
             }
-            let expected = Expectation(fields[field].type) {
+            let expected = Expectation(fields[field].type, parameter: owner) {
                 .fieldTypeMismatch(field: fields[field].name, expected: $0, found: $1)
             }
             // A value that failed, or that has another type than its field's, was reported.

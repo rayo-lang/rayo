@@ -19,7 +19,7 @@ public enum CheckedArgument: Sendable {
     /// The place that `value`, passed to a mutable parameter, names. Checking must report a call that passes a mutable
     /// parameter anything but a place, `copy x` among them, before it makes the call's arguments.
     private static func place(passedAs value: CheckedExpr) -> CheckedPlace {
-        // Checking rejects a `mutable` parameter that the source writes, and no built-in or initializer has one, so
+        // Checking rejects a `mutable &` parameter that the source writes, and no built-in or initializer has one, so
         // no checked call reaches a mutable parameter.
         guard case .place(let place) = value.kind else {
             preconditionFailure("only a place is passed to a mutable parameter")

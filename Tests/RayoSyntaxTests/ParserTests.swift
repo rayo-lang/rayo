@@ -42,7 +42,7 @@ struct ParserErrorTests {
         #expect(errors("func f() {\n    print(\"}\")\n    print(1)\n}") == [.unexpectedCharacter(character: "\"")])
     }
 
-    @Test(arguments: ["self", "mutable", "owned", "mutating", "ref"])
+    @Test(arguments: ["self", "mutable", "mutating", "ref"])
     func `a reserved word names nothing`(word: String) {
         let found = FoundToken.token(word)
         #expect(errors("func f() { let \(word) = 1 }") == [.missingBindingName(found: found)])
@@ -54,14 +54,34 @@ struct ParserErrorTests {
         #expect(errors("func f(x: Int) -> \(word) { x }") == [.missingType(found: found)])
     }
 
-    @Test func `a convention needs a type after it`() {
-        #expect(errors("func f(x: owned) {}") == [.missingType(found: .token(")"))])
+    @Test(arguments: [
+        ("func f(x: &) {}", ErrorCode.missingType(found: .token(")"))),
+        ("func f(x: mutable &) {}", .missingType(found: .token(")"))),
+        ("func f(x: mutable Int) {}", .missingType(found: .token("mutable"))),
+        ("func f(x: owned Int) {}", .unclosedParameters(found: .token("Int"))),
+    ])
+    func `a reference parameter's '&' needs a type after it, and 'mutable' needs a '&'`(
+        source: String, expected: ErrorCode,
+    ) {
+        #expect(errors(source) == [expected])
     }
 
-    @Test func `a '&' is reported wherever it stands, since nothing takes it`() {
-        #expect(errors("func f() {\n    g(&x)\n}") == [.missingExpression(found: .token("&"))])
-        #expect(errors("func f() {\n    x = &y\n}") == [.missingExpression(found: .token("&"))])
-        #expect(errors("func f() {\n    a & b\n}") == [.unendedStatement(found: .token("&"))])
+    @Test(arguments: [
+        "func f() { g(&e) }", "func f() { g(&e.stats.hp, by: &a[i].n) }", "func f() {\n    g(&e\n        .hp)\n}",
+    ])
+    func `'&' takes a name and the members and elements after it`(source: String) {
+        #expect(errors(source) == [])
+    }
+
+    @Test(arguments: [
+        ("func f() { g(&) }", ErrorCode.missingLentName(found: .token(")"))),
+        ("func f() { g(&(e).hp) }", .missingLentName(found: .token("("))),
+        ("func f() { g(&1) }", .missingLentName(found: .token("1"))),
+        ("func f() { g(mutable &e) }", .missingExpression(found: .token("mutable"))),
+        ("func f() {\n    a & b\n}", .unendedStatement(found: .token("&"))),
+    ])
+    func `'&' needs a name first, and stands only before a place`(source: String, expected: ErrorCode) {
+        #expect(errors(source) == [expected])
     }
 
     @Test("an unclosed block is reported at the end of the file")

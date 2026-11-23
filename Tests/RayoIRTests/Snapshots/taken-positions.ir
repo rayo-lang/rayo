@@ -4,7 +4,7 @@ struct Hit {
 
 main "main()"
 
-init "Hit(damage: Int)"(damage: owned Int) -> Hit
+init "Hit(damage: Int)"(damage: Int) -> Hit
 
 func "main()"() -> Void {
   let %0 a: Hit @2:9-2:10
@@ -42,19 +42,19 @@ bb3:
   declare %7
   branch read %2 @10:13-10:14, bb4, bb5
 bb4:
-  %7 @10:10-10:31 = operand read %5 @10:17-10:18 @10:17-10:18
+  %7 @10:10-10:33 = operand read %5 @10:17-10:19 @10:17-10:19
   goto bb6
 bb5:
-  %7 @10:10-10:31 = operand read %4 @10:28-10:29 @10:28-10:29
+  %7 @10:10-10:33 = operand read %4 @10:29-10:31 @10:29-10:31
   goto bb6
 bb6:
-  begin a0 read %7 @10:10-10:31
-  _ = call "show(_: Hit)"(a0) @10:5-10:32
+  begin a0 read %7 @10:10-10:33
+  _ = call "show(_: &Hit)"(a0) @10:5-10:34
   return
 }
 
-func "show(_: Hit)"(_: Hit) -> Void {
-  param %0 h: Hit @12:13-12:14
+func "show(_: &Hit)"(_: &Hit) -> Void {
+  param %0 h: &Hit @12:13-12:14
 bb0:
   return
 }

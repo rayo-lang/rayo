@@ -11,7 +11,9 @@ extension Argument: CallArgument {
         expressions.value(of: value)
     }
 
+    /// Reports the errors the value gives on its own, and not those its parameter would have settled, such as an
+    /// implicit member's want of a type, or a `&` given to no parameter that borrows.
     func reportErrors(by expressions: ExpressionChecker) {
-        _ = expressions.check(value)
+        expressions.reportSettlingErrors(of: [expressions.value(of: value)])
     }
 }

@@ -1,4 +1,7 @@
-/// How a parameter takes its argument, when it doesn't borrow it.
+/// How a parameter takes its argument, when it doesn't own it: the reference its type is written as.
 public enum ParamConvention: String, Sendable {
-    case mutable, owned
+    /// `&T`, which borrows the argument.
+    case borrowed = "&"
+    /// `mutable &T`, which borrows it for change.
+    case mutable = "mutable &"
 }

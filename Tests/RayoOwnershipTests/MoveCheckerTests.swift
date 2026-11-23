@@ -24,15 +24,15 @@ struct MoveCheckerTests {
     }
 
     @Test(arguments: [
-        ("owned", [Diagnostic]()),
-        ("mutable", [Diagnostic(.moveFromParameter(name: "n"), at: at(1))]),
+        ("", [Diagnostic]()),
+        ("mutable &", [Diagnostic(.moveFromParameter(name: "n"), at: at(1))]),
     ])
     func `a move out of an owned parameter is allowed, and one out of a mutable parameter is reported`(
-        convention: String, expected: [Diagnostic],
+        reference: String, expected: [Diagnostic],
     ) throws {
         let function = (name: "f(_: Int)", text: """
-            func "f(_: Int)"(_: \(convention) Int) -> Void {
-              param %0 n: \(convention) Int @1:1-1:1
+            func "f(_: Int)"(_: \(reference)Int) -> Void {
+              param %0 n: \(reference)Int @1:1-1:1
             bb0:
               _ = operand move %0 @2:1-2:1 @1:1-1:1
               return
@@ -112,9 +112,9 @@ struct MoveCheckerTests {
 /// Ints.
 private func takingIntAndShot(_ blocks: String, result: String = "Void") -> (name: String, text: String) {
     let text = """
-        func "f(_: Int, _: Shot)"(_: Int, _: Shot) -> \(result) {
-          param %0 n: Int @1:1-1:1
-          param %1 p: Shot @1:1-1:1
+        func "f(_: Int, _: Shot)"(_: &Int, _: &Shot) -> \(result) {
+          param %0 n: &Int @1:1-1:1
+          param %1 p: &Shot @1:1-1:1
           var %2 v: Int @1:1-1:1
           var %3 a: [2 of Hit] @1:1-1:1
           temp %4: UInt

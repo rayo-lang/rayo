@@ -78,24 +78,25 @@ struct SourceRangeTests {
         let source = """
             func main() {
                 let e = Enemy(hp: 1)
-                print(e.hp)
-                print(e.hp)
+                show(&e.hp)
+                show(&e.hp)
             }
+            func show(_ n: &Int) {}
             struct Enemy(let hp: Int)
             """
         // The struct declares its primary initializer ahead of every function the source writes.
         let main = try lowered(source).body(at: 1)
 
-        // The two prints follow the declaration and its value, and each begins an access to `e.hp` where it lies.
+        // The two calls follow the declaration and its value, and each begins an access to `e.hp` where it lies.
         guard case .begin(_, let first) = main.blocks[0].statements[2],
               case .begin(_, let second) = main.blocks[0].statements[4]
         else {
-            Issue.record("the two prints don't begin an access as statements 3 and 5 of \(main.blocks[0])")
+            Issue.record("the two calls don't begin an access as statements 3 and 5 of \(main.blocks[0])")
             return
         }
         #expect(first.place == second.place)
         #expect(Set([first.place, second.place]).count == 1)
-        #expect(text(of: first.range, in: source) == "e.hp")
+        #expect(text(of: first.range, in: source) == "&e.hp")
         #expect(first.range != second.range)
     }
 

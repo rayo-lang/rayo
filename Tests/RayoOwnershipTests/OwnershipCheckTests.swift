@@ -172,8 +172,8 @@ private func longFunction(rounds: Int) -> (name: String, text: String) {
 /// The function `f(_: Int)`, made of `blocks`, whose one local is `n` (`%0`), a borrowed Int parameter.
 private func takingInt(_ blocks: String) -> (name: String, text: String) {
     let text = """
-        func "f(_: Int)"(_: Int) -> Void {
-          param %0 n: Int @1:1-1:1
+        func "f(_: Int)"(_: &Int) -> Void {
+          param %0 n: &Int @1:1-1:1
         \(blocks)
         }
         """

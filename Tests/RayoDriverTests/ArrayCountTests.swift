@@ -12,8 +12,8 @@ struct ArrayCountTests {
                 let none: [0 of Int] = []
                 print(a.count)
                 print(none.count)
-                print(length(of: a))
-                print(lengthOfNone(none))
+                print(length(of: &a))
+                print(lengthOfNone(&none))
                 let e = Enemy(slots: [5, 6], none: [])
                 print(e.slots.count)
                 print(e.none.count)
@@ -26,8 +26,8 @@ struct ArrayCountTests {
                 print(make().count)
                 print(makeNone().count)
             }
-            func length(of a: [3 of Int]) -> UInt { a.count }
-            func lengthOfNone(_ a: [0 of Int]) -> UInt { a.count }
+            func length(of a: &[3 of Int]) -> UInt { a.count }
+            func lengthOfNone(_ a: &[0 of Int]) -> UInt { a.count }
             func make() -> [5 of Bool] {
                 print(7)
                 return [true, true, false, false, true]

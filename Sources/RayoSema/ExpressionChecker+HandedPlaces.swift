@@ -13,6 +13,53 @@ extension ExpressionChecker {
         }
     }
 
+    /// Reports `value` where `expected` names a parameter that borrows its argument, since a call lends such a
+    /// parameter a place with `&`. A place rooted in a local is reported with the `&` to write, even where its type
+    /// is implicitly copyable, since a copy is a value, and the parameter takes the place; the call still lends the
+    /// place, so that error leaves the body's meaning whole. Any other value, such as a call's result or a copy, is
+    /// reported as unsupported, since rayoc lends no value that no local holds.
+    func reportUnlent(_ value: CheckedExpr, to expected: Expectation) {
+        guard let parameter = expected.parameter, parameter.convention == .borrowed else { return }
+        // A value that stands here is no `if`, since each branch of an `if` stands in its place on its own.
+        guard let handed = value.handedPlaces.first else {
+            file.errors.report(.unsupportedLentValue, at: value.range)
+            return
+        }
+        let code = ErrorCode.unlentPlace(name: parameter.callee, type: typeName(of: value.type),
+                                         place: sourceName(of: handed))
+        file.errors.reportKeepingMeaning(code, at: handed.place.range)
+    }
+
+    /// `lent`, a `&` of a place, as it stands where a position expects what `expected` names. The argument of a
+    /// parameter that borrows takes the place itself, and checks its type as it would the value's. Reports the `&`
+    /// anywhere else.
+    func lent(_ lent: LentPlace, to expected: Expectation) -> CheckedExpr? {
+        // Only a call's argument takes a reference.
+        guard let parameter = expected.parameter else {
+            file.errors.report(.unsupportedReference, at: lent.range)
+            return nil
+        }
+
+        let place = CheckedExpr(kind: .place(lent.place), type: lent.placeType, range: lent.range)
+        return switch parameter.convention {
+        case .borrowed: typeFitted(place, to: expected)
+        case .owned: reportReference(lent, toOwning: parameter, expected)
+        // Checking leaves a `mutable &` parameter that the source writes without a type, and no built-in or
+        // initializer takes its argument for change, so no argument stands where one is expected.
+        case .mutable: preconditionFailure("no parameter that checking declares borrows its argument for change")
+        }
+    }
+
+    /// Reports `lent`, given to `parameter`, which owns its argument of the type `expected` names, and returns nil.
+    /// Nothing written says whether the call copies the place's value or moves it, so the argument fails.
+    private func reportReference(
+        _ lent: LentPlace, toOwning parameter: ArgumentParameter, _ expected: Expectation,
+    ) -> CheckedExpr? {
+        file.errors.report(.referenceToOwnedParameter(name: parameter.callee, type: typeName(of: expected.type)),
+                           at: lent.range)
+        return nil
+    }
+
     /// Reports each place that `value` hands the `ref let` called `binding` in a local out of scope here: one that a
     /// branch of an `if` declares, which ends with the branch while the `ref let` lives on.
     func reportEndedPlaces(of value: CheckedExpr, referredToBy binding: String) {

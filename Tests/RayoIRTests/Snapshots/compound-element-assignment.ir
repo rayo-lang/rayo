@@ -27,8 +27,7 @@ bb0:
   declare %7
   %7 @3:31-3:38 = call "value()"() @3:31-3:38
   %0[%3][%5] @3:5-3:27 = add checked read %0[%3][%5] @3:5-3:27, read %7 @3:31-3:38 @3:5-3:27
-  begin a0 read %0[1][0] @4:11-4:21
-  _ = call builtin "print(_: Int)"(a0) @4:5-4:22
+  _ = call builtin "print(_: Int)"(read %0[1][0] @4:11-4:21) @4:5-4:22
   return
 }
 

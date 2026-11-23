@@ -167,8 +167,8 @@ public struct IRParser: ~Copyable {
         return (name, parameters)
     }
 
-    /// Reads `label: Type`, with `_` for no label, and the type after `owned` or `mutable` where the parameter
-    /// doesn't borrow.
+    /// Reads `label: Type`, with `_` for no label, and the type after `&` or `mutable &` where the parameter borrows
+    /// its argument.
     private mutating func parameter() throws(IRTextError) -> FunctionParameter {
         let label = try word()
         try expect(":")

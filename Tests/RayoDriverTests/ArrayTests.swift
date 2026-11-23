@@ -12,35 +12,36 @@ struct ArrayTests {
         let source = """
             func main() {
                 let ints: [2 of Int] = [1, -2]
-                let kept = relayInts(ints)
+                let kept = relayInts(&ints)
                 let bools = [true, false, true]
                 let copied = copy bools
-                let returned = relayBools(bools)
+                let returned = relayBools(&bools)
                 let hits = [Hit(damage: 3), Hit(damage: 4)]
                 let grid = [[1, 2, 3], [4, 5, 6]]
                 var board = Board(grid: grid, hits: hits, flags: copied)
                 let moved = consume board.grid
-                board.grid = relayGrid(moved)
+                board.grid = relayGrid(&moved)
                 let none: [0 of Int] = []
-                _ = relayNone(none)
-                _ = relayNone([])
-                print(count(of: board, kept, returned))
+                _ = relayNone(&none)
+                let empty: [0 of Int] = []
+                _ = relayNone(&empty)
+                print(count(of: &board, &kept, &returned))
             }
-            func relayInts(_ a: [2 of Int]) -> [2 of Int] { copy a }
-            func relayBools(_ a: [3 of Bool]) -> [3 of Bool] {
+            func relayInts(_ a: &[2 of Int]) -> [2 of Int] { copy a }
+            func relayBools(_ a: &[3 of Bool]) -> [3 of Bool] {
                 print(3)
                 return copy a
             }
-            func relayGrid(_ a: [2 of [3 of Int]]) -> [2 of [3 of Int]] {
+            func relayGrid(_ a: &[2 of [3 of Int]]) -> [2 of [3 of Int]] {
                 print(6)
                 let b = copy a
                 return b
             }
-            func relayNone(_ a: [0 of Int]) -> [0 of Int] {
+            func relayNone(_ a: &[0 of Int]) -> [0 of Int] {
                 print(0)
                 return copy a
             }
-            func count(of board: Board, _ ints: [2 of Int], _ bools: [3 of Bool]) -> Int { 7 }
+            func count(of board: &Board, _ ints: &[2 of Int], _ bools: &[3 of Bool]) -> Int { 7 }
             struct Hit(var damage: Int)
             struct Board(var grid: [2 of [3 of Int]], let hits: [2 of Hit], var flags: [3 of Bool])
             """
@@ -62,9 +63,9 @@ struct ArrayTests {
                 print(a[0] + a[99999])
                 print(hits[0][0].damage + hits[999][99].damage)
             }
-            func relay(_ a: [100000 of Int]) -> [100000 of Int] { copy a }
-            func relayAll(_ a: [100000 of [2 of Hit]]) -> [100000 of [2 of Hit]] { relay(copy a) }
-            func relay(_ a: [100000 of [2 of Hit]]) -> [100000 of [2 of Hit]] { copy a }
+            func relay(_ a: &[100000 of Int]) -> [100000 of Int] { copy a }
+            func relayAll(_ a: &[100000 of [2 of Hit]]) -> [100000 of [2 of Hit]] { relay(&a) }
+            func relay(_ a: &[100000 of [2 of Hit]]) -> [100000 of [2 of Hit]] { copy a }
             struct Hit(var damage: Int, let crit: Bool)
             """
         #expect(run(source, options: mode) == CommandResult(exitCode: 0, output: "0\n2\n4\n", errors: ""))
@@ -74,7 +75,7 @@ struct ArrayTests {
 /// A function that prints each element of an array of three Ints, which the program below uses.
 private let show = """
 
-    func show(_ a: [3 of Int]) {
+    func show(_ a: &[3 of Int]) {
         var i: UInt = 0
         while i < a.count {
             print(a[i])
@@ -88,16 +89,17 @@ struct FilledArrayTests {
     func `.init(repeating:) fills arrays of Ints, Bools, structs and arrays wherever an array type is expected`(
         mode: [String],
     ) {
-        // Each array is filled where a local's annotation, an argument, a `return`, an assignment, a field's argument
-        // or an outer array expects it, and each of its elements is printed. `relayFlags` and `made` each print their
-        // array's count as they run, so the run shows each was called.
+        // Each array is filled where a local's annotation, a `return`, an assignment, a field's argument or an outer
+        // array expects it, and each of its elements is printed. `relayFlags` and `made` each print their array's
+        // count as they run, so the run shows each was called.
         let source = """
             func main() {
                 var ints: [3 of Int] = .init(repeating: 7)
-                show(ints)
+                show(&ints)
                 ints = .init(repeating: -1)
-                show(ints)
-                let flags = relayFlags(.init(repeating: true))
+                show(&ints)
+                let given: [2 of Bool] = .init(repeating: true)
+                let flags = relayFlags(&given)
                 print(flags[0])
                 print(flags[1])
                 let hit = Hit(damage: 3)
@@ -109,8 +111,8 @@ struct FilledArrayTests {
                 let grids: [2 of [2 of [3 of Int]]] = .init(repeating: .init(repeating: .init(repeating: 5)))
                 var i: UInt = 0
                 while i < grids.count {
-                    show(grids[i][0])
-                    show(grids[i][1])
+                    show(&grids[i][0])
+                    show(&grids[i][1])
                     i += 1
                 }
                 let none: [0 of Hit] = .init(repeating: hit)
@@ -123,7 +125,7 @@ struct FilledArrayTests {
                 }
                 print(hit.damage)
             }
-            func relayFlags(_ a: [2 of Bool]) -> [2 of Bool] {
+            func relayFlags(_ a: &[2 of Bool]) -> [2 of Bool] {
                 print(2)
                 return copy a
             }

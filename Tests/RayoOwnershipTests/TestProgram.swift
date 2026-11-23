@@ -34,8 +34,8 @@ func program(of functions: [(name: String, text: String)], from stage: IRStage) 
         }
         main "\(functions[0].name)"
         \(functions.map(\.text).joined(separator: "\n"))
-        init "Shot(range: Int, hit: Hit)"(range: owned Int, hit: owned Hit) -> Shot
-        init "Hit(damage: Int)"(damage: owned Int) -> Hit
+        init "Shot(range: Int, hit: Hit)"(range: Int, hit: Hit) -> Shot
+        init "Hit(damage: Int)"(damage: Int) -> Hit
         """, from: stage)
 }
 
@@ -75,9 +75,9 @@ func storeShot(at column: Int? = nil) -> String {
 /// The functions that the tests' blocks call, which have no bodies. Each `change` may change its first argument, and
 /// the others borrow theirs.
 let callees = [
-    (name: "g(_: Int, _: Int)", text: #"func "g(_: Int, _: Int)"(_: Int, _: Int) -> Void"#),
-    (name: "take(_: Int, _: Hit)", text: #"func "take(_: Int, _: Hit)"(_: Int, _: Hit) -> Void"#),
-    (name: "double(_: Int)", text: #"func "double(_: Int)"(_: Int) -> Int"#),
-    (name: "change(_: Int, _: Int)", text: #"func "change(_: Int, _: Int)"(_: mutable Int, _: Int) -> Void"#),
-    (name: "change(_: Int, _: Hit)", text: #"func "change(_: Int, _: Hit)"(_: mutable Int, _: Hit) -> Void"#),
+    (name: "g(_: Int, _: Int)", text: #"func "g(_: Int, _: Int)"(_: &Int, _: &Int) -> Void"#),
+    (name: "take(_: Int, _: Hit)", text: #"func "take(_: Int, _: Hit)"(_: &Int, _: &Hit) -> Void"#),
+    (name: "double(_: Int)", text: #"func "double(_: Int)"(_: &Int) -> Int"#),
+    (name: "change(_: Int, _: Int)", text: #"func "change(_: Int, _: Int)"(_: mutable &Int, _: &Int) -> Void"#),
+    (name: "change(_: Int, _: Hit)", text: #"func "change(_: Int, _: Hit)"(_: mutable &Int, _: &Hit) -> Void"#),
 ]

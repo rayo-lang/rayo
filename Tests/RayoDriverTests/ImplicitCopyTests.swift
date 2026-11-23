@@ -23,9 +23,9 @@ struct ImplicitCopyTests {
                 print(e.hp + hps[0] + hps[1])
                 print(e.level)
                 print(e.alive)
-                print(hpOf(e))
+                print(hpOf(&e))
             }
-            func hpOf(_ e: Enemy) -> Int {
+            func hpOf(_ e: &Enemy) -> Int {
                 return e.hp
             }
             struct Enemy(var hp: Int, var level: UInt, var alive: Bool)
@@ -33,6 +33,33 @@ struct ImplicitCopyTests {
         #expect(run(source, options: mode) == CommandResult(
             exitCode: 0, output: "6\n3\nfalse\n15\n2\ntrue\n5\n", errors: "",
         ))
+    }
+
+    // Each parameter owns its copy, and changes it, while the caller's places keep their values and are used after
+    // the call.
+    @Test(arguments: [["--debug"], ["--release"]])
+    func `an Int, UInt or Bool place given to a parameter that owns it is copied, and stays usable`(mode: [String]) {
+        let source = """
+            func main() {
+                var hp = 5
+                let level: UInt = 2
+                let alive = true
+                print(spent(hp, level, alive))
+                print(hp)
+                print(level)
+                print(alive)
+                hp = 9
+                print(spent(hp, level, !alive))
+            }
+            func spent(_ hp: Int, _ level: UInt, _ alive: Bool) -> Int {
+                hp -= 1
+                level += 1
+                alive = !alive
+                if alive { return 0 }
+                return hp + Int(level)
+            }
+            """
+        #expect(run(source, options: mode) == CommandResult(exitCode: 0, output: "7\n5\n2\ntrue\n0\n", errors: ""))
     }
 
     // A `let`, a `var` and an assignment take an Int, a UInt or a Bool from a place that is used, and changed, after
@@ -57,9 +84,10 @@ struct ImplicitCopyTests {
                 print(r + s)
                 print(t)
                 print(alive)
-                print(hpOf(Stats(hp: 7)))
+                let stats = Stats(hp: 7)
+                print(hpOf(&stats))
             }
-            func hpOf(_ s: Stats) -> Int {
+            func hpOf(_ s: &Stats) -> Int {
                 let hp = s.hp
                 return hp
             }

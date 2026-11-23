@@ -46,8 +46,7 @@ bb9:
   depend %2 on a0
   goto bb10
 bb10:
-  begin a1 read %2 @7:15-7:19
-  _ = call builtin "print(_: Int)"(a1) @7:9-7:20
+  _ = call builtin "print(_: Int)"(read %2 @7:15-7:19) @7:9-7:20
   goto bb1
 bb11:
   goto bb10
@@ -96,8 +95,7 @@ bb1:
 bb2:
   return 2
 bb3:
-  begin a0 read %1 @16:10-16:45
-  _ = call "show(_: Int)"(a0) @16:5-16:46
+  _ = call "show(_: Int)"(read %1 @16:10-16:45) @16:5-16:46
   unreachable
 bb4:
   goto bb3
