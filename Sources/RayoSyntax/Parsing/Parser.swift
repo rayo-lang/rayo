@@ -64,7 +64,8 @@ package struct Parser: ~Copyable {
         for token in tokens[start..<position] {
             switch token.kind {
             case .punct(.lparen), .punct(.lbrace), .punct(.lbracket): depth += 1
-            case .punct(.rparen), .punct(.rbrace), .punct(.rbracket): depth -= 1
+            // A stray closer, which a statement's recovery skipped, closes nothing.
+            case .punct(.rparen), .punct(.rbrace), .punct(.rbracket): depth = max(depth - 1, 0)
             default: break
             }
         }

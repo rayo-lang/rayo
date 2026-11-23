@@ -73,8 +73,53 @@ extension Parser {
         try expect(.rparen, else: unclosed)
     }
 
+    /// Skips the rest of a declaration's header that failed, up to the `{` of a body. Where a `)` at this level comes
+    /// first, the skip goes past it, so a `{` inside the header's list isn't taken for the body.
+    mutating func skipHeader() {
+        if let ahead = closingParenthesisAhead() {
+            for _ in 0...ahead { advance() }
+        }
+        recover(upTo: [.lbrace])
+    }
+
     private mutating func skipSeparators() {
         while current.kind == .newline || current.isPunct(.semicolon) { advance() }
+    }
+
+    /// How many tokens past the current one the `)` at its level comes, or nil where the declaration ends first.
+    private func closingParenthesisAhead() -> Int? {
+        var depth = 0
+        var ahead = 0
+        while true {
+            switch peek(ahead).kind {
+            case .eof:
+                return nil
+
+            // A `)` outside the brackets ahead closes the one the parser is in.
+            case .punct(.rparen) where depth == 0:
+                return ahead
+
+            case .punct(.lparen), .punct(.lbrace), .punct(.lbracket):
+                depth += 1
+
+            // A `}` outside the brackets ahead closes the declaration's block.
+            case .punct(.rbrace):
+                guard depth > 0 else { return nil }
+                depth -= 1
+
+            // A `)` or `]` closes one of the brackets ahead; a stray `]` closes nothing.
+            case .punct(.rparen), .punct(.rbracket):
+                depth = max(depth - 1, 0)
+
+            // A newline or `;` outside the brackets ahead ends the declaration.
+            case .newline, .punct(.semicolon):
+                if depth == 0 { return nil }
+
+            default:
+                break
+            }
+            ahead += 1
+        }
     }
 
     /// Skips the rest of an item that failed, up to the newline or `;` that ends it, the `}` after it, the end of the

@@ -45,6 +45,16 @@ struct ParserErrorTests {
         ("struct S(var a: Int = (1 +), var b: Int) {\n    func f() { copy }\n}", [
             .missingExpression(found: .token(")")), .missingCopiedName(found: .token("}")),
         ]),
+        ("func f(x: Int = if true { 1) } else 2, y: Int) {\n    copy\n}", [
+            .unendedStatement(found: .token(")")), .missingBlock(found: .token("2")),
+            .missingCopiedName(found: .newline),
+        ]),
+        ("func f(x: Int y: Int = if true { 1 } else { 2 }) {\n    copy\n}", [
+            .unclosedParameters(found: .token("y")), .missingCopiedName(found: .newline),
+        ]),
+        ("struct S(var a: Int b: Int = if true { 1 } else { 2 }) {\n    func f() { copy }\n}", [
+            .unclosedFields(found: .token("b")), .missingCopiedName(found: .token("}")),
+        ]),
     ])
     func `an error in a declaration's header leaves the parser reporting the errors after it`(
         source: String, expected: [ErrorCode],

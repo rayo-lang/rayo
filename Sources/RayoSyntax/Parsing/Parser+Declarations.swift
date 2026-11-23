@@ -71,7 +71,7 @@ extension Parser {
             header.result = consume(.arrow) ? try parseType() : nil
             header.readToEnd = true
         } catch {
-            recover(upTo: [.lbrace])
+            skipHeader()
         }
         return header
     }
@@ -145,7 +145,7 @@ extension Parser {
             }
             header.readToEnd = true
         } catch {
-            recover(upTo: [.lbrace])
+            skipHeader()
         }
         return header
     }
