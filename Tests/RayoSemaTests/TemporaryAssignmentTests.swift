@@ -47,6 +47,10 @@ struct TemporaryAssignmentTests {
             "(if true { print(1) ; makeEnemy() } else { makeEnemy() }).hp = 0", "2:1",
             "if true { print(1); makeEnemy() } else { makeEnemy() }",
         ),
+        (
+            "(if true {\n    print(1);\n    makeEnemy()\n} else { makeEnemy() }).hp = 0", "2:1",
+            "if true { print(1); makeEnemy() } else { makeEnemy() }",
+        ),
         ("(makeEnemy()).hp = 0", "2:1", "makeEnemy()"),
         ("((makeEnemy())).hp = 0", "2:1", "makeEnemy()"),
         ("(makeHP()) + (makeHP()) = 1", "2:1", "(makeHP()) + (makeHP())"),

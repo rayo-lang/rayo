@@ -28,8 +28,8 @@ public struct SourceFile: Sendable {
             covered.removeLast()
         }
 
-        // Join the tokens, writing a newline that ends a statement as a `;`, except before the `}` that ends its
-        // block, since the `}` ends the statement too.
+        // Join the tokens, writing a newline that ends a statement as a `;`, except after a `;` or before the `}` that
+        // ends its block, which end the statement already.
         var spelling = ""
         var previous: Token?
         var endsStatement = false
@@ -39,7 +39,7 @@ public struct SourceFile: Sendable {
                 continue
             }
             if let previous {
-                if endsStatement, !token.isPunct(.rbrace) { spelling += ";" }
+                if endsStatement, !previous.isPunct(.semicolon), !token.isPunct(.rbrace) { spelling += ";" }
                 if Self.isSpaced(previous, token) { spelling += " " }
             }
             spelling += source.text(of: token.range)
