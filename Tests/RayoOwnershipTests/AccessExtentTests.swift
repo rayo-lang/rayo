@@ -376,10 +376,8 @@ private struct CountingReads<Inner: DataflowState>: DataflowState where Inner.Fu
     }
 }
 
-
-/// How much of `first` and `second`, two values of one type in two states, a merge reads: the slots of the
-/// persistent-array nodes the two don't share, the entries of the larger dictionary or set, or the sum of that over
-/// the fields of any other value.
+/// How much of two values of one type a merge reads: the unshared slots of a persistent array, the larger count of a
+/// collection, or the sum over another value's fields.
 private func unsharedStorage(of first: Any, and second: Any) -> Int {
     switch (first, second) {
     case let (first as PersistentArray<Set<AccessID>>, second as PersistentArray<Set<AccessID>>):
