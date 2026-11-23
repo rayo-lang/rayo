@@ -350,8 +350,16 @@ private final class ReadCount {
     var count = 0
 }
 
+/// A state that says how much of its storage another state doesn't share, which a merge of the two reads.
+private protocol SharingState: DataflowState where Function == Void {
+    func unsharedSlots(comparedWith other: Self) -> Int
+}
+
+extension DependencyState: SharingState {}
+extension UnbegunAccessState: SharingState {}
+
 /// A state that carries `inner`, and adds to `reads` how much of the two states each merge reads.
-private struct CountingReads<Inner: DataflowState>: DataflowState where Inner.Function == Void {
+private struct CountingReads<Inner: SharingState>: DataflowState {
     var inner: Inner
     let reads: ReadCount
 
@@ -363,7 +371,7 @@ private struct CountingReads<Inner: DataflowState>: DataflowState where Inner.Fu
     var direction: DataflowDirection { inner.direction }
 
     func merged(with other: CountingReads) -> CountingReads {
-        reads.count += unsharedStorage(of: inner, and: other.inner)
+        reads.count += inner.unsharedSlots(comparedWith: other.inner)
         return CountingReads(inner.merged(with: other.inner), into: reads)
     }
 
@@ -373,22 +381,5 @@ private struct CountingReads<Inner: DataflowState>: DataflowState where Inner.Fu
 
     static func == (first: CountingReads, second: CountingReads) -> Bool {
         first.inner == second.inner
-    }
-}
-
-/// How much of two values of one type a merge reads: the unshared slots of a persistent array, the larger count of a
-/// collection, or the sum over another value's fields.
-private func unsharedStorage(of first: Any, and second: Any) -> Int {
-    switch (first, second) {
-    case let (first as PersistentArray<Set<AccessID>>, second as PersistentArray<Set<AccessID>>):
-        first.unsharedSlots(comparedWith: second)
-    case let (first as PersistentArray<Bool>, second as PersistentArray<Bool>):
-        first.unsharedSlots(comparedWith: second)
-    case let (first as any Collection, second as any Collection):
-        max(first.count, second.count)
-    default:
-        zip(Mirror(reflecting: first).children, Mirror(reflecting: second).children).reduce(0) { storage, fields in
-            storage + unsharedStorage(of: fields.0.value, and: fields.1.value)
-        }
     }
 }

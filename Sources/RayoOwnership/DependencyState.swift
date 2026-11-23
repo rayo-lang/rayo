@@ -40,6 +40,13 @@ struct DependencyState: DataflowState {
         accessDependencies[access.index]
     }
 
+    /// The slots of the arrays' nodes that this state doesn't share with `other`, which a merge of the two reads.
+    /// Tests count them to see how the state's cost grows.
+    func unsharedSlots(comparedWith other: DependencyState) -> Int {
+        localDependencies.unsharedSlots(comparedWith: other.localDependencies)
+            + accessDependencies.unsharedSlots(comparedWith: other.accessDependencies)
+    }
+
     mutating func apply(_ effect: Effect, in function: Void) {
         switch effect {
         // The value at the place now depends on the access too, and on what the access depends on.
