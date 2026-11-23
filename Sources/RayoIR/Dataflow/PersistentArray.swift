@@ -122,7 +122,7 @@ package struct PersistentArray<Element: Equatable>: Equatable {
 
     /// The slots of the nodes this array doesn't share with `other`, an array of the same count, which a merge or a
     /// comparison of the two reads. Tests count them to see how a state's cost grows.
-    func unsharedSlots(comparedWith other: Self) -> Int {
+    package func unsharedSlots(comparedWith other: Self) -> Int {
         precondition(count == other.count, "compared arrays have one count")
         return Self.unsharedSlots(root, other.root)
     }
