@@ -42,7 +42,7 @@ struct IRVerificationTests {
     }
 
     @Test(arguments: brokenInTheIREveryBuildChecks)
-    func `in a release build, IR the emitter receives that breaks its types, blocks or indices stops the compile`(
+    func `in a release build, the emitter's IR that breaks its types, blocks, indices or local lives stops the compile`(
         broken: BrokenIR,
     ) throws {
         let program = try program(running: broken.blocks)
@@ -52,7 +52,7 @@ struct IRVerificationTests {
     }
 
     @Test(arguments: brokenWhereOnlyADebugBuildChecks)
-    func `in a release build, lowering's IR, and where accesses end and locals retire, go on unchecked`(
+    func `in a release build, lowering's IR, and where accesses end, go on unchecked`(
         broken: BrokenIR,
     ) throws {
         let program = try program(running: broken.blocks)
@@ -143,6 +143,17 @@ private let uncheckedIndexMessage =
     "the IR indexes an array of 2 elements at %2, which it changes without checking it is below 2"
 private let typeMessage = "the IR returns a value of type Bool from a function that returns Void"
 
+/// The blocks of a `main` that prints `%0` after it retires it.
+private let retiredUse = """
+      declare %0
+      %0 @1:1-1:2 = operand 1 @1:1-1:2
+      retire %0
+      begin a0 read %0 @1:1-1:2
+      _ = call builtin "print(_: &Int)"(a0) @1:1-1:2
+      end a0
+    """
+private let retiredUseMessage = "the IR uses %0 at bb0, where it is retired"
+
 /// IR the ownership stage gives, which the emitter receives, broken in a way every build of `rayoc` checks.
 private let brokenInTheIREveryBuildChecks = [
     BrokenIR(
@@ -170,10 +181,23 @@ private let brokenInTheIREveryBuildChecks = [
         blocks: uncheckedIndex + "\n  return true",
         message: typeMessage,
     ),
+    BrokenIR(
+        testDescription: "the ownership stage's IR that uses a retired local",
+        stage: .ownership,
+        blocks: retiredUse + "\n  return",
+        message: retiredUseMessage,
+    ),
+    // The rules every stage's IR keeps are checked before where locals retire, as a debug build checks them.
+    BrokenIR(
+        testDescription: "the ownership stage's IR that breaks its types after a use of a retired local",
+        stage: .ownership,
+        blocks: retiredUse + "\n  return true",
+        message: typeMessage,
+    ),
 ]
 
 /// IR broken in a way only a debug build of `rayoc` checks: lowering's IR, whatever rule it breaks, and the ownership
-/// stage's IR where its accesses end and its locals retire.
+/// stage's IR where its accesses end.
 private let brokenWhereOnlyADebugBuildChecks = [
     BrokenIR(
         testDescription: "lowering's IR that breaks its types",
@@ -208,19 +232,5 @@ private let brokenWhereOnlyADebugBuildChecks = [
               return
             """,
         message: "the IR leaves the function at bb0 without ending a0",
-    ),
-    BrokenIR(
-        testDescription: "the ownership stage's IR that uses a retired local",
-        stage: .ownership,
-        blocks: """
-              declare %0
-              %0 @1:1-1:2 = operand 1 @1:1-1:2
-              retire %0
-              begin a0 read %0 @1:1-1:2
-              _ = call builtin "print(_: &Int)"(a0) @1:1-1:2
-              end a0
-              return
-            """,
-        message: "the IR uses %0 at bb0, where it is retired",
     ),
 ]

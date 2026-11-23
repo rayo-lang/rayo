@@ -100,13 +100,10 @@ extension Compiler {
         case (.debug, _):
             IRVerifier.verify(program, from: stage)
 
-        // The emitter takes the IR's types, the blocks its paths reach and the checks of its indices as given, and
-        // finds an element at an index a local holds with no check of its own, so every build checks those in the IR
-        // it receives. A release build leaves out the checks of where accesses end and locals retire, which cost
-        // more: the time the local-life check takes grows faster than a function's length. Lowering's IR never
-        // reaches the emitter, so a release build leaves it unchecked.
+        // The emitter trusts its IR's types, blocks, indices and local lives, so every build checks those.
+        // It ignores where an access ends, and never receives lowering's IR, so a release build checks neither.
         case (.release, .ownership):
-            IRVerifier.verifySharedRules(program)
+            IRVerifier.verifyEmitterRules(program)
         case (.release, .lowering):
             nil
         }

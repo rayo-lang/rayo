@@ -1,4 +1,3 @@
-@testable import RayoOwnership
 import RayoCheckedProgram
 import RayoIR
 import Testing
@@ -94,6 +93,29 @@ struct DataflowTests {
         var visited: [(point: Int, columns: Set<Int>)] = []
         results.walk(BlockID(index: 0)) { visited.append(($0, $1.columns)) }
         #expect(visited.map(\.point) == points)
+        #expect(visited.map(\.columns) == expected)
+    }
+
+    @Test(arguments: [
+        (DataflowDirection.forward, [1, 2, 3], [Set(), Set([1]), Set([1, 2])]),
+        (DataflowDirection.backward, [3, 2, 1], [Set(), Set([3]), Set([2, 3])]),
+    ])
+    func `a walk of effects lends each effect once, with the state just before it in the analysis's direction`(
+        direction: DataflowDirection, columns: [Int], expected: [Set<Int>],
+    ) throws {
+        let blocks = """
+            bb0:
+              \(reading(1))
+              \(reading(2))
+              return read %0 @2:3-2:3
+            """
+        let results = try solve(EvaluatedOperands(direction: direction), blocks, result: "Int")
+        var visited: [(column: Int, columns: Set<Int>)] = []
+        results.walkEffects(of: BlockID(index: 0)) { effect, state in
+            guard case .read(_, let range) = effect else { return }
+            visited.append((range.start.column, state.columns))
+        }
+        #expect(visited.map(\.column) == columns)
         #expect(visited.map(\.columns) == expected)
     }
 
@@ -243,9 +265,16 @@ private func solve(
     DataflowSolver.solve(from: start, through: try body(of: blocks, result: result), knowing: ())
 }
 
-/// The body of the function `function` makes of `blocks`, which returns `result`.
+/// The body of a function made of `blocks`, whose one local is the Int `x` (`%0`), and which returns `result`.
 private func body(of blocks: String, result: String = "Void") throws -> IRBody {
-    let program = try program(of: [function(blocks, result: result)], from: .lowering)
+    let program = try IRParser.program(from: """
+        main "f()"
+        func "f()"() -> \(result) {
+          var %0 x: Int @1:1-1:1
+        \(blocks)
+        }
+        """)
+    #expect(IRVerifier.verify(program, from: .lowering) == nil)
     // The program's one function has a body.
     return try #require(program.bodies[FunctionID(index: 0)])
 }

@@ -1,5 +1,5 @@
 import RayoCheckedProgram
-import RayoIR
+@testable import RayoIR
 import Testing
 
 /// IR that uses a local on some path after a retirement ends its life, and what the verifier says is wrong with it.
@@ -39,6 +39,130 @@ struct LocalLifeTests {
             """))
         #expect(IRVerifier.verify(program, from: .ownership) == nil)
     }
+
+    @Test func `a block that no path reaches may use a retired local, since it never runs`() throws {
+        let program = try IRParser.program(from: assigningThreeLocals("""
+              return
+            bb1:
+              retire %0
+              begin a0 read %0 @1:1-1:2
+              _ = call builtin "print(_: &Int)"(a0) @1:1-1:2
+              end a0
+              return
+            """))
+        #expect(IRVerifier.verify(program, from: .ownership) == nil)
+    }
+
+    @Test func `eight times the loops take the check's state through under sixteen times the steps`() throws {
+        let short = try IRParser.program(from: retiringLoops(50))
+        let long = try IRParser.program(from: retiringLoops(400))
+        #expect(IRVerifier.verify(long, from: .ownership) == nil)
+
+        // A step is an effect the state crosses or a merge it makes. Growth in line with the loops takes eight times as
+        // many, and growth with their square up to sixty-four.
+        let shortSteps = try stepsToCheckLocalLives(short)
+        let longSteps = try stepsToCheckLocalLives(long)
+        #expect(longSteps < shortSteps * 16)
+    }
+}
+
+/// The effects the local-life check takes its state across, and the merges it makes, over `program`'s `main`. It
+/// throws at a violation, which cuts the work short.
+private func stepsToCheckLocalLives(_ program: IRProgram) throws -> Int {
+    let body = try #require(program.bodies[FunctionID(index: 0)])
+    let work = WorkCount()
+    try LocalLifeVerifier(body: body, of: "main()").verify(from: CountedRetiredLocals(entering: body, counting: work))
+    return work.count
+}
+
+/// A count of steps of work; a class, since every copy of a state adds to one count.
+private final class WorkCount {
+    var count = 0
+}
+
+/// The retired locals, carried by a state that counts each effect it is taken across and each merge it makes.
+private struct CountedRetiredLocals: RetiredLocalSet {
+    var retired: RetiredLocals
+    let work: WorkCount
+
+    init(entering body: IRBody, counting work: WorkCount) {
+        retired = RetiredLocals(entering: body)
+        self.work = work
+    }
+
+    var direction: DataflowDirection { retired.direction }
+
+    func contains(_ local: LocalID) -> Bool {
+        retired.contains(local)
+    }
+
+    func merged(with other: CountedRetiredLocals) -> CountedRetiredLocals {
+        work.count += 1
+        var merged = self
+        merged.retired = retired.merged(with: other.retired)
+        return merged
+    }
+
+    mutating func apply(_ effect: Effect, in function: Void) {
+        work.count += 1
+        retired.apply(effect, in: ())
+    }
+
+    static func == (first: CountedRetiredLocals, second: CountedRetiredLocals) -> Bool {
+        first.retired == second.retired
+    }
+}
+
+/// A program whose `main` runs `loops` loops in a row, each with locals of its own that it retires as it ends.
+private func retiringLoops(_ loops: Int) -> String {
+    let locals = (0..<loops).map { loop in
+        """
+          var %\(3 * loop) c\(loop): UInt @1:1-1:1
+          temp %\(3 * loop + 1): Bool
+          let %\(3 * loop + 2) v\(loop): Int @1:1-1:1
+        """
+    }
+    let blocks = (0..<loops).map { loop in
+        let (counter, test, value) = (3 * loop, 3 * loop + 1, 3 * loop + 2)
+        let (start, header, body) = (3 * loop, 3 * loop + 1, 3 * loop + 2)
+        return """
+            bb\(start):
+            \(retiringLoop(loop - 1))
+              declare %\(counter)
+              %\(counter) @1:1-1:1 = operand UInt 0 @1:1-1:1
+              goto bb\(header)
+            bb\(header):
+              declare %\(test)
+              %\(test) @1:1-1:1 = less read %\(counter) @1:1-1:1, UInt 8 @1:1-1:1
+              branch read %\(test) @1:1-1:1, bb\(body), bb\(start + 3)
+            bb\(body):
+              retire %\(test)
+              declare %\(value)
+              %\(value) @1:1-1:1 = call builtin "Int(_: UInt)"(read %\(counter) @1:1-1:1) @1:1-1:1
+              begin a\(loop) read %\(value) @1:1-1:1
+              _ = call builtin "print(_: &Int)"(a\(loop)) @1:1-1:1
+              end a\(loop)
+              retire %\(value)
+              %\(counter) @1:1-1:1 = add checked read %\(counter) @1:1-1:1, UInt 1 @1:1-1:1
+              goto bb\(header)
+            """
+    }
+    return """
+        main "main()"
+        func "main()"() -> Void {
+        \(locals.joined(separator: "\n"))
+        \(blocks.joined(separator: "\n"))
+        bb\(3 * loops):
+        \(retiringLoop(loops - 1))
+          return
+        }
+        """
+}
+
+/// The retirements of the count and the test of loop `loop` as it ends, or none before the first loop.
+private func retiringLoop(_ loop: Int) -> String {
+    guard loop >= 0 else { return "" }
+    return "  retire %\(3 * loop + 1)\n  retire %\(3 * loop)"
 }
 
 private let retiredUses = [
@@ -78,6 +202,24 @@ private let retiredUses = [
               end a0
               retire %0
               goto bb1
+            """,
+        message: "the IR uses %0 at bb1, where it is retired",
+    ),
+    RetiredUse(
+        testDescription: "uses in two blocks, of which the earlier block's is named",
+        blocks: """
+              retire %0
+              branch true, bb1, bb2
+            bb1:
+              begin a0 read %0 @1:1-1:2
+              _ = call builtin "print(_: &Int)"(a0) @1:1-1:2
+              end a0
+              return
+            bb2:
+              begin a1 read %0 @1:1-1:2
+              _ = call builtin "print(_: &Int)"(a1) @1:1-1:2
+              end a1
+              return
             """,
         message: "the IR uses %0 at bb1, where it is retired",
     ),

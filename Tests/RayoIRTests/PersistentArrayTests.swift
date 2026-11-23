@@ -1,4 +1,4 @@
-@testable import RayoOwnership
+import RayoIR
 import Testing
 
 struct PersistentArrayTests {

@@ -11,11 +11,12 @@ public enum IRVerifier {
         }
     }
 
-    /// The first declaration or operation in `program` that breaks the rules every stage's IR keeps, or nil where none
-    /// does. Those are all but the rules of where accesses end and locals retire, which differ between stages.
-    package static func verifySharedRules(_ program: IRProgram) -> IRViolation? {
+    /// The first declaration or operation in `program`, which the ownership stage gave, that breaks a rule the emitter
+    /// takes as given, or nil where none does. Those are all its rules but where its accesses end.
+    package static func verifyEmitterRules(_ program: IRProgram) -> IRViolation? {
         firstViolation(in: program) { body, declaration throws(IRViolation) in
             try verifySharedRules(in: body, of: declaration, in: program)
+            try LocalLifeVerifier(body: body, of: declaration.name).verify()
         }
     }
 

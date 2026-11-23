@@ -1,9 +1,7 @@
-import RayoIR
-
 /// The settled states of a dataflow analysis through a function. They answer what the state is at each point of a
 /// block: point `i` lies just before the statement at `i`, the point at the number of statements just before the
 /// terminator, and the point one past that just after it.
-struct DataflowResults<State: DataflowState> {
+package struct DataflowResults<State: DataflowState> {
     /// The effects of each block's statements and terminator, indexed by `BlockID`, as `BasicBlock.effects` gives them.
     private let effects: [[[Effect]]]
     /// What the state needs to know of the function.
@@ -20,7 +18,7 @@ struct DataflowResults<State: DataflowState> {
 
     /// The settled state at `block`'s boundary: at its entry going forward, and at its exit going backward; nil where
     /// no state reaches the block.
-    func boundaryState(of block: BlockID) -> State? {
+    package func boundaryState(of block: BlockID) -> State? {
         boundaryStates[block.index]
     }
 
@@ -30,7 +28,7 @@ struct DataflowResults<State: DataflowState> {
     /// The walk changes one state in place as it crosses each statement. A `visit` that keeps the state itself makes
     /// the next statement copy the whole of it, so a check keeps only what it works out from each state.
     @discardableResult
-    func walk(_ block: BlockID, visit: (_ point: Int, _ state: State) -> Void) -> Bool {
+    package func walk(_ block: BlockID, visit: (_ point: Int, _ state: State) -> Void) -> Bool {
         guard var state = boundaryStates[block.index] else { return false }
         // The statements, then the terminator, each crossed from the point before it to the point after it.
         let crossings = effects[block.index]
@@ -49,6 +47,30 @@ struct DataflowResults<State: DataflowState> {
                 state.apply(crossing, in: function)
             }
             visit(0, state)
+        }
+        return true
+    }
+
+    /// Walks `block` from its boundary in the analysis's direction, and lends `visit` each effect in turn, with the
+    /// state just before the walk crosses it. Returns whether a state reaches the block; stops where `visit` throws.
+    @discardableResult
+    package func walkEffects<Failure: Error>(
+        of block: BlockID, visit: (_ effect: Effect, _ state: State) throws(Failure) -> Void,
+    ) throws(Failure) -> Bool {
+        guard var state = boundaryStates[block.index] else { return false }
+        let crossings = effects[block.index].joined()
+
+        switch state.direction {
+        case .forward:
+            for effect in crossings {
+                try visit(effect, state)
+                state.apply(effect, in: function)
+            }
+        case .backward:
+            for effect in crossings.reversed() {
+                try visit(effect, state)
+                state.apply(effect, in: function)
+            }
         }
         return true
     }

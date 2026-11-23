@@ -15,51 +15,28 @@ struct LocalLifeVerifier {
         uses = LocalUses(body)
     }
 
-    /// Throws the first use found of a retired local, on a walk of the blocks that a path from the entry reaches. A
-    /// block that no path reaches runs nothing, so it can't use a retired local.
+    /// Throws the first use of a retired local, in the order of the blocks and of the effects in each. A block that no
+    /// path from the entry reaches runs nothing, so it can't use a retired local.
     func verify() throws(IRViolation) {
-        // The locals retired on some path into each block, or nil where the walk hasn't reached it yet.
-        var entered: [Set<LocalID>?] = Array(repeating: nil, count: body.blocks.count)
-        entered[0] = []
+        try verify(from: RetiredLocals(entering: body))
+    }
 
-        // A block is walked again whenever a path into it brings a local retired that no path walked before brought.
-        // Each walk only grows a block's set, so the walk stops.
-        var pending = [BlockID(index: 0)]
-        while let block = pending.popLast() {
-            let leaving = try localsRetired(after: block, entering: entered[block.index] ?? [])
-            for successor in body.blocks[block.index].terminator.successors {
-                let merged = (entered[successor.index] ?? []).union(leaving)
-                guard merged != entered[successor.index] else { continue }
-                entered[successor.index] = merged
-                pending.append(successor)
+    /// Verifies as `verify()` does, carrying `start`, which retires no local, through the body. It takes any such
+    /// state, so that one which counts its work can measure the check's.
+    func verify<Retired: RetiredLocalSet>(from start: Retired) throws(IRViolation) {
+        let settled = DataflowSolver.solve(from: start, through: body, knowing: ())
+        for index in body.blocks.indices {
+            try settled.walkEffects(of: BlockID(index: index)) { effect, retired throws(IRViolation) in
+                try verify(effect, at: index, isNotUsing: retired)
             }
         }
     }
 
-    /// The locals retired as `block` ends, where `retired` are those retired as it begins. Throws where it uses one
-    /// that is retired.
-    private func localsRetired(
-        after block: BlockID, entering retired: Set<LocalID>,
-    ) throws(IRViolation) -> Set<LocalID> {
-        var retired = retired
-        let label = "bb\(block.index)"
-        for effect in body.blocks[block.index].effects.joined() {
-            switch effect {
-            case .declare(let local):
-                retired.remove(local)
-            case .retire(let local):
-                retired.insert(local)
-            case .read, .move, .store, .begin, .use, .end, .depend, .exit:
-                guard let used = uses.local(usedBy: effect) else { continue }
-                try verify(used, isNotIn: retired, at: label)
-            }
-        }
-        return retired
-    }
-
-    /// Throws where `used`, a local that the block `label` uses, is retired.
-    private func verify(_ used: LocalID, isNotIn retired: Set<LocalID>, at label: String) throws(IRViolation) {
-        guard retired.contains(used) else { return }
-        throw IRViolation(function: function, message: "the IR uses %\(used.index) at \(label), where it is retired")
+    /// Throws where `effect`, in the block at `index`, uses one of the locals `retired`.
+    private func verify(
+        _ effect: Effect, at index: Int, isNotUsing retired: some RetiredLocalSet,
+    ) throws(IRViolation) {
+        guard let used = uses.local(usedBy: effect), retired.contains(used) else { return }
+        throw IRViolation(function: function, message: "the IR uses %\(used.index) at bb\(index), where it is retired")
     }
 }
