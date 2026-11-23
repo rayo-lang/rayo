@@ -427,7 +427,7 @@ _ = r.value?.submit(mesh)          // fine: an object's value is changeable thro
 
 **A change to what a temporary owns is a compile error.** A temporary, such as a call's result or a literal, is destroyed at the end of its statement ([02](../02-views-and-dependencies/dependency-projection-and-results.md#temporaries)). So a change to it or a part of it dies with it, and outlasts nothing.
 
-Lending a temporary for change, assigning into it or a part of it, calling a `mutating` method on it, and calling a `mutating` closure it owns, such as a `Closure<mutating () -> Int>`, are errors ([05](../05-protocols-generics-and-closures/functions-and-closures.md#closure-kinds)). The error names the temporary, and says to keep it in a `var`, or to change the storage itself. A copy the language writes back, such as an aligned temporary, stays changeable ([above](#changeable-places)), since its change reaches the place it stands for.
+Lending a temporary for change, assigning into it or a part of it, calling a `mutating` method on it, and calling a `mutating` closure it is or holds, such as a `Closure<mutating () -> Int>`, are errors ([05](../05-protocols-generics-and-closures/functions-and-closures.md#closure-kinds)). The error names the temporary, and says to keep it in a `var`, or to change the storage itself. A copy the language writes back, such as an aligned temporary, stays changeable ([above](#changeable-places)), since its change reaches the place it stands for.
 
 **A change that goes through a temporary to storage it doesn't own is fine in three cases**, since that storage outlives the temporary:
 
