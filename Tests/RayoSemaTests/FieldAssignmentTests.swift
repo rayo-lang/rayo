@@ -24,7 +24,7 @@ struct FieldAssignmentTests {
         ("e.stats.mana = 1", .noSuchField(type: "Stats", field: "mana"), "mana"),
         ("e.armor = true", .typeMismatch(expected: "Int", found: "Bool"), "true"),
         ("e.stats = made()", .typeMismatch(expected: "Stats", found: "Enemy"), "made()"),
-        ("made().armor = 1", .assignToNonLocal, "made()"),
+        ("made().armor = 1", .assignToTemporary(temporary: "made()"), "made()"),
         ("_.armor = 1", .assignToNonLocal, "_"),
         ("Enemy.armor = 1", .assignToType(name: "Enemy"), "Enemy"),
         ("made.armor = 1", .assignToFunction(name: "made"), "made"),

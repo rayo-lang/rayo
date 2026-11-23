@@ -36,7 +36,7 @@ package struct Parser: ~Copyable {
         guard let tokens else { return (nil, lexerErrors) }
 
         var parser = Parser(bytes, tokens: tokens, lexerErrors: lexerErrors)
-        let file = parser.parseFile()
+        let file = SourceFile(declarations: parser.parseFileDeclarations(), source: bytes)
         return (file, parser.diagnostics.inSourceOrder)
     }
 

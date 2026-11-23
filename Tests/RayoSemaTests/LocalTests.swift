@@ -14,7 +14,7 @@ struct LocalTests {
         ("let x: Bool = 1", ErrorCode.typeMismatch(expected: "Bool", found: "Int")),
         ("var x = 1\nx = true", .typeMismatch(expected: "Int", found: "Bool")),
         ("var x = true\nx += 1", .integerOperands(op: "+=", left: "Bool", right: "Int")),
-        ("1 = 2", .assignToNonLocal),
+        ("1 = 2", .assignToTemporary(temporary: "1")),
         ("let x = 1\nlet x = 2", .alreadyDeclared(name: "x")),
         ("let x = print(1)", .voidLocal(name: "x", type: "Void")),
         ("let x = 1\nx(2)", .notAFunction(name: "x")),

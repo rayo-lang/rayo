@@ -398,6 +398,9 @@ public enum ErrorCode: Sendable, Hashable {
     @Code(290, error: "'mutable' takes a place, not a reference; write 'mutable {place}'")
     case mutableOfReference(place: String)
 
+    @Code(291, error: "'{temporary}' is a temporary; keep it in a 'var'")
+    case assignToTemporary(temporary: String)
+
     // MARK: Ownership
 
     @Code(301, error: "can't move the borrowed parameter '{name}'; write 'copy' before it to take a copy")
