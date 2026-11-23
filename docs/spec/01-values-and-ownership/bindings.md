@@ -440,7 +440,7 @@ Lending a temporary for change, assigning into it or a part of it, calling a `mu
 **A temporary may still be lent shared, or consumed**, as an owning parameter or a `consuming` method takes it:
 
 ```swift
-heal(mutable makeEnemy())          // error: 'makeEnemy()' is a temporary; keep it in a 'var'
+heal(mutable makeEnemy())          // error: changing 'makeEnemy()' does nothing, since it's dropped right after; store it in a 'var' first
 makeEnemy().hp = 0                 // error: the same
 makeIterator().next()              // error: 'next' changes the position the iterator owns; keep it in a 'var'
 makeCounter()()                    // error: the 'Closure<mutating () -> Int>' it returns owns the captures the call changes

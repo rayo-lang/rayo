@@ -398,7 +398,7 @@ public enum ErrorCode: Sendable, Hashable {
     @Code(290, error: "'mutable' takes a place, not a reference; write 'mutable {place}'")
     case mutableOfReference(place: String)
 
-    @Code(291, error: "'{temporary}' is a temporary; keep it in a 'var'")
+    @Code(291, error: "changing '{temporary}' does nothing, since it's dropped right after; store it in a 'var' first")
     case assignToTemporary(temporary: String)
 
     // MARK: Ownership
