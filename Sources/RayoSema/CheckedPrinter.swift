@@ -163,7 +163,7 @@ public struct CheckedPrinter: ~Copyable {
     }
 
     /// Writes a call's argument as the source would write it: an owned value as its expression, and a borrowed value
-    /// or a mutable place under `&` or `mutable &`.
+    /// or a mutable place under `&` or `mutable`.
     private mutating func write(_ argument: CheckedArgument, depth: Int) {
         switch argument {
         case .owned(let value):
@@ -172,7 +172,7 @@ public struct CheckedPrinter: ~Copyable {
             line("&", depth)
             write(value, depth: depth + 1)
         case .mutable(let place):
-            line("mutable &", depth)
+            line("mutable", depth)
             write(place, depth: depth + 1)
         }
     }

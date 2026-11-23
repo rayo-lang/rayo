@@ -1,6 +1,7 @@
 import RayoCheckedProgram
 import RayoDiagnostics
 import RayoSource
+import RayoSyntax
 
 extension ExpressionChecker {
     /// Reports each place rooted in a local that `value` hands its position to, with the error `code` gives for the
@@ -88,11 +89,11 @@ extension ExpressionChecker {
         }
     }
 
-    /// `lent`, a `mutable &` of a place, as it stands where a position expects what `expected` names. A `ref var`
-    /// takes the place itself, checking its type as it would the value's, and reports nothing more, since the
-    /// `ref var` is reported as unsupported. Reports the `mutable &` anywhere else.
+    /// `lent`, a `mutable` of a place, where a position expects what `expected` names. A `ref var` takes the place,
+    /// and any other position reports the `mutable`.
     func mutablyLent(_ lent: MutablyLentPlace, to expected: Expectation) -> CheckedExpr? {
         switch expected.recipient {
+        // The `ref var` itself is reported as unsupported, so its place reports nothing more.
         case .declaration(.refVar)?: typeFitted(lent.placeExpression, to: expected)
         default: refused(.unsupportedMutableReference, at: lent.range)
         }
@@ -119,6 +120,21 @@ extension ExpressionChecker {
             let place = sourceName(of: handed)
             file.errors.report(.referenceOutlivesPlace(binding: binding, place: place), at: handed.place.range)
         }
+    }
+
+    /// Reports `mutable &operand` at `range`, naming the `mutable` of its place to write, and gives nil. A `&`, at
+    /// `referenceRange`, of a value that no local holds is reported as unsupported.
+    func mutableOfReference(_ operand: Expr, referenceRange: SourceRange, in range: SourceRange) -> CheckedValue? {
+        // A place that failed was reported.
+        guard let lentPlace = place(operand, under: self) else { return nil }
+        guard let local = lentPlace.place.local else {
+            file.errors.report(.unsupportedLentValue, at: referenceRange)
+            return nil
+        }
+
+        let placeName = sourceName(of: HandedPlace(local: local, place: lentPlace.place))
+        file.errors.report(.mutableOfReference(place: placeName), at: range)
+        return nil
     }
 
     /// The name of `place` as the source writes it, such as `e.stats.hp` or `g[i][0]`, for an error to name it by.

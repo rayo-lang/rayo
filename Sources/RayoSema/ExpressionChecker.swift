@@ -32,7 +32,7 @@ struct ExpressionChecker {
     }
 
     /// Checks `expr` on its own, leaving it to wait for its position where it is an untyped value, an array literal,
-    /// an implicit member, an `if`, a `&` or a `mutable &`.
+    /// an implicit member, an `if`, a `&` or a `mutable`.
     func value(of expr: Expr) -> CheckedValue? {
         switch expr.kind {
         // An integer literal is untyped until its position settles it.
@@ -90,11 +90,9 @@ struct ExpressionChecker {
         case .reference(let lent):
             place(lent, under: self).map { .waiting(LentPlace(place: $0.place, placeType: $0.type, range: expr.range)) }
 
-        // So does a `mutable &`, which lends the place for change.
+        // So does a `mutable`, which lends the place for change.
         case .mutableReference(let lent):
-            place(lent, under: self).map {
-                .waiting(MutablyLentPlace(place: $0.place, placeType: $0.type, range: expr.range))
-            }
+            mutablyLentValue(of: lent, in: expr.range)
 
         // An `if` read for its value gives the value of the branch that runs, so its branches' values wait for its
         // position as the `if` does.
@@ -104,6 +102,19 @@ struct ExpressionChecker {
         // An array literal waits for its position to give it a type, which its elements settle to.
         case .arrayLiteral(let elements):
             arrayLiteral(of: elements, in: expr.range)
+        }
+    }
+
+    /// `mutable lent`, written at `range`, waiting for its position. A `&` as `lent` is reported, since the reference
+    /// it makes is a temporary.
+    private func mutablyLentValue(of lent: Expr, in range: SourceRange) -> CheckedValue? {
+        switch lent.kind {
+        case .reference(let operand):
+            mutableOfReference(operand, referenceRange: lent.range, in: range)
+        default:
+            place(lent, under: self).map {
+                .waiting(MutablyLentPlace(place: $0.place, placeType: $0.type, range: range))
+            }
         }
     }
 

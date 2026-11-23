@@ -127,6 +127,9 @@ public enum ErrorCode: Sendable, Hashable {
     @Code(136, error: "expected a name after '&', found {found}")
     case missingLentName(found: FoundToken)
 
+    @Code(137, error: "expected a name after 'mutable', found {found}")
+    case missingMutablyLentName(found: FoundToken)
+
     // MARK: Checking
 
     @Code(201, error: "the file has no 'main' function, so it can't be built into an executable or run")
@@ -389,8 +392,11 @@ public enum ErrorCode: Sendable, Hashable {
     @Code(288, error: "a '{keyword}' holding a reference isn't supported; declare 'ref let', or remove the '&'")
     case unsupportedHeldReference(keyword: String)
 
-    @Code(289, error: "'mutable &' isn't supported")
+    @Code(289, error: "'mutable' isn't supported")
     case unsupportedMutableReference
+
+    @Code(290, error: "'mutable' takes a place, not a reference; write 'mutable {place}'")
+    case mutableOfReference(place: String)
 
     // MARK: Ownership
 

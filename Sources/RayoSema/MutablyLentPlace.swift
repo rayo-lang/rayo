@@ -1,17 +1,16 @@
 import RayoCheckedProgram
 import RayoSource
 
-/// `mutable &place`, checked on its own: the place it lends for change, the type of the value the place holds, and
-/// where the source writes it. Only a `ref var`'s value takes it, so it waits for its position to say whether that is
-/// what the position is.
+/// `mutable place`, checked on its own: the place it lends for change, the type of the value the place holds, and
+/// where the source writes it. It waits for its position, since only a `ref var`'s value takes it.
 struct MutablyLentPlace {
     var place: CheckedPlace
     /// The type of the value the place holds.
     var placeType: RayoType
-    /// Where the source writes the `mutable &` and the place.
+    /// Where the source writes the `mutable` and the place.
     var range: SourceRange
 
-    /// The place itself, as the value of a position that takes it, where the source writes the `mutable &`.
+    /// The place itself, as the value of a position that takes it, where the source writes the `mutable`.
     var placeExpression: CheckedExpr {
         CheckedExpr(kind: .place(place), type: placeType, range: range)
     }
@@ -27,7 +26,7 @@ extension MutablyLentPlace: WaitingValue {
         TypeFit.fits(placeType, type)
     }
 
-    /// Reports the `mutable &`, since a position that expects at most a type takes no reference.
+    /// Reports the `mutable`, since a position that expects at most a type takes no reference.
     func settled(toward type: RayoType?, by expressions: ExpressionChecker) -> CheckedExpr? {
         expressions.file.errors.report(.unsupportedMutableReference, at: range)
         return nil
@@ -42,7 +41,7 @@ extension MutablyLentPlace: WaitingValue {
         expressions.mutablyLent(self, to: Expectation(placeType, recipient: recipient))
     }
 
-    /// Reports nothing: the place was checked as the source wrote it, and what the `mutable &` gives it to failed for
+    /// Reports nothing: the place was checked as the source wrote it, and what the `mutable` gives it to failed for
     /// another reason.
     func reportErrors(by expressions: ExpressionChecker) {}
 }

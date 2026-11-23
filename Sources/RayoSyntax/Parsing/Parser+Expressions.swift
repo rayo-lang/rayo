@@ -20,7 +20,7 @@ extension Parser {
     }
 
     /// `'-' int-literal`, `('copy' | 'consume') identifier ('.' member | '[' expression ']')*`,
-    /// `'mutable'? '&' identifier postfix*`, `('-' | '!') unary`, or a postfix expression.
+    /// `'&' identifier postfix*`, `'mutable' '&'? identifier postfix*`, `('-' | '!') unary`, or a postfix expression.
     private mutating func parseUnary() throws(ParseFailure) -> Expr {
         let start = current.range
 
@@ -46,16 +46,13 @@ extension Parser {
         // A `&` takes what it lends: a place that starts from a name, such as a local, a part of one at any depth, or
         // a call's result.
         if consume(.ampersand) {
-            let place = try parseLent()
+            let place = try parseLent(else: ErrorCode.missingLentName)
             return Expr(kind: .reference(place), range: range(from: start))
         }
 
-        // So does a `mutable &`, which lends it for change. A `mutable` without a `&` after it starts no expression,
-        // and is reported as such.
-        if current.isKeyword(.mutable), peek().isPunct(.ampersand) {
-            advance()
-            advance()
-            let place = try parseLent()
+        // So does a `mutable`, which lends it for change.
+        if consume(.mutable) {
+            let place = try parseMutablyLent()
             return Expr(kind: .mutableReference(place), range: range(from: start))
         }
 
@@ -102,12 +99,20 @@ extension Parser {
         }
     }
 
-    /// After a `&` or a `mutable &`: `identifier postfix*`, what it lends, which starts from a name, such as
-    /// `e.party[i].hp` or `makeEnemy().stats`. A token other than a name first is reported, since a literal or a
-    /// parenthesized expression is no place that a name starts.
-    private mutating func parseLent() throws(ParseFailure) -> Expr {
-        guard case .identifier = current.kind else { throw fail(ErrorCode.missingLentName) }
+    /// After a `&` or a `mutable`: the place it lends, `identifier postfix*`. A token other than a name first is
+    /// reported as `error`, since a literal or a parenthesized expression is no place a name starts.
+    private mutating func parseLent(else error: ErrorCase) throws(ParseFailure) -> Expr {
+        guard case .identifier = current.kind else { throw fail(error) }
         return try parsePostfix()
+    }
+
+    /// After a `mutable`: the place it lends for change, or a whole `&` expression, which checking reports.
+    private mutating func parseMutablyLent() throws(ParseFailure) -> Expr {
+        if current.isPunct(.ampersand) {
+            try parseUnary()
+        } else {
+            try parseLent(else: ErrorCode.missingMutablyLentName)
+        }
     }
 
     /// `identifier ('.' member | '[' expression ']')*`: a place that starts from a name, such as `e.party[i].hp`. A
