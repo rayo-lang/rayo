@@ -37,13 +37,13 @@ struct DataflowSolver<State: DataflowState> {
         boundaryStates = Array(repeating: nil, count: body.blocks.count)
 
         // The walk begins at the function's entry going forward, and at the exit of each reached block going
-        // backward, so that a loop that no path leaves has a state too. Going forward, reverse postorder visits each
-        // block after the blocks that lead to it, outside loops; going backward, postorder visits each block after
-        // those it leads to.
+        // backward, so that a loop that no path leaves has a state too. Going backward, postorder visits each block
+        // after those it leads to.
         switch direction {
         case .forward:
             boundaryStates[0] = start
-            pending = WorkQueue(order.postorder.reversed(), blockCount: body.blocks.count)
+            let forwardOrder = LoopNestOrder(body, reached: order.postorder.reversed())
+            pending = WorkQueue(forwardOrder.blocks, blockCount: body.blocks.count)
         case .backward:
             for block in order.postorder {
                 boundaryStates[block.index] = start
@@ -96,43 +96,68 @@ struct DataflowSolver<State: DataflowState> {
     }
 }
 
-/// Blocks waiting their turn, first in first out, each at most once at a time.
+/// Blocks waiting their turn, each at most once at a time, handed out earliest in the solver's order first.
 private struct WorkQueue {
-    private var blocks: [BlockID]
-    /// The index in `blocks` of the next block to hand out; those before it are handed out.
-    private var head = 0
-    /// Whether each block is waiting, indexed by `BlockID`.
+    private let order: [BlockID]
+    /// The position in `order` of each block, indexed by `BlockID`; `outsideOrder` for a block it leaves out.
+    private let positions: [Int]
+    /// The positions of the waiting blocks, as a binary heap whose root is the earliest.
+    private var heap: [Int]
+    /// Whether the block at each position is waiting.
     private var isWaiting: [Bool]
 
-    /// A queue of `blocks`, in their order, from a function of `blockCount` blocks.
-    init(_ blocks: [BlockID], blockCount: Int) {
-        self.blocks = blocks
-        isWaiting = Array(repeating: false, count: blockCount)
-        for block in blocks {
-            isWaiting[block.index] = true
+    private static var outsideOrder: Int { -1 }
+
+    /// A queue of `order`, every block of it waiting, from a function of `blockCount` blocks.
+    init(_ order: [BlockID], blockCount: Int) {
+        self.order = order
+        var positions = Array(repeating: Self.outsideOrder, count: blockCount)
+        for (position, block) in order.enumerated() {
+            positions[block.index] = position
         }
+        self.positions = positions
+        // Positions in increasing order already form a heap.
+        heap = Array(order.indices)
+        isWaiting = Array(repeating: true, count: order.count)
     }
 
-    /// Adds `block` at the back, unless it is already waiting.
+    /// Adds `block`, unless it is already waiting.
     mutating func push(_ block: BlockID) {
-        guard !isWaiting[block.index] else { return }
-        isWaiting[block.index] = true
-        blocks.append(block)
+        let position = positions[block.index]
+        precondition(position != Self.outsideOrder, "the solver hands on states only to blocks of its order")
+        guard !isWaiting[position] else { return }
+        isWaiting[position] = true
+
+        // Sift the new position up past each parent that comes after it.
+        var child = heap.count
+        heap.append(position)
+        while child > 0, heap[(child - 1) / 2] > heap[child] {
+            heap.swapAt(child, (child - 1) / 2)
+            child = (child - 1) / 2
+        }
     }
 
-    /// Takes the block at the front, or returns nil when none is waiting.
+    /// Takes the waiting block that comes first in the order, or returns nil when none is waiting.
     mutating func pop() -> BlockID? {
-        guard head < blocks.count else { return nil }
-        let block = blocks[head]
-        isWaiting[block.index] = false
-        head += 1
+        guard let first = heap.first else { return nil }
+        isWaiting[first] = false
 
-        // Drop the blocks handed out once they fill half the storage, so it grows only with the blocks waiting.
-        if head * 2 >= blocks.count {
-            blocks.removeFirst(head)
-            head = 0
+        // Move the last position to the root, and sift it down past each child that comes before it.
+        let last = heap.removeLast()
+        if !heap.isEmpty {
+            heap[0] = last
+            var parent = 0
+            while true {
+                let left = 2 * parent + 1
+                guard left < heap.count else { break }
+                let right = left + 1
+                let earlier = right < heap.count && heap[right] < heap[left] ? right : left
+                guard heap[earlier] < heap[parent] else { break }
+                heap.swapAt(parent, earlier)
+                parent = earlier
+            }
         }
-        return block
+        return order[first]
     }
 }
 
@@ -168,5 +193,125 @@ private struct BlockOrder {
             isReached[successor.index] = true
             path.append((successor, 0))
         }
+    }
+}
+
+/// The reached blocks in the order a forward walk visits them: each after the blocks that lead to it, and each loop's
+/// blocks together, header first, so the solver settles a loop before it carries the loop's state on.
+private struct LoopNestOrder {
+    private(set) var blocks: [BlockID] = []
+    /// Indexed by `BlockID`.
+    private let successors: [[BlockID]]
+    /// The part being ordered that each block lies in, indexed by `BlockID`; a search keeps to one part. An unreached
+    /// block lies in `unreached`, which no search orders.
+    private var part: [Int]
+    private var partCount = 1
+    /// When the search of its part reached each block, indexed by `BlockID`; `unreached` where it hasn't yet.
+    private var reachedAt: [Int]
+    /// The earliest `reachedAt` that each block leads back to through `stack`, indexed by `BlockID`.
+    private var earliestReachable: [Int]
+    /// The reached blocks not yet in a component, in the order the search reached them.
+    private var stack: [BlockID] = []
+    private var isOnStack: [Bool]
+    private var clock = 0
+
+    private static var unreached: Int { -1 }
+
+    /// The order of `reached`, the blocks of `body` that some path from its entry reaches, the entry first.
+    init(_ body: IRBody, reached: [BlockID]) {
+        successors = body.blocks.map(\.terminator.successors)
+        part = Array(repeating: Self.unreached, count: body.blocks.count)
+        reachedAt = Array(repeating: Self.unreached, count: body.blocks.count)
+        earliestReachable = Array(repeating: 0, count: body.blocks.count)
+        isOnStack = Array(repeating: false, count: body.blocks.count)
+        for block in reached {
+            part[block.index] = 0
+        }
+        order(reached, inPart: 0)
+    }
+
+    /// Adds `members`, the blocks of part `id`, to the order: each strongly connected component in turn, its header
+    /// first, then the rest of it ordered the same way.
+    private mutating func order(_ members: [BlockID], inPart id: Int) {
+        for component in components(of: members, inPart: id) {
+            let header = component[0]
+            blocks.append(header)
+            guard component.count > 1 else { continue }
+
+            // The rest of the loop is a part of its own, which leaves out the edges back to the header.
+            let inner = Array(component.dropFirst())
+            let innerID = partCount
+            partCount += 1
+            for block in inner {
+                part[block.index] = innerID
+                reachedAt[block.index] = Self.unreached
+            }
+            order(inner, inPart: innerID)
+        }
+    }
+
+    /// The strongly connected components of part `id`, in the order their edges run, each in the order it was reached.
+    private mutating func components(of members: [BlockID], inPart id: Int) -> [[BlockID]] {
+        var found: [[BlockID]] = []
+        for root in members where reachedAt[root.index] == Self.unreached {
+            search(from: root, inPart: id, into: &found)
+        }
+        // A search finds each component after every component its edges lead to.
+        return found.reversed()
+    }
+
+    /// Adds the strongly connected components that a depth-first search of part `id` from `root` finds to `found`, by
+    /// Tarjan's algorithm.
+    private mutating func search(from root: BlockID, inPart id: Int, into found: inout [[BlockID]]) {
+        reach(root)
+        var path: [(block: BlockID, followed: Int)] = [(root, 0)]
+        while let (block, followed) = path.last {
+            let next = successors[block.index]
+            if followed < next.count {
+                path[path.count - 1].followed += 1
+                let successor = next[followed]
+                // An edge out of the part, such as one back to the loop's header, is left out.
+                guard part[successor.index] == id else { continue }
+                if reachedAt[successor.index] == Self.unreached {
+                    reach(successor)
+                    path.append((successor, 0))
+                } else if isOnStack[successor.index] {
+                    // An edge to a block on the stack leads back to it.
+                    lowerEarliest(of: block, to: reachedAt[successor.index])
+                }
+                continue
+            }
+
+            // With every successor followed, the block before it on the path leads back as far as it does.
+            path.removeLast()
+            if let (parent, _) = path.last { lowerEarliest(of: parent, to: earliestReachable[block.index]) }
+            // A block that leads back to nothing reached before it begins a component.
+            if earliestReachable[block.index] == reachedAt[block.index] { found.append(popComponent(from: block)) }
+        }
+    }
+
+    private mutating func reach(_ block: BlockID) {
+        reachedAt[block.index] = clock
+        earliestReachable[block.index] = clock
+        clock += 1
+        stack.append(block)
+        isOnStack[block.index] = true
+    }
+
+    private mutating func lowerEarliest(of block: BlockID, to time: Int) {
+        earliestReachable[block.index] = min(earliestReachable[block.index], time)
+    }
+
+    /// Takes the component that `first` begins off the stack.
+    private mutating func popComponent(from first: BlockID) -> [BlockID] {
+        guard let start = stack.lastIndex(of: first) else {
+            preconditionFailure("a search puts each block it reaches on the stack")
+        }
+        let component = Array(stack[start...])
+        stack.removeSubrange(start...)
+        for block in component {
+            isOnStack[block.index] = false
+        }
+        return component
     }
 }

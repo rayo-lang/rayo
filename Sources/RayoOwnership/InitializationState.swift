@@ -9,18 +9,18 @@ struct InitializationState: DataflowState {
     /// Called with a whole local that a statement stores to, and what the local holds just before it does.
     typealias StoreVisitor = (Destination, PlaceState) -> Void
 
-    /// Indexed by `LocalID`.
-    private var locals: [LocalState]
+    /// Indexed by `LocalID`. Blocks change few locals, so their states share the rest.
+    private var locals: PersistentArray<LocalState>
 
     /// The state on entry to `body`, where its function's parameters hold their arguments, and its other locals hold
     /// nothing yet.
     init(entering body: IRBody) {
-        locals = body.locals.map { $0.parameterConvention != nil ? .initialized : .declared }
+        locals = PersistentArray(body.locals.map { $0.parameterConvention != nil ? .initialized : .declared })
     }
 
     func merged(with other: InitializationState) -> InitializationState {
         var merged = self
-        merged.locals = zip(locals, other.locals).map { $0.joined(with: $1) }
+        merged.locals = locals.merged(with: other.locals) { $0.joined(with: $1) }
         return merged
     }
 

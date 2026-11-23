@@ -97,6 +97,20 @@ struct DataflowTests {
         #expect(visited.map(\.columns) == expected)
     }
 
+    @Test(arguments: [
+        DataflowDirection.forward, .backward,
+    ])
+    func `solving eight times as many loops in a row crosses well under sixty-four times as many effects`(
+        direction: DataflowDirection,
+    ) throws {
+        let short = try effectsCrossed(solving: loopsInARow(10), direction)
+        let long = try effectsCrossed(solving: loopsInARow(80), direction)
+
+        // Settling each loop before going on crosses about eight times as many; walking every later block again
+        // after each loop, about sixty-four times.
+        #expect(long < short * 16)
+    }
+
     // The solver checks its merges only in a debug build, which is how the tests run.
     @Test func `in a debug build, a merge that shrinks a block's state stops the solver`() async {
         await #expect(processExitsWith: .failure) {
@@ -170,14 +184,70 @@ private struct EvaluatedOperands: DataflowState {
     }
 }
 
+/// Blocks that run `count` loops one after another, each a header and a body. Each reads `x` at a column of its own,
+/// so each pass of a body adds to its header's state.
+private func loopsInARow(_ count: Int) -> String {
+    let loops = (0..<count).map { loop in
+        let (header, body) = (2 * loop + 1, 2 * loop + 2)
+        return """
+            bb\(header):
+              \(reading(header))
+              branch true, bb\(body), bb\(header + 2)
+            bb\(body):
+              \(reading(body))
+              goto bb\(header)
+            """
+    }
+    return "bb0:\n  goto bb1\n" + loops.joined(separator: "\n") + "\nbb\(2 * count + 1):\n  return"
+}
+
+/// The number of effects the solver takes the state across, going in `direction` through a function made of `blocks`.
+private func effectsCrossed(solving blocks: String, _ direction: DataflowDirection) throws -> Int {
+    let crossings = EffectCount()
+    let start = CountedOperands(direction: direction)
+    _ = DataflowSolver.solve(from: start, through: try body(of: blocks), knowing: crossings)
+    return crossings.count
+}
+
+/// A count of effects a state is taken across; a class, since the solver and the test both hold it.
+private final class EffectCount {
+    var count = 0
+}
+
+/// The operands that `EvaluatedOperands` gathers, carried by a state that counts each effect it is taken across.
+private struct CountedOperands: DataflowState {
+    var operands: EvaluatedOperands
+
+    init(direction: DataflowDirection) {
+        operands = EvaluatedOperands(direction: direction)
+    }
+
+    var direction: DataflowDirection { operands.direction }
+
+    func merged(with other: CountedOperands) -> CountedOperands {
+        var merged = self
+        merged.operands = operands.merged(with: other.operands)
+        return merged
+    }
+
+    mutating func apply(_ effect: Effect, in crossings: EffectCount) {
+        crossings.count += 1
+        operands.apply(effect, in: ())
+    }
+}
+
 /// Solves the walk from `start` through a function that returns `result` and is made of `blocks`.
 private func solve(
     _ start: EvaluatedOperands, _ blocks: String, result: String = "Void",
 ) throws -> DataflowResults<EvaluatedOperands> {
+    DataflowSolver.solve(from: start, through: try body(of: blocks, result: result), knowing: ())
+}
+
+/// The body of the function `function` makes of `blocks`, which returns `result`.
+private func body(of blocks: String, result: String = "Void") throws -> IRBody {
     let program = try program(of: [function(blocks, result: result)], from: .lowering)
     // The program's one function has a body.
-    let body = try #require(program.bodies[FunctionID(index: 0)])
-    return DataflowSolver.solve(from: start, through: body, knowing: ())
+    return try #require(program.bodies[FunctionID(index: 0)])
 }
 
 /// The columns at each point of the block at `index`, which `results` settle on, in the order of the points; nil where
