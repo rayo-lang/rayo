@@ -204,8 +204,8 @@ def cachegrind_run(command, counts):
     # tools that does.
     wrapped = [shutil.which('valgrind') or 'valgrind', '--tool=cachegrind', '--cache-sim=no', '--branch-sim=no',
                f'--cachegrind-out-file={counts}', *command]
-    # The environment's size moves the stack, which moves the count by up to 0.13%, and Swift's random hash seed
-    # moves it as much, so every run gets this one environment.
+    # The environment's size moves the stack, and Swift's random hash seed moves hashing, each moving the count by up
+    # to 0.14%, so every run gets this one environment.
     return wrapped, {'SWIFT_DETERMINISTIC_HASHING': '1'}
 
 
@@ -235,7 +235,8 @@ COUNTERS = {
     'system': InstructionCounter(system_measures, runs=3, threshold=5.0,
                                  method="Instructions and peak memory are as the system reports them for rayoc's "
                                         'process.'),
-    # Valgrind's count varies by under 0.001% between runs, so one run gives it and a small rise is real.
+    # Valgrind's count varies by under 0.001% between runs, so one run gives it. Two builds of one compiler can still
+    # differ by about 0.1% as their memory lands, which 1% leaves room for.
     'valgrind': InstructionCounter(valgrind_measures, runs=1, threshold=1.0,
                                    method="Instructions are as Valgrind's Cachegrind counts them, within 0.001% from "
                                           'run to run, and peak memory as the system reports it for a run outside '
@@ -251,12 +252,24 @@ def median_measures(runs):
     return {key: median(key) for key in ('instructions', 'peak_memory_bytes', 'wall_seconds')}
 
 
+def linked_rayoc(rayoc, directory):
+    """A link to `rayoc` in `directory`, whose path has one length wherever rayoc was built."""
+    # rayoc's arguments sit on the stack it starts on, so a longer path moves the stack, and with it Valgrind's
+    # count, as a larger environment does.
+    linked = os.path.join(directory, 'rayoc')
+    if os.path.lexists(linked):
+        os.remove(linked)
+    os.symlink(rayoc, linked)
+    return linked
+
+
 def measure_all(rayoc, sources, options):
     """The median measures of each benchmark over `sources` that `options` selects, over its runs of `rayoc` each,
     with its counter, printing each as it is measured."""
     measure_once = COUNTERS[options.counter].measure
     results = {}
     with tempfile.TemporaryDirectory() as directory:
+        rayoc = linked_rayoc(rayoc, directory)
         for program, source in sources:
             path = os.path.join(directory, program + '.rayo')
             with open(path, 'w', encoding='utf-8') as f:
@@ -431,7 +444,7 @@ def main(arguments):
         print('benchmark.py: --save needs --code, to say what the code at the commit is', file=sys.stderr)
         return 2
     if options.counter == 'valgrind' and not shutil.which('valgrind'):
-        print('benchmark.py: --counter valgrind needs Valgrind, which runs only on Linux', file=sys.stderr)
+        print('benchmark.py: --counter valgrind needs valgrind on the path', file=sys.stderr)
         return 2
     baseline = None
     if options.compare:

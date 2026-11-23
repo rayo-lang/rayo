@@ -17,10 +17,8 @@ outputs:
 runs:
   using: composite
   steps:
-    # The cached packages are what LLVM and the job's other packages need on top of the packages the container's
-    # image holds, at their exact versions. A new build of the image can change those, so the cache is keyed on them
-    # too. Raising the revision fetches apt.llvm.org's newest build of the release, since the cache otherwise keeps
-    # the build it first fetched.
+    # The cache is keyed on the image's exact packages, which a new image can change. Raising the revision fetches
+    # apt.llvm.org's newest build of the release, which the cache otherwise never does.
     - name: Name the packages' cache
       id: image
       shell: bash

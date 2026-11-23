@@ -78,7 +78,7 @@ Each benchmark runs `rayoc` to one stop point over one program, and is named `st
 
 M is 200, 400, 800 and 1600 unless `--sizes` names others, and N is five times M. `--stops` names the stop points to measure, such as `check,compile-debug`. The script measures the instructions `rayoc` retires and its peak memory, as the system reports them for the process, and its wall-clock time, and gives the median of three runs.
 
-On Linux, `--counter valgrind` has Valgrind's Cachegrind count the instructions instead, with its cache and branch simulations off, on a processor it simulates, and takes peak memory and wall-clock time from a run of its own outside Valgrind. It runs `rayoc` under Valgrind with only `SWIFT_DETERMINISTIC_HASHING=1` in its environment, since the environment's size and Swift's random hash seed each move the count by up to 0.13%. Its count varies by under 0.001% from run to run, even on a virtual machine whose processor counts nothing, so it measures one run. Valgrind runs `rayoc` about 40 times slower, so measure small sizes with it:
+On Linux, `--counter valgrind` has Valgrind's Cachegrind count the instructions instead, with its cache and branch simulations off, on a processor it simulates, and takes peak memory and wall-clock time from a run of its own outside Valgrind. The size of the environment and of the arguments, and Swift's random hash seed, each move that count by up to 0.14%. So the script runs `rayoc` under Valgrind through a link in a temporary directory, with only `SWIFT_DETERMINISTIC_HASHING=1` in its environment. Its count varies by under 0.001% from run to run, even on a virtual machine whose processor counts nothing, so it measures one run. Valgrind runs `rayoc` about 40 times slower, so measure small sizes with it:
 
 ```sh
 python3 Benchmarks/benchmark.py --counter valgrind --sizes 50,100,200 --stops check,compile-debug
@@ -93,7 +93,7 @@ python3 Benchmarks/benchmark.py --compare 2042c3c1
 
 A comparison fails where a benchmark's instructions rise more than 5% over the baseline's, since the system's count varies by up to 2.8% between runs, or more than 1% under Valgrind; `--threshold` names another. A baseline counted one way is never compared with a run counted the other. Peak memory and wall-clock time are reported, never compared, since peak memory varies by up to 11% between runs of one `rayoc` and wall-clock time with the machine's load.
 
-CI's benchmark job compares each pull request that changes the compiler with its base, both measured in the same job on Linux with the command above. GitHub's runners are virtual machines whose processors count no instructions, so Valgrind counts them there. The job leaves out the release compile, whose cost is mostly LLVM's optimisations.
+CI's benchmark job compares each pull request that changes the compiler with its base, both measured in the same job on Linux with the command above. GitHub's runners are virtual machines whose processors count no instructions, so Valgrind counts them there. The job measures only checking and a debug compile: printing costs little past checking, and LLVM's optimisations make most of a release compile's cost.
 
 ## How rayo and rayoc work together
 

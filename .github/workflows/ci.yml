@@ -240,12 +240,8 @@ jobs:
           llvm-version: ${{ env.LLVM_BUILD }}
           changed-paths: ${{ needs.changes.outputs.test-paths }}
 
-  # The benchmarks build a pull request's rayoc and the rayoc of its base, in one job on one machine, and run each on
-  # the same programs, so a rise in instructions past the threshold fails the job. GitHub's runners are virtual
-  # machines whose processors count no instructions, so Valgrind counts them, within 0.001% from run to run, and the
-  # job reports peak memory and wall-clock time from runs outside it and never compares them. The CI check leaves the
-  # job out, since a change may cost more on purpose: its pull request says why. A push to main only builds its
-  # release rayoc, which it saves for pull requests to start from.
+  # Measures a pull request's rayoc and its base's under Valgrind, since GitHub's runners count no instructions, and
+  # fails on a rise past the threshold. The CI check leaves it out, since a change may cost more on purpose.
   benchmarks:
     name: Benchmark on Linux
     needs: changes

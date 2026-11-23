@@ -6,9 +6,9 @@ import tempfile
 import unittest
 from unittest import mock
 
-from benchmark import (STOP_POINTS, UNCOUNTED, cachegrind_instructions, cachegrind_run, linux_measures, loops,
-                       macos_measures, main, parse_arguments, programs, ref_let_loops, regressions, stage_costs,
-                       straight_line, summary)
+from benchmark import (STOP_POINTS, UNCOUNTED, cachegrind_instructions, cachegrind_run, linked_rayoc, linux_measures,
+                       loops, macos_measures, main, parse_arguments, programs, read, ref_let_loops, regressions,
+                       stage_costs, straight_line, summary)
 
 MACOS_TIME = '''        0.31 real         0.27 user         0.03 sys
             52183040  maximum resident set size
@@ -62,6 +62,19 @@ class MeasuresTests(unittest.TestCase):
 
         self.assertEqual(with_base, with_head)
         self.assertEqual(with_base['SWIFT_DETERMINISTIC_HASHING'], '1')
+
+    def test_rayoc_runs_by_the_same_path_wherever_it_was_built(self):
+        with tempfile.TemporaryDirectory() as checkouts, tempfile.TemporaryDirectory() as directory:
+            linked = []
+            for checkout in ('a', 'a-checkout-at-a-longer-path'):
+                built = os.path.join(checkouts, checkout, 'rayoc')
+                os.makedirs(os.path.dirname(built))
+                with open(built, 'w', encoding='utf-8') as f:
+                    f.write(checkout)
+                linked.append(linked_rayoc(built, directory))
+                self.assertEqual(read(linked[-1]), checkout)
+
+        self.assertEqual(linked[0], linked[1])
 
     def test_a_cachegrind_file_with_no_summary_is_an_error(self):
         with self.assertRaises(ValueError):
