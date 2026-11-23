@@ -54,15 +54,18 @@ extension ExpressionChecker {
     }
 
     /// `lent`, a `&` of a place, as it stands where a position expects what `expected` names. The argument of a
-    /// parameter that borrows, and a `ref let`'s value, take the place itself, and check its type as they would the
-    /// value's. Reports the `&` anywhere else.
+    /// parameter that borrows, and a `ref let`'s value, take the place itself, where a local holds it. Reports the `&`
+    /// anywhere else.
     func lent(_ lent: LentPlace, to expected: Expectation) -> CheckedExpr? {
         switch expected.recipient {
         case .parameter(let parameter)?:
             self.lent(lent, to: parameter, expected)
 
-        // A `ref var`, which is reported as unsupported, takes a `&` as a `ref let` does, so it reports nothing more.
-        case .declaration(.refLet)?, .declaration(.refVar)?:
+        case .declaration(.refLet)?:
+            heldPlace(of: lent, fitting: expected)
+
+        // A `ref var`, which is reported as unsupported, takes any `&`, so it reports nothing more.
+        case .declaration(.refVar)?:
             typeFitted(lent.placeExpression, to: expected)
 
         // A `let` or a `var` would hold the reference as a value.
@@ -76,12 +79,12 @@ extension ExpressionChecker {
     }
 
     /// `lent`, a `&` of a place, as the argument of `parameter`, of the type `expected` names. A parameter that
-    /// borrows takes the place itself. One that owns its argument reports the `&`, since nothing written says whether
-    /// the call copies the place's value or moves it.
+    /// borrows takes the place itself, where a local holds it. One that owns its argument reports the `&`, since
+    /// nothing written says whether the call copies the place's value or moves it.
     private func lent(_ lent: LentPlace, to parameter: ArgumentParameter, _ expected: Expectation) -> CheckedExpr? {
         switch parameter.convention {
         case .borrowed:
-            typeFitted(lent.placeExpression, to: expected)
+            heldPlace(of: lent, fitting: expected)
         case .owned:
             refused(.referenceToOwnedParameter(name: parameter.callee, type: typeName(of: expected.type)),
                     at: lent.range)
@@ -100,6 +103,14 @@ extension ExpressionChecker {
         case .declaration(.refVar)?: typeFitted(lent.placeExpression, to: expected)
         default: refused(.unsupportedMutableReference, at: lent.range)
         }
+    }
+
+    /// The place that `lent` lends, as a value of the type `expected` names, where a local holds it. A place in a
+    /// temporary, such as the one that holds `e.slots.count`, is reported as unsupported, since rayoc lends no value
+    /// that no local holds.
+    private func heldPlace(of lent: LentPlace, fitting expected: Expectation) -> CheckedExpr? {
+        guard lent.place.local != nil else { return refused(.unsupportedLentValue, at: lent.range) }
+        return typeFitted(lent.placeExpression, to: expected)
     }
 
     /// Reports `code` at `range`, where a position refuses the value the source writes there, and returns nil in its

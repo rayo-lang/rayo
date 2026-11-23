@@ -10,6 +10,7 @@ private let declarations = """
     func show(_ e: &Enemy) {}
     func showStats(_ s: &Stats) {}
     func read(_ n: &Int) {}
+    func count(_ n: &UInt) {}
     func take(_ n: Int) {}
     func pair(_ n: &Int, with m: Int) {}
     func pass(_ e: &Enemy) { show(&e) }
@@ -50,7 +51,8 @@ struct ReferenceParameterTests {
     @Test(arguments: [
         ("show(makeEnemy())", [10]), ("show(copy e)", [10]), ("read(1)", [10]), ("read(a + 1)", [10]),
         ("read(makeEnemy().stats.hp)", [10]), ("show(if c { makeEnemy() } else { copy e })", [17, 38]),
-        ("show(if c { &e } else { makeEnemy() })", [29]),
+        ("show(if c { &e } else { makeEnemy() })", [29]), ("count(&e.slots.count)", [11]),
+        ("count(if c { &i } else { &g[0].slots.count })", [30]),
     ])
     func `lending a value that no local or parameter holds to a '&T' parameter is reported as unsupported`(
         statement: String, columns: [Int],

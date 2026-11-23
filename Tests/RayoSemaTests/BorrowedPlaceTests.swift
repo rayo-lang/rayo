@@ -141,12 +141,20 @@ struct BorrowedPlaceTests {
         #expect(messages(of: statement) == [])
     }
 
+    // `&` of an array's count lends a temporary that holds the count, which rayoc lends nowhere.
+    @Test(arguments: [("ref let x = &e.slots.count", 17), ("ref let x = if c { &i } else { &e.slots.count }", 36)])
+    func `a 'ref let' given '&' of a value that no local holds reports the lending as unsupported`(
+        statement: String, column: Int,
+    ) {
+        #expect(messages(of: statement) == [
+            "\(column): error[E0286]: lending a value that no local holds isn't supported; put it in a 'let' and "
+                + "lend that",
+        ])
+    }
+
     // A `ref let` refers to a place, so a value that no place holds, a place in a temporary among them, gives it
-    // nothing to refer to. So does `&` of an array's count, which is a value its type fixes.
-    @Test(arguments: [
-        "ref let x = 1", "ref let x = copy a", "ref let x = makeEnemy().stats", "ref let x = a + b",
-        "ref let x = &e.slots.count",
-    ])
+    // nothing to refer to.
+    @Test(arguments: ["ref let x = 1", "ref let x = copy a", "ref let x = makeEnemy().stats", "ref let x = a + b"])
     func `a 'ref let' given a value names the binding, and says to declare 'let' or 'var'`(statement: String) {
         #expect(messages(of: statement) == [
             "13: error[E0280]: 'x' has no place to refer to; declare it 'let' or 'var' to own its value",
