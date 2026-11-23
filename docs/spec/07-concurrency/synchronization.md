@@ -194,10 +194,10 @@ So each send either put its item in before the disconnection, and the item is de
 
 ```swift
 while let r = rx.receive() { handle(consume r) }      // ends once every Sender is gone and the channel is empty
-for r in mutable &rx { handle(consume r) }           // the same loop
+for r in mutable rx { handle(consume r) }            // the same loop
 ```
 
-**A `Receiver` is a `MutableSequence` whose iterator calls `receive()`**, so `for r in mutable &rx` hands each item over, and ends at disconnection ([04](../04-types/collections.md#iteration)). The loop holds `rx` exclusively, as each `receive()` does, and the `mutable &` says so.
+**A `Receiver` is a `MutableSequence` whose iterator calls `receive()`**, so `for r in mutable rx` hands each item over, and ends at disconnection ([04](../04-types/collections.md#iteration)). The loop holds `rx` exclusively, as each `receive()` does, and the `mutable` says so.
 
 **`tryReceive()` never parks, and tells an empty channel from a disconnected one:**
 
@@ -307,16 +307,16 @@ if let map = lightmap.wait() { apply(map) }       // returns at once: the bake i
 ThreadScope.run { s in
     var assets = consume rx                                          // the block owns the Receiver: an unwind out of the block destroys it
     let meshes = tx.share()
-    s.spawn { [move meshes] in loadMeshes(into: mutable &meshes) }   // each thread owns its Sender, so its panic destroys it inside the scope
-    s.spawn { [move tx] in loadSounds(into: mutable &tx) }           // the last producer takes the original
-    for asset in mutable &assets { register(consume asset) }         // ends once both producers are done, or have panicked
+    s.spawn { [move meshes] in loadMeshes(into: mutable meshes) }    // each thread owns its Sender, so its panic destroys it inside the scope
+    s.spawn { [move tx] in loadSounds(into: mutable tx) }            // the last producer takes the original
+    for asset in mutable assets { register(consume asset) }          // ends once both producers are done, or have panicked
 }
 ```
 
 **Code that only borrows an end compiles, but the end then outlives everything that happens in the scope**, panics included, since nothing destroys a frame outside the scope until `ThreadScope.run` has joined every thread:
 
-- **A borrowed `Sender`**, such as `mutable &tx`. The channel never disconnects inside the scope, so a consumer there waits for ever, after a producer's panic or even after every producer finishes, and `ThreadScope.run` waits for it.
-- **A borrowed `Receiver`**, such as `mutable &rx`. After the consumer's panic, a producer parked in `send` on the full channel is never woken, and `ThreadScope.run` waits for it.
+- **A borrowed `Sender`**, such as `mutable tx`. The channel never disconnects inside the scope, so a consumer there waits for ever, after a producer's panic or even after every producer finishes, and `ThreadScope.run` waits for it.
+- **A borrowed `Receiver`**, such as `mutable rx`. After the consumer's panic, a producer parked in `send` on the full channel is never woken, and `ThreadScope.run` waits for it.
 
 ### Snapshots, one-time values and waits
 

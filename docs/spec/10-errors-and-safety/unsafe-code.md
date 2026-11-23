@@ -6,7 +6,7 @@ Safe Rayo code relies on the compiler to check its memory guarantees. Some opera
 
 ```swift
 unsafe {
-    let p: *Particle = ptr(to: mutable &particles[0])
+    let p: *Particle = ptr(to: mutable particles[0])
     p[3].pos = .zero
     _ = memcpy(dst, src, n)                                         // C's memcpy returns 'dst', dropped here
 }
@@ -60,7 +60,7 @@ So a call the language makes on the code's behalf is allowed only where the call
 - **Untyped pointers.** `*Void` points at memory of no stated type, and `p.cast(to: U.self)` converts between pointer types, to a `U` of a sized type or an `@opaque` one.
 - **Integers.** A pointer and a `CUIntPtr` have the same size, so each converts to the other as a bit cast does ([04](../04-types/data-layout.md#plain-data-pod-and-bit-casts)). `CUIntPtr(bitPattern: p)`, for a `p` of type `*T` or `*T?`, is safe, with `nil` giving 0, though it can't run at compile time ([09](../09-compile-time/constants-and-conditions.md#running-code-at-compile-time-const)). Its result converts on to `UInt` as any `UIntN` does ([04](../04-types/numbers-and-math.md#conversions)). The reverse, `*T?(bitPattern: c)` of a `CUIntPtr`, is `unsafe`. A `UInt` converts to a `CUIntPtr` first, as `CUIntPtr(u)`, which checks that it fits.
 - **Reading and offsetting.** `p.pointee` is the `T` at `p`, `p + n` is `n` times `T`'s size further on, and `p[i]` is `(p + i).pointee`. They need a `T` whose size is known and nonzero. So `*Void` and a pointer to an `@opaque` type have none of them, nor `q - p` (below), and byte offsets go through `p.cast(to: UInt8.self)`.
-- **Runs.** `p[a..<b]` is the run of `T`s from `p + a` up to `p + b`, a `[T]` place with a `borrow` and a `mutate`, under the same condition on `T`. So `&p[0..<n]` makes a `&[T]` of the `n` elements at `p`, and `mutable &p[0..<n]` a `mutable &[T]`. A reference made through a raw pointer carries no dependency the compiler can check, so the code that makes one keeps the promises below for as long as it is used ([Values, views and threads](#values-views-and-threads)).
+- **Runs.** `p[a..<b]` is the run of `T`s from `p + a` up to `p + b`, a `[T]` place with a `borrow` and a `mutate`, under the same condition on `T`. So `&p[0..<n]` makes a `&[T]` of the `n` elements at `p`, and `mutable p[0..<n]` a `mutable &[T]`. A reference made through a raw pointer carries no dependency the compiler can check, so the code that makes one keeps the promises below for as long as it is used ([Values, views and threads](#values-views-and-threads)).
 - **Alignment.** Every type's size is a multiple of its alignment, so consecutive values stay aligned.
 - **Alignment and distance queries.** `p.isAligned(to: n)` tells whether `p`'s address is a multiple of `n`, a power of two, and `p.alignedUp(to: n)` is the first pointer at or after `p` whose address is one. `q - p` is how many `T`s lie from `p` to `q`, as an `Int`.
 
@@ -129,7 +129,7 @@ The rules say what an allocation is, what each access through a raw pointer must
 **These rules cover the values, views and threads that `unsafe` code hands on to other code:**
 
 - **Places hold valid values.** Whenever Rayo code may next read, lend or destroy a place as `T`, it holds a valid `T`. So a write through a pointer of another type leaves one there. A place that `p.move()` or `p.deinitialize()` emptied is initialized again before its owner uses or destroys it, a panic's unwind included ([below](#panics-in-unsafe-code)). Otherwise the owner would use or destroy a value that has moved out or been destroyed already.
-- **Views reach live, aligned, valid places.** This holds for a reference or other view that `unsafe` code makes from a raw pointer, such as `&p.pointee` or `mutable &p[0..<n]`, and for one it passes on as an argument. For as long as such a view lives, its places lie inside one live allocation, and each is aligned for its type and holds a valid value. A mutable reference's places are also writable. A `&[T]` or `mutable &[T]` reaches its `count` consecutive places. Safe code reads and writes them with aligned accesses.
+- **Views reach live, aligned, valid places.** This holds for a reference or other view that `unsafe` code makes from a raw pointer, such as `&p.pointee` or `mutable p[0..<n]`, and for one it passes on as an argument. For as long as such a view lives, its places lie inside one live allocation, and each is aligned for its type and holds a valid value. A mutable reference's places are also writable. A `&[T]` or `mutable &[T]` reaches its `count` consecutive places. Safe code reads and writes them with aligned accesses.
 - **A move-only value has one owner.** Its bytes stand for one value. After they are copied to a second place, only one of the two is used or destroyed as that type again, as `p.move()` leaves only the destination. That holds wherever the code can panic too, since the unwind destroys the places it finds. Two places standing for it would be two owners of what it holds, two mutable aliases, or a guard that unlocks twice.
 - **Values that aren't `Sendable` stay on their thread.** Such a value is used, lent and destroyed only on the thread whose code made it, or, for a thread-bound object, on its home thread ([07](../07-concurrency/race-freedom-and-sendable.md#what-may-cross-threads-sendable)). That holds whatever `unsafe` code or C passes it through, since only on that thread do exclusivity and the dynamic tier check all of its aliases ([07](../07-concurrency/race-freedom-and-sendable.md#why-safe-code-cant-race)). A value that only the raw pointers it holds keep from being `Sendable` may cross, and each access through those pointers follows the rules on raw accesses ([above](#raw-accesses)).
 
@@ -172,7 +172,7 @@ subscript(i: UInt) -> T {
 }
 subscript(i: UInt) -> T {
     borrow { unsafe &storage[i] }                            // sound: hands out slot i itself, which stays full
-    mutate { unsafe mutable &storage[i] }
+    mutate { unsafe mutable storage[i] }
 }
 ```
 
@@ -188,15 +188,15 @@ Two more facts are part of the boundary between `unsafe` and safe code:
 
 ## Taking an address
 
-**`ptr(to:)` returns the address of a place**, in two forms: one for a place lent to it with `mutable &`, and a shared form for a place lent shared.
+**`ptr(to:)` returns the address of a place**, in two forms: one for a place lent to it with `mutable`, and a shared form for a place lent shared.
 
 ```swift
 unsafe func ptr<T>(to place: mutable &T) -> *T    // the form for a place lent for change
-let p = unsafe ptr(to: mutable &particles[0])     // the address of particles[0], lent for change
+let p = unsafe ptr(to: mutable particles[0])      // the address of particles[0], lent for change
 let q = unsafe ptr(to: particles[0])              // the shared form: the address of a place it borrows
 ```
 
-- **Builtin.** It is builtin, and the argument chooses the form: `mutable &` lends the place for change, and a place given as it is, or with `&`, is lent shared ([05](../05-protocols-generics-and-closures/implicit-conversions.md#places-lent-where-a-reference-is-expected)).
+- **Builtin.** It is builtin, and the argument chooses the form: `mutable` lends the place for change, and a place given as it is, or with `&`, is lent shared ([05](../05-protocols-generics-and-closures/implicit-conversions.md#places-lent-where-a-reference-is-expected)).
 - **Sized places.** The place's type binds `T`, so it is sized, as a raw pointer's target is ([above](#raw-pointers)). So `ptr(to: hits.span)` is a compile error, and a run's address is its `baseAddress`.
 - **Never a function value.** It converts to no function type or `Closure` and binds no `some F`, so every call of it is direct.
 - **The caller's place.** Its argument, of either form, is always the caller's place, never a copy, since its result is that place's address ([01](../01-values-and-ownership/parameters.md#borrowed-arguments)).

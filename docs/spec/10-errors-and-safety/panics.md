@@ -157,7 +157,7 @@ fatalError("enemy \(id) has no mesh")      // an interpolated message, formatted
 
 ```swift
 defer { x.reset() }
-f(mutable &x)          // fine: if f panics, its borrow of x has ended by the time the defer runs
+f(mutable x)           // fine: if f panics, its borrow of x has ended by the time the defer runs
 ```
 
 **A panic in a `deinit` or a `defer` block unwinds as any panic does, except in code an unwind runs** ([below](#what-ends-the-program)). The unwind still destroys the rest of the value whose `deinit` panicked, its fields after its `deinit`, and every other live value. An assignment whose old value's `deinit` panics has already stored its new value ([01](../01-values-and-ownership/moves-copies-destruction.md#destruction)).

@@ -36,7 +36,7 @@ Written this way, two threads may write one cell with nothing ordering the write
 
 ### C2 · Disjoint writes to one value from several threads (also C16)
 
-**Two closures work on one `world`: one writes `world.velocities`, and the other reads `world.positions`.** Separately, inside `ThreadScope.run`, the block spawns one thread per part of the work while it works too: one thread writes `world.bodies`, another writes `world.ai` and reads `world.perception`, and the block writes `world.audio`. A helper function takes the scope as a `mutable &` parameter and spawns two more threads over places its caller lends it.
+**Two closures work on one `world`: one writes `world.velocities`, and the other reads `world.positions`.** Separately, inside `ThreadScope.run`, the block spawns one thread per part of the work while it works too: one thread writes `world.bodies`, another writes `world.ai` and reads `world.perception`, and the block writes `world.audio`. A helper function takes the scope as a `mutable &T` parameter and spawns two more threads over places its caller lends it.
 
 - **Must accept** `join` with the two closures, and all of the scoped threads, with no copies of the world and no `unsafe` outside std. Once the scope returns, every place the spawns borrowed is free again.
 

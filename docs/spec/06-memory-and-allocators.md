@@ -11,7 +11,7 @@ var names = alloc List<String>()                            // the ambient alloc
 
 do {
     var visible = scratch.alloc List<Handle<Mesh>>()        // built in the scratch arena
-    cull(scene, into: mutable &visible)                     // grows there, though 'cull' names no allocator
+    cull(scene, into: mutable visible)                      // grows there, though 'cull' names no allocator
     submit(visible)
 }                                                           // 'visible' is destroyed here; freeing to an arena is a no-op
 

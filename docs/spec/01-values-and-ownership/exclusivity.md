@@ -50,8 +50,8 @@ The law of exclusivity governs accesses to overlapping places, so which places o
 - **A user-declared computed property or subscript accessor is an access to all of `self`**, whatever place or value it hands out, since its body may reach any of it. So two `ref var` bindings of two computed properties of `world` conflict, as in the example below. An imported bitfield's generated accessors are the exception: each accesses only its C memory location (below), as a reflection projection of the bitfield does.
 
 ```swift
-ref var p = mutable &world.physics      // when 'physics' and 'render' are computed properties,
-ref var r = mutable &world.render       // error: each is an access to all of 'world', and 'p' is used below
+ref var p = mutable world.physics       // when 'physics' and 'render' are computed properties,
+ref var r = mutable world.render        // error: each is an access to all of 'world', and 'p' is used below
 p.step(dt)
 ```
 
@@ -63,10 +63,10 @@ p.step(dt)
 - **Bitfields.** Imported bitfields that form one C **memory location** ([08](../08-c-interop/imports-and-inline-c.md#structs-unions-and-enums)). Bitfields in different memory locations, or a bitfield and a neighboring field, are separate places, which two threads may write at once, as C11 allows.
 
 ```swift
-g(mutable &e.f, mutable &e.u)                      // error when 'f' and 'u' are members of one union
+g(mutable e.f, mutable e.u)                        // error when 'f' and 'u' are members of one union
 join({ e.f = 1 }, { use(e.u) })                    // error: the same
 join({ v.x = x }, { v.y = y })                     // error for a Simd 'v': each closure accesses the whole vector
-if ref var (first, second) = mutable &pair { ... } // fine for an optional tuple 'pair': two disjoint borrows
+if ref var (first, second) = mutable pair { ... } // fine for an optional tuple 'pair': two disjoint borrows
 ```
 
 ```c
@@ -78,10 +78,10 @@ struct { uint32_t a : 20; uint32_t b : 20; };  // 'a' and 'b' are one place, tho
 **Two elements at once need an API that checks at run time that they are distinct:**
 
 ```swift
-if ref var (a, b) = mutable &world.enemies[h1, h2] {   // nil if h1 == h2 or either is stale
-    swap(mutable &a.hp, mutable &b.hp)
+if ref var (a, b) = mutable world.enemies[h1, h2] {    // nil if h1 == h2 or either is stale
+    swap(mutable a.hp, mutable b.hp)
 }
-if ref var (a, b) = mutable &verts[i, j] { ... }       // lists too: nil if i == j; out of bounds still panics
+if ref var (a, b) = mutable verts[i, j] { ... }        // lists too: nil if i == j; out of bounds still panics
 list.swapAt(i, j)
 var (left, right) = list.span.mutableSplit(at: mid)     // two disjoint 'mutable &[T]'s, both depending on list exclusively
 ```

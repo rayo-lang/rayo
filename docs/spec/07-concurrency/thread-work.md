@@ -20,7 +20,7 @@ particles.forEachInParallel { p in                          // @sendable (mutabl
     - a non-`mutating` one by any number of threads at once, since it only reads its captures;
     - a `mutating` one by one thread at a time, each call happening before the next, since calling it changes the closure itself;
     - a `consuming` one once, since the call consumes it.
-- **Exclusivity holds across a call's arguments**, closures included, since a closure literal borrows what it captures for as long as the call has it. So the second `join` at the top of this chapter is rejected, as `f(mutable &x, x)` is, for an `f` whose second parameter is a `&Int` ([01](../01-values-and-ownership/parameters.md#evaluation-order-and-when-a-calls-borrows-begin)).
+- **Exclusivity holds across a call's arguments**, closures included, since a closure literal borrows what it captures for as long as the call has it. So the second `join` at the top of this chapter is rejected, as `f(mutable x, x)` is, for an `f` whose second parameter is a `&Int` ([01](../01-values-and-ownership/parameters.md#evaluation-order-and-when-a-calls-borrows-begin)).
 - **What a call begins ends with it**, since rule 5 lets no function return or store a view of what it owns or began ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-5-the-callee-side)). A lock guard is released on the thread that took it ([Locks: `Mutex` and `RwLock`](synchronization.md#locks-mutex-and-rwlock)). So nothing a closure began on one thread is left for another.
 
 **Writing a shared place from a parallel loop's body is a type error:**
@@ -61,7 +61,7 @@ A parameter of function type would get only a view of the literal, which dies at
 
 ```swift
 ThreadScope.run { s in
-    s.spawn { integrate(mutable &world.bodies, dt: dt) }
+    s.spawn { integrate(mutable world.bodies, dt: dt) }
     print(world.bodies.count)                               // error: 's' borrows 'world.bodies' exclusively until the block returns
 }
 ```
@@ -72,8 +72,8 @@ ThreadScope.run { s in
 
 ```swift
 ThreadScope.run { s in
-    s.spawn { integrate(mutable &world.bodies, dt: dt) }    // if this panics, its panic waits for the join
-    mix(mutable &world.audio)                               // and this still runs
+    s.spawn { integrate(mutable world.bodies, dt: dt) }     // if this panics, its panic waits for the join
+    mix(mutable world.audio)                                // and this still runs
 }                                                           // every thread has finished: a spawned thread's panic resumes here
 ```
 
@@ -118,9 +118,9 @@ The panic unwinds the spawned closure's frames on its own thread, and destroys t
 ```swift
 let ready = Event()
 ThreadScope.run { s in
-    s.spawn { ready.wait(); process(mutable &output) }   // parks until 'ready' is signalled
+    s.spawn { ready.wait(); process(mutable output) }    // parks until 'ready' is signalled
     defer { ready.signal() }                              // runs when the block unwinds too
-    prepare(mutable &input)                              // may panic: without the defer, the spawned thread would wait for ever
+    prepare(mutable input)                               // may panic: without the defer, the spawned thread would wait for ever
 }
 ```
 
@@ -158,7 +158,7 @@ let table = catchPanic {                          // a global's initializer, run
 func startRenderer() -> (Thread<Void>, Sender<Shared<Snapshot>>) {           // called from main, after startup
     let (tx, rx) = alloc Channel<Shared<Snapshot>>.make(capacity: 3)
     let render: Thread<Void> = Thread.start(name: "render") { [move rx] in   // the thread owns the receiver
-        for snapshot in mutable &rx { draw(snapshot) }                      // parks between snapshots; ends once every sender is gone
+        for snapshot in mutable rx { draw(snapshot) }                       // parks between snapshots; ends once every sender is gone
     }
     return (consume render, consume tx)                                      // the simulation keeps the sender
 }
@@ -166,7 +166,7 @@ func startRenderer() -> (Thread<Void>, Sender<Shared<Snapshot>>) {           // 
 func runSimulation(_ world: mutable &World) {                                // called from main, after startup
     var (render, tx) = startRenderer()
     while !world.quit {
-        step(mutable &world)
+        step(mutable world)
         when tx.send(alloc Shared(world.snapshot())) {
             .failure { break }                                               // the render thread is gone
             else {}

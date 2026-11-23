@@ -20,7 +20,7 @@ func parse(_ lines: &[&Text]) { ... }
 func loadScript(_ path: &Text) -> Void!IoError {
     var source = try readText(path)
     var lines = alloc List<&Text>()
-    splitLines(source, into: mutable &lines)      // 'lines' now borrows 'source'
+    splitLines(source, into: mutable lines)       // 'lines' now borrows 'source'
     source.append("\n")                           // error: 'source' is borrowed by 'lines' (used below)
     parse(lines)
 }
@@ -29,7 +29,7 @@ func loadScript(_ path: &Text) -> Void!IoError {
 Change `source` only after the last use of `lines`, and the code compiles:
 
 ```swift
-    splitLines(source, into: mutable &lines)
+    splitLines(source, into: mutable lines)
     parse(lines)                                  // the last use of 'lines'
     source.append("\n")                           // fine: nothing borrows 'source' any more
 ```
@@ -50,7 +50,7 @@ The compiler never looked inside `splitLines`. Its signature alone tells the cal
 ```swift
 let all: &[Int] = hits                   // the hit list's elements, read-only
 let firstTwo = &hits[0..<2]              // a range of them: also a &[Int]
-var editable = mutable &hits.span        // a mutable &[Int], which can change them
+var editable = mutable hits.span         // a mutable &[Int], which can change them
 let text: &Text = source                 // the string's bytes
 let word = &text[0..<5]                  // a range of bytes: also a &Text
 let name = "grunt"                       // a literal is a static &Text: its bytes last for the whole run
@@ -70,16 +70,16 @@ let run: [Int] = hits.span               // error: '[Int]' is unsized; declare '
 
 **A `mutable &[T]` is move-only**, since two copies would be two ways to change the same elements at once.
 
-**`hits.span` is the list's elements, and the mark you write before it says which reference you get.** `&hits.span` reads them, and `mutable &hits.span` can change them. A range such as `hits[0..<4]` works the same way, so one name serves both ([04](../spec/04-types/collections.md#shared-and-mutable-views-of-one-collection)).
+**`hits.span` is the list's elements, and the mark you write before it says which reference you get.** `&hits.span` reads them, and `mutable hits.span` can change them. A range such as `hits[0..<4]` works the same way, so one name serves both ([04](../spec/04-types/collections.md#shared-and-mutable-views-of-one-collection)).
 
 **Writing through a `mutable &[T]` takes a binding that may change.** `editable[0] = 0` changes an element of `hits` through the reference, so `editable` is a `var`. A `let` that holds a mutable reference can read through it, but never write through it ([01](../spec/01-values-and-ownership/references.md#forwarding-through-a-reference)).
 
-**A function that changes a run of elements takes a `mutable &[T]`.** Inside, the parameter names the elements, so the function lends them on with `mutable &`, just as it would lend a variable of its own. At the call, `mutable &editable` lends a new reference to the same elements, and `editable` works again once the call returns ([01](../spec/01-values-and-ownership/references.md#reborrowing)):
+**A function that changes a run of elements takes a `mutable &[T]`.** Inside, the parameter names the elements, so the function lends them on with `mutable`, just as it would lend a variable of its own. At the call, `mutable editable` lends a new reference to the same elements, and `editable` works again once the call returns ([01](../spec/01-values-and-ownership/references.md#reborrowing)):
 
 ```swift
-func clear(_ s: mutable &[Int]) { for x in mutable &s { x = 0 } }
+func clear(_ s: mutable &[Int]) { for x in mutable s { x = 0 } }
 
-clear(mutable &editable)                 // a new reference to the hits, for this call
+clear(mutable editable)                  // a new reference to the hits, for this call
 editable[0] = 1                          // fine: 'editable' is free again
 ```
 
@@ -130,7 +130,7 @@ let tok = Token(text: word, line: 1)      // so does the token that holds it
 source.append("!")                        // error: 'source' is borrowed by 'tok' (used below)
 log("\(tok.text)")
 
-var editable = mutable &hits.span         // carries 'hits', exclusive
+var editable = mutable hits.span          // carries 'hits', exclusive
 let n = hits.count                        // error: 'hits' is borrowed by 'editable' (used below)
 editable[0] = 0
 ```
@@ -163,11 +163,11 @@ log("\(title)")
 
 **A `mutable &[T]` gets no such exception**, since it is move-only.
 
-## Storing views through a `mutable &` argument
+## Storing views through a `mutable` argument
 
 ```swift
 var lines = alloc List<&Text>()
-splitLines(source, into: mutable &lines)      // 'lines' takes on what the reference to 'source' carries: 'source'
+splitLines(source, into: mutable lines)       // 'lines' takes on what the reference to 'source' carries: 'source'
 var names = alloc List<&Text>()
 names.append(banner)                          // 'self' absorbs too: 'names' takes on 'banner'
 
@@ -176,12 +176,12 @@ struct Scanner(var text: &Text, var pos: UInt = 0): Scoped {
 }
 
 var scanner = Scanner(text: source)
-scanner.scan(into: mutable &tokens)           // 'tokens' takes on what 'scanner' carries: 'source'
+scanner.scan(into: mutable tokens)            // 'tokens' takes on what 'scanner' carries: 'source'
 scanner.pos = 0                               // fine: 'tokens' doesn't borrow 'scanner' itself
 use(tokens)
 ```
 
-**After a call, each scoped `mutable &` argument takes on what the other arguments borrow.** This is **absorption** ([02](../spec/02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-4-absorption)), and it's how `lines` learns that it borrows `source`.
+**After a call, each scoped `mutable` argument takes on what the other arguments borrow.** This is **absorption** ([02](../spec/02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-4-absorption)), and it's how `lines` learns that it borrows `source`.
 
 **The caller assumes the function stores whatever it could.** The signature of `splitLines` can't say whether it stores references to `text` into `out`, so the caller assumes it does.
 
@@ -191,7 +191,7 @@ use(tokens)
 
 **A shared reference, or a number, lends an absorbing argument only what it carries.** It lends a call's result the same, as `longest` showed above. So `lines` borrows `source`, not the reference the call made to it.
 
-**Another `mutable &` argument lends what it carries, not itself.** So `tokens` borrows the text the scanner refers to, and the scanner can move on while `tokens` is in use.
+**Another `mutable` argument lends what it carries, not itself.** So `tokens` borrows the text the scanner refers to, and the scanner can move on while `tokens` is in use.
 
 ### What the function may keep
 
@@ -249,11 +249,11 @@ lexer.advance()                           // fine: 'tok' was last used above
 use(syms)
 ```
 
-**Each item of the clause names a subject and what it borrows.** The subject is `return` or a `mutable &` parameter:
+**Each item of the clause names a subject and what it borrows.** The subject is `return` or a `mutable &T` parameter:
 
 - `return borrows x`: the parameter `x` and what it carries, and no other parameter;
 - `return borrows static`: only global `let`s and `const`s, so no argument stays borrowed;
-- `out borrows text`: the `mutable &` parameter `out` takes on `text`, and not the other arguments.
+- `out borrows text`: the `mutable &T` parameter `out` takes on `text`, and not the other arguments.
 
 **The compiler checks the clause against the body**, so a wrong clause is a compile error, never a dangling reference:
 
@@ -285,7 +285,7 @@ log("\(text)")
 
 **A `for` loop keeps the temporaries of its sequence until the loop ends.**
 
-**A reference made for an argument doesn't tie the call's result to the statement.** In `splitLines(source, into: mutable &lines)`, the `&Text` the call makes from `source` lives only for the call, yet `lines` outlives it. A shared reference lends only what it carries, `source` ([above](#what-a-calls-result-borrows)). So a range of it, such as `&text[0..<5]`, borrows `source` too, not the reference it was taken through.
+**A reference made for an argument doesn't tie the call's result to the statement.** In `splitLines(source, into: mutable lines)`, the `&Text` the call makes from `source` lives only for the call, yet `lines` outlives it. A shared reference lends only what it carries, `source` ([above](#what-a-calls-result-borrows)). So a range of it, such as `&text[0..<5]`, borrows `source` too, not the reference it was taken through.
 
 ## Staying valid after a parameter changes: `outlives`
 
@@ -293,7 +293,7 @@ log("\(text)")
 func copyAll(from src: &List<&Text>, into dst: mutable &List<&Text>)
     where dst outlives src { ... }
 
-copyAll(from: words, into: mutable &kept)     // 'kept' borrows what 'words' carries: 'source'
+copyAll(from: words, into: mutable kept)      // 'kept' borrows what 'words' carries: 'source'
 words.append("eof")                           // fine: without the clause, 'kept' would borrow 'words' itself
 use(kept)
 ```
@@ -324,7 +324,7 @@ use(names)                                                  // fine: the loop's 
 
 ## In the spec
 
-- [01 References](../spec/01-values-and-ownership/references.md#references): what a reference is, how `&` and `mutable &` make one, and how it forwards to the value it refers to.
+- [01 References](../spec/01-values-and-ownership/references.md#references): what a reference is, how `&` and `mutable` make one, and how it forwards to the value it refers to.
 - [01 Unsized types](../spec/01-values-and-ownership/references.md#unsized-types): `[T]` and `Text`, why they sit behind a reference, and which references convert to them.
 - [01 Reborrowing](../spec/01-values-and-ownership/references.md#reborrowing): lending a new reference to what a held reference refers to.
 - [02 Scoped values](../spec/02-views-and-dependencies/scoped-values.md#scoped-values): the scoped types, where a scoped value can go, and `~Scoped` in generic code.

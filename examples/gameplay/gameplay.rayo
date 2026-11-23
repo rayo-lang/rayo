@@ -54,7 +54,7 @@ extension World: TimeSource {                       // lets tasks stepped with a
 
 /// Picks the closest player for each enemy that has lost its target.
 func acquireTargets(_ world: mutable &World) {
-    for e in mutable &world.enemies where e.target == nil || world.players[e.target] == nil {
+    for e in mutable world.enemies where e.target == nil || world.players[e.target] == nil {
         var best: Handle<Player>? = nil
         var bestDist: Float = .infinity
         for (h, p) in &world.players.entries {      // a shared borrow, disjoint from enemies
@@ -146,11 +146,11 @@ public func newGame(viewport: IVec2) -> UniquePointer<Game> {
 
 public func tick(_ game: mutable &Game, dt: Float) {
     game.world.clock += Duration.seconds(dt)          // Float widens to Double implicitly
-    acquireTargets(mutable &game.world)
-    steer(mutable &game.world, dt: dt)
-    contact(mutable &game.world)
-    game.scripts.step(mutable &game.world)            // one task step per frame
-    applyCommands(mutable &game.world)
+    acquireTargets(mutable game.world)
+    steer(mutable game.world, dt: dt)
+    contact(mutable game.world)
+    game.scripts.step(mutable game.world)             // one task step per frame
+    applyCommands(mutable game.world)
 }
 
 // MARK: - Editor tuning panel, generated from reflection
@@ -159,7 +159,7 @@ func drawTuning<T>(_ value: mutable &T, _ ui: mutable &DebugUI) {
     static for field in T.fields where field.has(Tuning.self) {
         static if field.type == Float {
             let bounds = field.attribute(Bounds.self) ?? Bounds(0, 1)
-            ui.slider(field.name, mutable &value[field], min: bounds.min, max: bounds.max)
+            ui.slider(field.name, mutable value[field], min: bounds.min, max: bounds.max)
         }
     }
 }

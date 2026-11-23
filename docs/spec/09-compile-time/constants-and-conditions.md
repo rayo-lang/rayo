@@ -137,7 +137,7 @@ func store<T>(_ value: &T, into w: mutable &Writer) {
     static if T.conforms(Pod.self) && T.isPaddingFree {
         w.bytes(of: value)                                      // fast path for plain data: safe, one memcpy
     } else {
-        serialize(value, into: mutable &w)
+        serialize(value, into: mutable w)
     }
 }
 ```

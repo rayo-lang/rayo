@@ -48,7 +48,7 @@ task func openDoor(_ door: Handle<Door>) with (game: mutable &Game) {
 
 **Locals that are live across an `await`, and parameters, are stored in the state.** So they must be owned: every task parameter owns its argument, as a parameter `x: T` does, and its type is unscoped ([01](../01-values-and-ownership/parameters.md#parameters)). So no parameter in its parameter list has a reference type, which is scoped. A `task func` method is `consuming` or `static`, so `self` is owned too, and its type is unscoped.
 
-**The `with (...)` clause declares the task's one resume parameter**, of type `mutable &C`, where `C` is the task's `Context` ([below](#awaitables)). A task without the clause has `Void` as its `Context`. The owner lends it anew at every step, as `scripts.step(mutable &game)` does ([below](#running-tasks)). Its type is a mutable reference, since the owner only lends it for the step, and every awaitable's `poll` takes a `mutable &Context`. So inside the body it names the owner's place, as any `mutable &T` parameter does ([01](../01-values-and-ownership/parameters.md#parameters)). It has no default value.
+**The `with (...)` clause declares the task's one resume parameter**, of type `mutable &C`, where `C` is the task's `Context` ([below](#awaitables)). A task without the clause has `Void` as its `Context`. The owner lends it anew at every step, as `scripts.step(mutable game)` does ([below](#running-tasks)). Its type is a mutable reference, since the owner only lends it for the step, and every awaitable's `poll` takes a `mutable &Context`. So inside the body it names the owner's place, as any `mutable &T` parameter does ([01](../01-values-and-ownership/parameters.md#parameters)). It has no default value.
 
 **No borrow and no dynamic access may be live across an `await`**, since the task's owner may move or destroy its state between steps. That means none of these may be live there:
 
@@ -69,7 +69,7 @@ let p = await pointsFor(n)            // fine: the 'await' comes first
 game.score += p                       // and the write after it
 ```
 
-**In a task whose `Context` is `C`, `await x` needs an `Awaitable` whose `Context` is `C` or `Void`.** One whose `Context` is `C` is polled with a reborrow of the resume parameter, as `mutable &game` in `openDoor`, and one whose `Context` is `Void` with a mutable reference to a `()` of the task's own. The operand is checked expecting an `Awaitable` whose `Context` is `C`. So a generic parameter that appears only in the operand's `Context` is bound to `C` before the operand's arguments are checked, as in `await elapsed(.seconds(0.5))`. A closure argument then gets its parameter types from that binding, as `until`'s condition does in `openDoor`.
+**In a task whose `Context` is `C`, `await x` needs an `Awaitable` whose `Context` is `C` or `Void`.** One whose `Context` is `C` is polled with a reborrow of the resume parameter, as `mutable game` in `openDoor`, and one whose `Context` is `Void` with a mutable reference to a `()` of the task's own. The operand is checked expecting an `Awaitable` whose `Context` is `C`. So a generic parameter that appears only in the operand's `Context` is bound to `C` before the operand's arguments are checked, as in `await elapsed(.seconds(0.5))`. A closure argument then gets its parameter types from that binding, as `until`'s condition does in `openDoor`.
 
 **`await` takes its operand as a parameter `x: T` takes its argument** ([01](../01-values-and-ownership/parameters.md#parameters)): it moves into the task's state and is polled there. So an operand that is a place writes its mark, as every position's does ([01](../01-values-and-ownership/references.md#places-given-to-a-position)), and awaiting a local `Future` is `await consume f`, which consumes it.
 
@@ -130,7 +130,7 @@ protocol WakeTarget: Synchronized {   // reached only by shared access, so it ch
 }
 ```
 
-**`await x` evaluates to `x`'s `Output!Failure` once it finishes**, or to its `Output` where `Failure` is `Never` (below), `.success` for `.done` and `.failure` for `.failed`. For the dependency rules ([02](../02-views-and-dependencies.md#dependencies)), it is the `x.poll(mutable &ctx, waker)` call that returned, with `x` a temporary of its statement. So the value, an error included, depends, exclusively, on each of these:
+**`await x` evaluates to `x`'s `Output!Failure` once it finishes**, or to its `Output` where `Failure` is `Never` (below), `.success` for `.done` and `.failure` for `.failed`. For the dependency rules ([02](../02-views-and-dependencies.md#dependencies)), it is the `x.poll(mutable ctx, waker)` call that returned, with `x` a temporary of its statement. So the value, an error included, depends, exclusively, on each of these:
 
 - the resume parameter;
 - `x`'s storage, unless `x` is a `task func`'s call. That task's result can view nothing its state owns, as no function's result views what its owning parameters or locals own ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-5-the-callee-side)).
@@ -217,7 +217,7 @@ var scripts = TaskSet<Game>(capacity: 512)                       // resume param
 guard let door = try? scripts.start(openDoor(frontDoor)) else { return }   // nil when all 512 slots are taken
 scripts.cancel(door)                                             // runs live locals' deinits and live defers, or, unstepped, destroys its parameters
 
-scripts.step(mutable &game)                                      // wherever the program steps: one step for each task woken, or allowed an early poll, since the last
+scripts.step(mutable game)                                       // wherever the program steps: one step for each task woken, or allowed an early poll, since the last
 ```
 
 **A task's runner polls it and makes its `Waker`s.** A **runner** may be std's `TaskSet`, std's `block(on:)` ([below](#waiting-for-wakes-run-and-blockon)), or a library's own, whose `Waker`s reach a `WakeTarget` of its own. The runners in std give a pending task its next step only after the task is woken: by a `wake()`, by its deadline passing, or early in the bounded cases that a deadline allows ([Waking a task](#waking-a-task)).
@@ -256,7 +256,7 @@ struct TaskSetFull<A>(let work: A): Error                  // start's failure: t
 
 ```swift
 catchPanic {
-    scripts.step(mutable &game)
+    scripts.step(mutable game)
 } recover: { p in
     log("a script failed: \(p.message)")             // that script is gone; the rest wait for the next step
 }
@@ -274,7 +274,7 @@ catchPanic {
 var conns = TaskSet<Server>(capacity: 1024)            // the connections' tasks, run with the server's state
 _ = conns.start(acceptLoop(consume listener))          // puts each new socket in 'server.accepted', and never finishes
 while !stopping.load(.acquire) {                      // stopping: a global Atomic<Bool>, which another thread may set
-    conns.run(mutable &server, until: { s in !s.accepted.isEmpty || stopping.load(.acquire) })   // parks the thread between wakes
+    conns.run(mutable server, until: { s in !s.accepted.isEmpty || stopping.load(.acquire) })    // parks the thread between wakes
     while let sock = server.accepted.popLast() { _ = conns.start(serve(consume sock)) }
 }
 ```
@@ -299,7 +299,7 @@ func block<A: Awaitable>(on work: A) -> A.Output!A.Failure where A.Context == Vo
 2. It returns if the set holds no task, since no wake could come for one.
 3. It reads the word.
 4. It clears the run flag.
-5. It returns if `done(mutable &ctx)` is true.
+5. It returns if `done(mutable ctx)` is true.
 6. It goes back to 1 if a task is woken, a task's deadline has passed, or the run flag is set again.
 7. It parks, if the word still holds what 3 read, until a wake or the earliest of the set's deadlines. Then it goes back to 1.
 
@@ -322,7 +322,7 @@ stop.wake()                              // run steps, finds 'done' true, and re
 **`block(on:)` runs one awaitable on the calling thread until it is done, and returns its result.** Synchronous code uses it to wait for a task, as here for a load whose reads complete on an I/O thread:
 
 ```swift
-let level = try block(on: loadLevel(id), with: mutable &loader)   // parks while the load waits for its reads
+let level = try block(on: loadLevel(id), with: mutable loader)    // parks while the load waits for its reads
 ```
 
 - **What it takes.** It keeps the work in its own frame for the call, so it takes an awaitable of any result, scoped or not, where a `TaskSet` takes only unscoped tasks that return nothing.
@@ -341,7 +341,7 @@ let level = try block(on: loadLevel(id), with: mutable &loader)   // parks while
 var conns = TaskSet<Reactor>(capacity: 1024, notifying: loopWaker)   // loopWaker's target writes the loop's eventfd
 while reactor.running {
     reactor.wait(polling: conns.hasWoken, until: conns.deadline)      // epoll_wait, at most until the deadline
-    conns.step(mutable &reactor)
+    conns.step(mutable reactor)
 }
 ```
 

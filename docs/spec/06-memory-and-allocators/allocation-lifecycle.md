@@ -62,7 +62,7 @@ alloc func buildLevel(_ n: Int) -> Level!(IoError | ParseError) { … } // build
 
 world.level = try levelArena.alloc buildLevel(3)                      // in a function that can fail: the level's lists and strings come from the arena
 
-levelArena.release(replace(mutable &world.level, with: alloc Level())) // requires Level: TrivialFree; forgets the old level instead of destroying it
+levelArena.release(replace(mutable world.level, with: alloc Level())) // requires Level: TrivialFree; forgets the old level instead of destroying it
 levelArena.reset()                                                    // what the arena holds goes stale, and its memory is freed
 ```
 

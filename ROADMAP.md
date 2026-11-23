@@ -70,9 +70,9 @@ Its proof program extends v0.2's.
 
 v0.3 adds:
 
-- `mutable &T` parameters, which a call lends a place with `mutable &a`, and parameters `x: T` of a struct or array type, which own their arguments, with the [law of exclusivity](docs/spec/01-values-and-ownership/exclusivity.md#the-law-of-exclusivity), and the error for an owning parameter that no code reads ([05](docs/spec/05-protocols-generics-and-closures/functions-and-closures.md#unused-values));
-- the compile errors for a place given to a `mutable &T` parameter without `mutable &`, and for a struct or an array given to an owning parameter without `consume` or `copy`, each of which names the marks that fit;
-- the compile error for `mutable &a` given to a parameter that doesn't take a mutable reference;
+- `mutable &T` parameters, which a call lends a place with `mutable a`, and parameters `x: T` of a struct or array type, which own their arguments, with the [law of exclusivity](docs/spec/01-values-and-ownership/exclusivity.md#the-law-of-exclusivity), and the error for an owning parameter that no code reads ([05](docs/spec/05-protocols-generics-and-closures/functions-and-closures.md#unused-values));
+- the compile errors for a place given to a `mutable &T` parameter without `mutable`, and for a struct or an array given to an owning parameter without `consume` or `copy`, each of which names the marks that fit;
+- the compile error for `mutable a` given to a parameter that doesn't take a mutable reference;
 - `mutating func`, whose `self` names the receiver's place as a `mutable &T` parameter names its argument's.
 
 ## Not yet planned
@@ -114,8 +114,8 @@ Statements and control flow:
 
 Ownership and borrowing:
 
-- `ref var` bindings, as `ref var m = mutable &p`, and the errors for a `ref var` given `&p` and a `ref let` given `mutable &p` ([01](docs/spec/01-values-and-ownership/bindings.md#bindings-that-refer-to-a-place)): v0.2 builds `ref let` alone;
-- `&` and `mutable &` of a temporary, as `heal(mutable &makeEnemy())`, and a value lent to a `&T`, as `show(makeEnemy())` ([01](docs/spec/01-values-and-ownership/references.md#making-a-reference)): v0.1 to v0.3 lend only a local, a parameter, a field or an element of one, or a value given to `print`;
+- `ref var` bindings, as `ref var m = mutable p`, and the errors for a `ref var` given `&p` and a `ref let` given `mutable p` ([01](docs/spec/01-values-and-ownership/bindings.md#bindings-that-refer-to-a-place)): v0.2 builds `ref let` alone;
+- `&` and `mutable` of a temporary, as `heal(mutable makeEnemy())`, and a value lent to a `&T`, as `show(makeEnemy())` ([01](docs/spec/01-values-and-ownership/references.md#making-a-reference)): v0.1 to v0.3 lend only a local, a parameter, a field or an element of one, or a value given to `print`;
 - `consume` of any other place, such as a parameter that owns its argument, or a temporary ([01](docs/spec/01-values-and-ownership/moving-values-out.md#moving-values-out)): v0.2 builds `consume` of a local or a field of one;
 - `ImplicitlyCopyable`, its conformances declared by a struct or an enum, and the other implicitly copyable types, such as tuples, `Handle` and `T?` ([01](docs/spec/01-values-and-ownership/moves-copies-destruction.md#implicitly-copyable-types)): v0.2 copies `Int`, `UInt` and `Bool` implicitly, and v0.2.5 `Float` and `Double`;
 - implicit copies in the positions v0.2 doesn't build, such as a condition's binding, a `for` or `when` name and a tuple literal's element ([01](docs/spec/01-values-and-ownership/moves-copies-destruction.md#implicit-copies));

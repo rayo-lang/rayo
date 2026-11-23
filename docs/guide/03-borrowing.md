@@ -100,7 +100,7 @@ func turnsToHeal(hp: Int, target: Int) -> Int {
 
 The caller's variable stays as it was, and the call shows it: `turnsToHeal(hp: current, target: 100)` writes no mark before `current`, so the call can't change it.
 
-To change the caller's variable itself, the function asks for a `mutable &` parameter, a mutable reference:
+To change the caller's variable itself, the function asks for a `mutable &T` parameter, a mutable reference:
 
 ```swift
 func heal(hp: mutable &Int) {
@@ -108,53 +108,53 @@ func heal(hp: mutable &Int) {
 }
 
 var enemyHp = 40
-heal(hp: mutable &enemyHp)
+heal(hp: mutable enemyHp)
 log("hp \(enemyHp)")            // hp 60
 ```
 
 `heal` borrows `enemyHp` so that it can change it, and every change it makes to `hp` happens to `enemyHp` itself. This is a **mutable borrow**. Since `heal` must reach `enemyHp` itself, it gets `enemyHp`'s address underneath. You never see that address: inside `heal`, you read and assign `hp` directly.
 
-With `mutable &`, you lend `enemyHp` to `heal`, and leaving it out is an error:
+With `mutable`, you lend `enemyHp` to `heal`. The mark is one word, with no `&`: the parameter's type, `mutable &Int`, says that `heal` gets a reference, and the mark says what the call does to `enemyHp`, which is to lend it for change. Leaving the mark out is an error:
 
 ```swift
-heal(hp: enemyHp)               // error: 'heal' takes 'mutable &Int'; write 'mutable &enemyHp'
+heal(hp: enemyHp)               // error: 'heal' takes 'mutable &Int'; write 'mutable enemyHp'
 ```
 
-The marks are there so that you can see what a call does with each variable: `consume` moves it, and `mutable &` lends it to change. A variable with no mark is only lent to read or copied, so it comes back from the call as it went in. A change gives no warning later. `enemyHp` would just hold a different number, with nothing in the call to say why. So among the arguments in a call's parentheses, the ones marked `mutable &` are the ones it may change ([01](../spec/01-values-and-ownership/references.md#places-given-to-a-position)).
+The marks are there so that you can see what a call does with each variable: `consume` moves it, and `mutable` lends it to change. A variable with no mark is only lent to read or copied, so it comes back from the call as it went in. A change gives no warning later. `enemyHp` would just hold a different number, with nothing in the call to say why. So among the arguments in a call's parentheses, the ones marked `mutable` are the ones it may change ([01](../spec/01-values-and-ownership/references.md#places-given-to-a-position)).
 
 The value before the dot needs no mark, even when the method changes it, as `hits.append(5)` changes `hits`. The call names that value as the one it acts on. So you know which value might change, though not whether it does. The method's declaration says whether it changes the value. `append`'s does, and `clone()`'s doesn't ([01](../spec/01-values-and-ownership/references.md#unmarked-places)).
 
-Whether through a `mutable &` argument or the value before the dot, a call can change only a variable you could change yourself:
+Whether through a `mutable` argument or the value before the dot, a call can change only a variable you could change yourself:
 
 ```swift
 let startHp = 100
-heal(hp: mutable &startHp)      // error: 'startHp' is a 'let', so it can't change
+heal(hp: mutable startHp)       // error: 'startHp' is a 'let', so it can't change
 let done = alloc List<Int>()
 done.append(7)                  // error: 'done' is a 'let', so it can't change
 ```
 
-A `mutable &` parameter names the caller's variable, which the function can change, so the function can lend it on:
+A `mutable &T` parameter names the caller's variable, which the function can change, so the function can lend it on:
 
 ```swift
 func healTwice(hp: mutable &Int) {
-    heal(hp: mutable &hp)
-    heal(hp: mutable &hp)
+    heal(hp: mutable hp)
+    heal(hp: mutable hp)
 }
 ```
 
-Each `heal(hp: mutable &hp)` lends `heal` the variable that `healTwice` borrowed from its caller, such as `enemyHp`. Underneath, `heal` gets the same address that `healTwice` got.
+Each `heal(hp: mutable hp)` lends `heal` the variable that `healTwice` borrowed from its caller, such as `enemyHp`. Underneath, `heal` gets the same address that `healTwice` got.
 
 ## Borrowing in a declaration
 
 You've seen `same`, a `let` that holds a reference to a list ([Moves and copies](02-moves-and-copies.md#declaring-assigning-and-returning)). A declaration that begins with `ref` goes one step further: it takes a reference and names the place it refers to, the way a `&` parameter names the caller's value.
 
-To borrow something to change it, declare the name with `ref var`, and write `mutable &` before what it borrows, as in a call. Here `first` borrows `hits[0]`, which is the list's first element:
+To borrow something to change it, declare the name with `ref var`, and write `mutable` before what it borrows, as in a call. Here `first` borrows `hits[0]`, which is the list's first element:
 
 ```swift
 var hits = alloc List<Int>()
 hits.append(12)
 hits.append(30)
-ref var first = mutable &hits[0]
+ref var first = mutable hits[0]
 first += 5
 log("\(hits[0])")               // 17
 ```
@@ -164,12 +164,12 @@ log("\(hits[0])")               // 17
 The word and the mark have to agree, and a mismatch is an error:
 
 ```swift
-ref var first = hits[0]             // error: write 'mutable &hits[0]'
-ref var first = &hits[0]            // error: write 'mutable &hits[0]'
-ref let first = mutable &hits[0]    // error: 'mutable &' lends for change; declare 'ref var'
+ref var first = hits[0]             // error: write 'mutable hits[0]'
+ref var first = &hits[0]            // error: write 'mutable hits[0]'
+ref let first = mutable hits[0]     // error: 'mutable' lends for change; declare 'ref var'
 ```
 
-Every borrow that changes a value says so with `mutable &`, in a declaration as at a call. A `ref let` changes nothing, so it takes `&`. A `ref let`, like a `let` with no type written, has no type to say that it borrows, so the `&` is written there, and `ref let first = hits[0]` is an error that asks for it.
+Every borrow that changes a value says so with `mutable`, in a declaration as at a call. A `ref let` changes nothing, so it takes `&`. A `ref let`, like a `let` with no type written, has no type to say that it borrows, so the `&` is written there, and `ref let first = hits[0]` is an error that asks for it.
 
 A `var` that holds a reference is different from a `ref var`: it is a variable of its own, so assigning it a new reference points it somewhere else ([01](../spec/01-values-and-ownership/bindings.md#bindings-that-own-a-value)):
 
@@ -233,18 +233,18 @@ log("\(same.count)")
 
 ## Loops
 
-A `for` loop writes how it takes its list, since no parameter type says it. `&hits` lends the list to read, `mutable &hits` lends it to change its elements, and `consume hits` hands the elements over. A loop over `&hits` borrows the list for its whole run, and on each pass, `h` names one element where it sits, read-only:
+A `for` loop writes how it takes its list, since no parameter type says it. `&hits` lends the list to read, `mutable hits` lends it to change its elements, and `consume hits` hands the elements over. A loop over `&hits` borrows the list for its whole run, and on each pass, `h` names one element where it sits, read-only:
 
 ```swift
 for h in &hits {
-    h += 5                      // error: 'h' is a 'ref let'; write 'mutable &hits' to change the elements
+    h += 5                      // error: 'h' is a 'ref let'; write 'mutable hits' to change the elements
 }
 ```
 
-To change the elements, lend the list to the loop with `mutable &`. Then each `h` may change its element, so `h += 5` changes `hits` ([04](../spec/04-types/collections.md#iteration)):
+To change the elements, lend the list to the loop with `mutable`. Then each `h` may change its element, so `h += 5` changes `hits` ([04](../spec/04-types/collections.md#iteration)):
 
 ```swift
-for h in mutable &hits {
+for h in mutable hits {
     h += 5
 }
 ```
@@ -307,7 +307,7 @@ A mutable borrow is the strictest case. While it's in use, no other use of its p
 Here `i` is an index that the program works out while it runs, and `top` borrows the first hit of the first round to change it:
 
 ```swift
-ref var top = mutable &rounds[0][0]
+ref var top = mutable rounds[0][0]
 rounds[i] = alloc List<Int>()   // error: 'rounds' is mutably borrowed by 'top' (used below)
 top += 5
 ```
@@ -325,7 +325,7 @@ func addAll(target: mutable &List<Int>, source: &List<Int>) {
     }
 }
 
-addAll(target: mutable &hits, source: hits)     // error: two borrows of 'hits' overlap for the whole call
+addAll(target: mutable hits, source: hits)      // error: two borrows of 'hits' overlap for the whole call
 ```
 
 The compiler doesn't look inside `addAll` to find this. Its declaration alone says that `target` may change a list while `source` reads one. Here both are `hits`, so the loop over `source` would read the list while `append` changes it. If `append` transferred the values to a bigger block, the loop would go on reading the old block, which has been freed.
@@ -333,16 +333,16 @@ The compiler doesn't look inside `addAll` to find this. Its declaration alone sa
 The fix is to give `addAll` a second list to read. A clone is worth its cost here, since `addAll` needs the values as they were before it started appending:
 
 ```swift
-addAll(target: mutable &hits, source: alloc hits.clone())
+addAll(target: mutable hits, source: alloc hits.clone())
 ```
 
-A call works in two steps. First, it works out its arguments, left to right. Here, `alloc hits.clone()` reads `hits`, builds a new list, and is done with `hits`. Working out `mutable &hits` only finds the place to lend. The lending starts when the call begins, after the clone is made ([01](../spec/01-values-and-ownership/parameters.md#evaluation-order-and-when-a-calls-borrows-begin)). The clone's read of `hits` ends before the call's change begins. During the call, `addAll` reads one list and changes another.
+A call works in two steps. First, it works out its arguments, left to right. Here, `alloc hits.clone()` reads `hits`, builds a new list, and is done with `hits`. Working out `mutable hits` only finds the place to lend. The lending starts when the call begins, after the clone is made ([01](../spec/01-values-and-ownership/parameters.md#evaluation-order-and-when-a-calls-borrows-begin)). The clone's read of `hits` ends before the call's change begins. During the call, `addAll` reads one list and changes another.
 
 A value that a call makes and nothing names, such as this clone, is a **temporary**. It lives only until the end of the statement that made it, unless a parameter that owns its argument takes it ([02](../spec/02-views-and-dependencies/dependency-projection-and-results.md#temporaries)). `source` only borrows the clone, so the clone is destroyed at the end of this statement. In `rounds.append(alloc hits.clone())`, `append` took its clone, and `rounds` owns it.
 
 The compiler checks the law when it compiles, in every build. So for the values in this chapter, the check costs nothing while the program runs.
 
-Some values bend this chapter's rules. A value that several pointers can reach can't always be checked while compiling, so it's checked while the program runs instead ([Handles and objects](05-handles-and-objects.md)). And a `Mutex` can change with no `mutable &`, even while it's borrowed to read. Its lock lets only one piece of code use what it holds at a time, whether to read it or to change it ([Concurrency](07-concurrency.md)).
+Some values bend this chapter's rules. A value that several pointers can reach can't always be checked while compiling, so it's checked while the program runs instead ([Handles and objects](05-handles-and-objects.md)). And a `Mutex` can change with no `mutable`, even while it's borrowed to read. Its lock lets only one piece of code use what it holds at a time, whether to read it or to change it ([Concurrency](07-concurrency.md)).
 
 ## In the spec
 
@@ -350,8 +350,8 @@ Some values bend this chapter's rules. A value that several pointers can reach c
 - [01 References](../spec/01-values-and-ownership/references.md#references): `&T` and `mutable &T`, how they're made, and which of them copy.
 - [01 Borrowed arguments](../spec/01-values-and-ownership/parameters.md#borrowed-arguments): when a borrowed argument is passed as its bits, and when as the caller's place.
 - [01 What can be moved from](../spec/01-values-and-ownership/moving-values-out.md#what-can-be-moved-from): which places can be moved from, and what to do with the rest.
-- [01 Changeable places](../spec/01-values-and-ownership/bindings.md#changeable-places): every place that can be changed or lent with `mutable &`.
-- [01 Places given to a position](../spec/01-values-and-ownership/references.md#places-given-to-a-position): where code writes `&`, `mutable &`, `consume` or `copy`, and why the value a method is called on needs none.
+- [01 Changeable places](../spec/01-values-and-ownership/bindings.md#changeable-places): every place that can be changed or lent with `mutable`.
+- [01 Places given to a position](../spec/01-values-and-ownership/references.md#places-given-to-a-position): where code writes `&`, `mutable`, `consume` or `copy`, and why the value a method is called on needs none.
 - [01 Bindings](../spec/01-values-and-ownership/bindings.md#bindings): how `ref let` and `ref var` name a place, and how long a borrow lasts.
 - [01 Evaluation order](../spec/01-values-and-ownership/parameters.md#evaluation-order-and-when-a-calls-borrows-begin): the order a call works out its parts, and when its borrows begin.
 - [01 The law of exclusivity](../spec/01-values-and-ownership/exclusivity.md#the-law-of-exclusivity): which places overlap, two elements of one list at once, and the values checked while the program runs.

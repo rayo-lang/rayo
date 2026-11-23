@@ -13,15 +13,15 @@ Two kinds of value are exceptions, since taking one makes a new value and leaves
 - a value of an implicitly copyable type, which every position and a `consuming` receiver copy, though a `[move x]` capture moves it ([Implicit copies](moves-copies-destruction.md#implicit-copies));
 - a copyable `const` ([below](#constants)).
 
-**`consume place` writes a move as an expression.** Moving a place's value out, implicitly or this way, is **consuming** the place. `consume` gives a parameter that owns its argument a place's value, as `give` takes below, and gives a `let` or `var` one to own, as `kept` does. `&` and `mutable &` borrow a place instead, and leave its value where it is ([References](references.md#making-a-reference)).
+**`consume place` writes a move as an expression.** Moving a place's value out, implicitly or this way, is **consuming** the place. `consume` gives a parameter that owns its argument a place's value, as `give` takes below, and gives a `let` or `var` one to own, as `kept` does. `&` and `mutable` borrow a place instead, and leave its value where it is ([References](references.md#making-a-reference)).
 
 ```swift
 var loot = alloc List<Item>()
 give(consume loot)                    // fine: 'loot' is a local that owns its list
 var bag = alloc List<Item>()
 let kept = consume bag                // 'kept' owns the list, and 'bag' holds no value
-give(consume player.inventory)        // error if 'player' is a 'mutable &' parameter: the caller still owns it
-let old = replace(mutable &player.inventory, with: alloc List())    // the way to take it: leave a value behind
+give(consume player.inventory)        // error if 'player' is a 'mutable &Player' parameter: the caller still owns it
+let old = replace(mutable player.inventory, with: alloc List())     // the way to take it: leave a value behind
 ```
 
 ## What can be moved from
@@ -78,7 +78,7 @@ slots[0] = 1                       // fine: 'slots' holds all four elements
 **The alternatives leave a value in the place:**
 
 - `copy place` and `alloc place.clone()` leave it as it was, and so does an implicit copy of an implicitly copyable value ([Implicit copies](moves-copies-destruction.md#implicit-copies));
-- through a mutable reference, `replace(mutable &place, with: new)`, `swap(mutable &a, mutable &b)` or a type's own `take()`, such as `Optional.take()` and `List.take()`, leave a value behind.
+- through a mutable reference, `replace(mutable place, with: new)`, `swap(mutable a, mutable b)` or a type's own `take()`, such as `Optional.take()` and `List.take()`, leave a value behind.
 
 So such a place always holds a value, across a `throw`, an early return, an `await` and a panic too, a panic in the `deinit` of a value it overwrites included ([Destruction](moves-copies-destruction.md#destruction)). A caller, an alias, a later `deinit` or a `recover` closure that reaches it finds one there ([10](../10-errors-and-safety/panics.md#catching-a-panic-catchpanic)).
 

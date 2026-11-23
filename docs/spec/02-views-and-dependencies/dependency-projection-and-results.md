@@ -6,7 +6,7 @@ Dependencies begin where code makes a view of a place. They follow values derive
 
 ## Rule 1: Projection
 
-**A view taken from a place depends on that place**, since the view reaches only that place's storage and what the place owns. So `&p` depends on `p` shared, and `mutable &p` depends on it exclusively ([01](../01-values-and-ownership/references.md#making-a-reference)). A place property's place, such as `pool[h]` or `list[i]`, is part of the places it lies in, so a view of it depends on those, whatever its type ([Place and value properties](place-and-value-properties.md#what-a-place-depends-on)). A view that a call returns, such as `items.enumerated()` or what a `get` returns, depends on the place by rule 3, since a call returns a value instead of handing out a place ([below](#rule-3-call-results)).
+**A view taken from a place depends on that place**, since the view reaches only that place's storage and what the place owns. So `&p` depends on `p` shared, and `mutable p` depends on it exclusively ([01](../01-values-and-ownership/references.md#making-a-reference)). A place property's place, such as `pool[h]` or `list[i]`, is part of the places it lies in, so a view of it depends on those, whatever its type ([Place and value properties](place-and-value-properties.md#what-a-place-depends-on)). A view that a call returns, such as `items.enumerated()` or what a `get` returns, depends on the place by rule 3, since a call returns a value instead of handing out a place ([below](#rule-3-call-results)).
 
 **What a view taken from a place depends on follows from what the place is reached through:** a shared reference, a place that owns its value or a mutable reference, or a value property's change.
 
@@ -39,7 +39,7 @@ let t = Token(text: src[start..<pos])    // in a lexer: depends on the text, not
 
 **An owned argument contributes only its set**, since its own storage belongs to the callee, which can't return a view of it (rule 5).
 
-**A `mutable &` argument's place is held exclusively, and a `&` one's shared.** Each set keeps its own kinds, so a view taken through a shared borrow of a `mutable &[T]`, such as a `&` argument of a struct that holds one, still holds what the reference holds exclusively.
+**A `mutable` argument's place is held exclusively, and a `&` one's shared.** Each set keeps its own kinds, so a view taken through a shared borrow of a `mutable &[T]`, such as a `&` argument of a struct that holds one, still holds what the reference holds exclusively.
 
 **An error is part of the result**, since a function that can fail returns a `Result` ([10](../10-errors-and-safety/typed-errors.md#results)). So what a `try` propagates, and what a `catch` binds, depends on the arguments the same way.
 
@@ -88,7 +88,7 @@ var nextLine = { reader.readLine() }   // the same: each line it returns ties up
 ```swift
 func once(_ f: consuming () -> &[Int]) -> &[Int]
 
-let b = once(mutable &grow)      // consumes a new view of 'grow', not 'grow' itself
+let b = once(mutable grow)       // consumes a new view of 'grow', not 'grow' itself
 _ = grow()                       // error: 'grow' is borrowed by 'b' (used below)
 print("\(b.count)")
 ```
@@ -157,7 +157,7 @@ An owned function value is no absorbing argument ([Rule 4: Absorption](dependenc
 - **Code that views a shallow value's bytes with `ptr(to:)`** promises never to return or store that view where a sealed type holds it.
 - **Code that keeps a value through a raw pointer**, reading it after the call that gave it the value returns, promises that the holding type says what it holds, since rules 3 and 4 read only types. The type must be scoped if the value is, as a field `*T` makes it for a `T`. It must be unsealed if the value is, or may be, a closure, a function value, a reference to a sized type or an existential reference, as a type parameter, an associated type or a `some P` may be.
 
-**Code that keeps a value through a raw pointer also promises what it hands out of that storage.** What it later hands out borrows nothing that the handing-out call's dependencies don't give it, by the dependency rules and its `where` items. That covers a result, the place a place property hands out, and a store through a `mutable &` parameter. So storage that one value absorbs into and another hands out of, such as a channel's two ends, holds only unscoped values ([07](../07-concurrency/synchronization.md#queues-and-channels)).
+**Code that keeps a value through a raw pointer also promises what it hands out of that storage.** What it later hands out borrows nothing that the handing-out call's dependencies don't give it, by the dependency rules and its `where` items. That covers a result, the place a place property hands out, and a store through a `mutable &T` parameter. So storage that one value absorbs into and another hands out of, such as a channel's two ends, holds only unscoped values ([07](../07-concurrency/synchronization.md#queues-and-channels)).
 
 ### Mutable views
 
@@ -184,7 +184,7 @@ An owned function value is no absorbing argument ([Rule 4: Absorption](dependenc
 
 **A scoped value that only holds shared views is no mutable view**, as `List<&Text>` isn't. Neither is a function value made from a named function, or from a literal that captures nothing, since it views no storage.
 
-**A function that returns a mutable view must take a `mutable &` argument, or own a mutable view.** A `&` parameter that holds a mutable reference doesn't qualify, since a second view could then write what the first still reads. An `unsafe` function is exempt (next).
+**A function that returns a mutable view must take a `mutable` argument, or own a mutable view.** A `&` parameter that holds a mutable reference doesn't qualify, since a second view could then write what the first still reads. An `unsafe` function is exempt (next).
 
 ```swift
 struct Halves<T>(var low: mutable &[T], var high: mutable &[T]): Scoped
@@ -194,7 +194,7 @@ func take<T>(_ h: Halves<T>) -> mutable &[T]               // fine: 'h' is a mut
 func peek<T>(_ h: &Halves<T>) -> mutable &[T]              // error: 'h' is only borrowed
 ```
 
-**`unsafe` code that builds a mutable view answers for it**, since the signature's shape isn't enough: the code can take a dummy `mutable &` argument. This covers a mutable reference made from a raw pointer, and a type of the code's own, declared `~Copyable`, that changes what it views through a raw pointer. The code promises that everything the view can change lies in a `mutable &` argument's place, or in storage that place owns, or is reached through an exclusive dependency that a `mutable &` or owned argument carries. It promises too that none of it is reached only through a `&` argument or what one carries.
+**`unsafe` code that builds a mutable view answers for it**, since the signature's shape isn't enough: the code can take a dummy `mutable` argument. This covers a mutable reference made from a raw pointer, and a type of the code's own, declared `~Copyable`, that changes what it views through a raw pointer. The code promises that everything the view can change lies in a `mutable` argument's place, or in storage that place owns, or is reached through an exclusive dependency that a `mutable` or owned argument carries. It promises too that none of it is reached only through a `&` argument or what one carries.
 
 **In an `unsafe` function, that promise is its caller's**: that nothing else reaches what the view can change while it lives ([10](../10-errors-and-safety/unsafe-code.md#raw-accesses)). `S.trailing(at:count:)` is one such function ([08](../08-c-interop/imports-and-inline-c.md#what-imports-as-what)).
 

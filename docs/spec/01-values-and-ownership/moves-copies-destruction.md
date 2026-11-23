@@ -18,7 +18,7 @@ cmds = queued                     // error: write 'consume queued'
 
 **`consume x` moves the value.** The new owner takes it over, and the place it came from can't be used until it gets a new value, so the value's bytes stand for it in one place only.
 
-**A position takes a place's value only where it writes `consume`.** Every position given a place writes `&`, `mutable &`, `consume` or `copy` before it, or takes it bare, lending it where a `&T` is expected and copying it where its type is implicitly copyable ([References](references.md#places-given-to-a-position)). So an argument, a declaration, an assignment and a `return` move a place only with `consume`. The exception is a part of a temporary, such as `makeHolder().items`, which a position takes with nothing written, since the temporary dies with its statement ([References](references.md#unmarked-places)). A place of an implicitly copyable type, such as an `Int`, is copied with nothing written, and stays usable ([Implicit copies](#implicit-copies)).
+**A position takes a place's value only where it writes `consume`.** Every position given a place writes `&`, `mutable`, `consume` or `copy` before it, or takes it bare, lending it where a `&T` is expected and copying it where its type is implicitly copyable ([References](references.md#places-given-to-a-position)). So an argument, a declaration, an assignment and a `return` move a place only with `consume`. The exception is a part of a temporary, such as `makeHolder().items`, which a position takes with nothing written, since the temporary dies with its statement ([References](references.md#unmarked-places)). A place of an implicitly copyable type, such as an `Int`, is copied with nothing written, and stays usable ([Implicit copies](#implicit-copies)).
 
 **Only a place the code owns can be moved from.** Moving out of a value the code only borrows is a compile error, since the caller, an alias or a later `deinit` that reaches that place must still find a value in it ([What can be moved from](moving-values-out.md#what-can-be-moved-from)).
 
@@ -124,7 +124,7 @@ var lead = enemies[0]              // error: write 'copy' or '&' before 'enemies
 
 - **`copy p`** makes a copy.
 - **`consume p`** moves `p`, which can't be used until it gets a new value. So does a `[move p]` capture ([05](../05-protocols-generics-and-closures/functions-and-closures.md#unscoped-closures-closuref)).
-- **`&p` and `mutable &p`** make a reference to the place, and a `ref let` or `ref var` given one names it.
+- **`&p` and `mutable p`** make a reference to the place, and a `ref let` or `ref var` given one names it.
 - **A `&T` argument** borrows, so a call copies nothing that its parameter doesn't own.
 
 ### Operations that copy

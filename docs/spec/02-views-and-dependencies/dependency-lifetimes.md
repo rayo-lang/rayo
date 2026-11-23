@@ -95,7 +95,7 @@ print("\(syms?.count ?? 0) symbols")
 **An item's subject, what depends, is one of these:**
 
 - `return`, for the result, an error it fails with included, or for the place a place property hands out ([What a place depends on](place-and-value-properties.md#what-a-place-depends-on));
-- a parameter that absorbs under rule 4, for what it takes on: a `mutable &` one, `self` in a `mutating` method included, or one that owns a mutable view, such as an owned struct of mutable references.
+- a parameter that absorbs under rule 4, for what it takes on: a `mutable &T` one, `self` in a `mutating` method included, or one that owns a mutable view, such as an owned struct of mutable references.
 
 **An item says what its subject depends on.** In every item, a `&T` or `mutable &T` parameter `x`, or the `self` of a plain or `mutating` method, stands for the place it names, so `x` is the caller's place, and what `x` borrows is that place's set ([01](../01-values-and-ownership/parameters.md#parameters)):
 
@@ -157,16 +157,16 @@ return b
 
 **A witness must satisfy its requirement's clause**, depending on no more than it declares, so generic code can rely on the requirement alone. The compiler checks this at the conformance.
 
-**A value moved out of an owner carries only what the owner carried.** `where return outlives p` is also allowed, whatever `p` carries, on a function whose result is **moved out** of `p`'s own storage, where `p` is `self` or a `mutable &` parameter:
+**A value moved out of an owner carries only what the owner carried.** `where return outlives p` is also allowed, whatever `p` carries, on a function whose result is **moved out** of `p`'s own storage, where `p` is `self` or a `mutable &T` parameter:
 
 - `popLast()`, `remove(at:)` and `Optional.take()`, with `where return outlives self`;
-- `replace(mutable &place, with:)`, with `where return outlives place`.
+- `replace(mutable place, with:)`, with `where return outlives place`.
 
-**A value `p` owns can view `p`'s own storage only by making `p` depend on a part of itself.** Then `mutable &p` conflicts with that dependency, so the call can't be made. So what such a call returns depends only on what `p` carried, with the same kinds, and a worklist over a `List<mutable &[Float]>` works:
+**A value `p` owns can view `p`'s own storage only by making `p` depend on a part of itself.** Then `mutable p` conflicts with that dependency, so the call can't be made. So what such a call returns depends only on what `p` carried, with the same kinds, and a worklist over a `List<mutable &[Float]>` works:
 
 ```swift
 while var s = work.popLast() {                  // 'work' stays free while 's' holds its reference
-    let p = partition(mutable &s)
+    let p = partition(mutable s)
     let (low, high) = s.consumingSplit(at: p)   // the halves carry what 's' carried
     work.append(consume low)
     work.append(consume high)
@@ -177,7 +177,7 @@ while var s = work.popLast() {                  // 'work' stays free while 's' h
 
 ### Naming a field
 
-**An item may name a path of a parameter's stored fields and tuple elements, and a subject may be followed by one**, since a value may carry borrows of several places while a result comes from one of them. So a subject may be `return.name`, `return.0`, or `q.table` for a `mutable &` parameter `q`, which then takes on what the item names in that field only:
+**An item may name a path of a parameter's stored fields and tuple elements, and a subject may be followed by one**, since a value may carry borrows of several places while a result comes from one of them. So a subject may be `return.name`, `return.0`, or `q.table` for a `mutable &T` parameter `q`, which then takes on what the item names in that field only:
 
 ```swift
 struct Query(
@@ -204,7 +204,7 @@ print("\(e?.id ?? 0)")
 - A call result gets per-field sets only from `return.f` items. Its other fields get what a plain `return` item names, or what the default rules give the whole result.
 - Elements, enum payloads, what a `Box` holds, and a value of a type parameter have a single set.
 
-**A `mutable &` argument's fields may trade what they carry**, as in a `mutating` method that swaps two fields. So after the call, each stored field of the argument, at every depth, has the union of all its fields' sets from before, plus what the call gives it. A field that a `p.f` item names is the exception: it keeps its own set, plus what the items name, and the callee proves it took nothing from `p`'s other fields.
+**A `mutable` argument's fields may trade what they carry**, as in a `mutating` method that swaps two fields. So after the call, each stored field of the argument, at every depth, has the union of all its fields' sets from before, plus what the call gives it. A field that a `p.f` item names is the exception: it keeps its own set, plus what the items name, and the callee proves it took nothing from `p`'s other fields.
 
 ```swift
 struct Pair(var a: &Text, var b: &Text): Scoped {
@@ -223,10 +223,10 @@ pair.flip()                                      // both fields depend on 's1' a
 ```swift
 struct Node(var value: Int = 0, var children: List<Box<Node>> = alloc [])
 
-var cur = mutable &tree.root
+var cur = mutable tree.root
 for i in &path {
     guard i < cur.children.count else { break }
-    cur = mutable &cur.children[i].value         // 'cur' refers to that child from here on; no node is written
+    cur = mutable cur.children[i].value          // 'cur' refers to that child from here on; no node is written
 }
 cur.children.append(alloc Box(Node(value: 0)))
 tree.root.value = 1                              // error if placed before the last use of 'cur'
@@ -235,7 +235,7 @@ tree.root.value = 1                              // error if placed before the l
 **What the `var` depends on follows the place the new reference refers to:**
 
 - **A place reached through the `var` keeps the `var`'s set.** It lies inside the place the old reference referred to, so the original borrow of `tree.root` lasts until `cur`'s last use. The assignment ends the old reference, so the new one takes over what the old one carried, and keeps no borrow of `cur` itself. So nothing conflicts with the write, where a reborrow through a `cur` that holds a mutable reference would keep `cur` borrowed ([01](../01-values-and-ownership/references.md#reborrowing)).
-- **A step through a place property also takes on its other sources.** One whose sources go beyond `self` may reach a place in another argument, as `mutable &cur[graft: mutable &spare]` does. So the `var`'s set also takes on every other dependency of the new place ([Place and value properties](place-and-value-properties.md#the-place-lies-in-its-sources)).
+- **A step through a place property also takes on its other sources.** One whose sources go beyond `self` may reach a place in another argument, as `mutable cur[graft: mutable spare]` does. So the `var`'s set also takes on every other dependency of the new place ([Place and value properties](place-and-value-properties.md#the-place-lies-in-its-sources)).
 - **Any other place starts a new borrow.** The `var`'s set becomes the new reference's, as every assignment to a variable that owns its value replaces its set (rule 4 in [Absorption](dependency-absorption-and-accesses.md#rule-4-absorption)).
 
 **The `var` is a local declared in the same function or closure body**, not a parameter, a capture or a field, so the body sees every use of it. A mutable reference reached through any other place keeps that place borrowed, as a reborrow does, so assigning it back there conflicts with that borrow. Through a shared reference the place drops out anyway ([Rule 1: Projection](dependency-projection-and-results.md#rule-1-projection)), so `rest = rest[1...]` above works in a field too.
@@ -244,7 +244,7 @@ tree.root.value = 1                              // error if placed before the l
 
 ```swift
 var tree = buildTree()                           // owns the tree the call returned
-var at = mutable &tree.root                      // the cursor, which assignments point elsewhere
+var at = mutable tree.root                       // the cursor, which assignments point elsewhere
 ```
 
 **Through objects, the cursor holds one mark.** A step through an object's owner or weak pointer takes the new object's access ([Rule 6: Dynamic accesses](dependency-absorption-and-accesses.md#rule-6-dynamic-accesses)), as a step to a child's value does when the children are held by `UniquePointer`s. That access **replaces** the previous object's access in the `var`'s set, so the cursor holds a mark only on the object it stands on, however deep the walk. The previous access ends once nothing else depends on it.

@@ -11,7 +11,7 @@ let total: Int = n                                      // lossless widening is 
 let scale = Float(total) / 1024                         // a conversion that may round is spelled out
 
 var particles = alloc SoA<Particle>(capacity: 100_000)  // one buffer per field, still used with field syntax
-for p in mutable &particles {
+for p in mutable particles {
     p.pos += p.vel * dt                                 // vector math: no hidden calls where the processor has the operations
 }
 ```

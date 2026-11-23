@@ -27,7 +27,7 @@ struct Enemy(
 func inspect<T>(_ value: mutable &T, in ui: mutable &Inspector) {
     static for f in T.fields where f.has(Bounds.self) {
         const b = f.attribute(Bounds.self)!                // this field's @Bounds, known at compile time
-        ui.slider(f.name, mutable &value[f], min: b.min, max: b.max)
+        ui.slider(f.name, mutable value[f], min: b.min, max: b.max)
     }
 }
 ```

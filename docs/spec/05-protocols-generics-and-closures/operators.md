@@ -76,8 +76,8 @@ var fixed: Map<Name, Int, FixedHashing> = alloc [:]
 let pairs: [2 of (Name, Int)] = [("jump", 0), ("fire", 1)]
 
 takesFixed(alloc Map())                                    // H is FixedHashing, from the parameter's type
-merge(mutable &fixed, alloc Map())                         // K and H bind from 'fixed', and Map() takes them from the parameter's type
-merge(mutable &fixed, alloc Map<Name, Int>())              // error: a written Map<Name, Int> is SeededHashing, and 'fixed' is FixedHashing
+merge(mutable fixed, alloc Map())                          // K and H bind from 'fixed', and Map() takes them from the parameter's type
+merge(mutable fixed, alloc Map<Name, Int>())               // error: a written Map<Name, Int> is SeededHashing, and 'fixed' is FixedHashing
 g(alloc Map(dictionaryLiteral: copy pairs))                // error: K binds to Name from Map's own argument, but nothing binds H
 g(alloc Map<Name, Int>(dictionaryLiteral: copy pairs))     // fine: the written type takes its default, so H is SeededHashing
 h(alloc Map())                                             // error: ambiguous, since Map() fits both overloads
