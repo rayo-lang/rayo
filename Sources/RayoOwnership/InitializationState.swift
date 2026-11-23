@@ -140,7 +140,7 @@ struct InitializationState: DataflowState {
     /// What `effect` does to each place it changes.
     private static func changes(of effect: Effect, among places: TrackedPlaces) -> [(number: Int, change: Change)] {
         switch effect {
-        // A move takes the place's value, and its own facts stand for the parts inside it, which hold theirs again.
+        // A move takes the place's value. The parts inside it hold a value again, since the place's facts cover them.
         case .move(let place, _):
             guard let moved = places.number(of: place) else { preconditionFailure("every moved place is tracked") }
             let inside = parts(inside: place, among: places).filter { $0 != moved }
