@@ -116,10 +116,10 @@ struct BorrowedPlaceTests {
         ])
     }
 
-    // A `mutable &` lends its place for change, which only a `ref var` takes, and rayoc builds no `ref var`.
-    @Test(arguments: [("ref let x = mutable &a", 17), ("ref let x = if c { &a } else { mutable &b }", 36)])
-    func `a 'ref let' given 'mutable &' reports the 'mutable &' as unsupported`(statement: String, column: Int) {
-        #expect(messages(of: statement) == ["\(column): error[E0289]: 'mutable &' isn't supported"])
+    // A `mutable` lends its place for change, which only a `ref var` takes, and rayoc builds no `ref var`.
+    @Test(arguments: [("ref let x = mutable a", 17), ("ref let x = if c { &a } else { mutable b }", 36)])
+    func `a 'ref let' given 'mutable' reports the 'mutable' as unsupported`(statement: String, column: Int) {
+        #expect(messages(of: statement) == ["\(column): error[E0289]: 'mutable' isn't supported"])
     }
 
     // Each branch of an `if` stands in the `ref let`'s position, so branches of two types are reported as an `if`'s.
@@ -188,9 +188,16 @@ struct BorrowedPlaceTests {
         ])
     }
 
-    @Test(arguments: ["ref var x = a", "ref var x = &a", "ref var x = mutable &a"])
+    @Test(arguments: ["ref var x = a", "ref var x = &a", "ref var x = mutable a", "ref var x = mutable g[i][0]"])
     func `a 'ref var' is reported as unsupported, whatever its place is written as`(statement: String) {
         #expect(messages(of: "\(statement)\n    print(x)") == ["13: error[E0281]: 'ref var' isn't supported"])
+    }
+
+    // `mutable` of a `&` is wrong wherever it stands, and a declaration whose value fails reports nothing more.
+    @Test func `a 'ref var' given 'mutable' of a '&' reports the '&'`() {
+        #expect(messages(of: "ref var x = mutable &a\n    print(x)") == [
+            "17: error[E0290]: 'mutable' takes a place, not a reference; write 'mutable a'",
+        ])
     }
 
     @Test func `a 'var' of '_' is reported for its name alone, whatever its value`() {

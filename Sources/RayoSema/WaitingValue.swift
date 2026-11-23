@@ -1,7 +1,7 @@
 import RayoCheckedProgram
 
 /// A value checked on its own that waits for the position it stands in: an untyped value, an array literal or an
-/// implicit member, whose type the position settles, a `&` or a `mutable &` of a place, which only some positions
+/// implicit member, whose type the position settles, a `&` or a `mutable` of a place, which only some positions
 /// take, or an `if` whose branches end in such values.
 protocol WaitingValue {
     /// The type a part of the value fixes, whatever position it stands in, such as the type of an `if`'s typed

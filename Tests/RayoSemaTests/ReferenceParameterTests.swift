@@ -123,11 +123,38 @@ struct ReferenceParameterTests {
     }
 
     @Test(arguments: [
-        ("show(mutable &e)", 10), ("read(mutable &e.stats.hp)", 10), ("take(mutable &a)", 10), ("_ = mutable &a", 9),
-        ("let x = mutable &a", 13), ("a = mutable &a", 9),
+        ("show(mutable e)", 10), ("read(mutable e.stats.hp)", 10), ("take(mutable a)", 10), ("_ = mutable a", 9),
+        ("let x = mutable a", 13), ("a = mutable a", 9), ("show(mutable makeEnemy())", 10),
     ])
-    func `'mutable &' outside a 'ref let' or 'ref var' is reported as unsupported`(statement: String, column: Int) {
-        #expect(messages(of: statement) == ["\(column): error[E0289]: 'mutable &' isn't supported"])
+    func `'mutable' outside a 'ref var' is reported as unsupported`(statement: String, column: Int) {
+        #expect(messages(of: statement) == ["\(column): error[E0289]: 'mutable' isn't supported"])
+    }
+
+    @Test(arguments: [
+        ("show(mutable &e)", 10, "e"), ("read(mutable &e.stats.hp)", 10, "e.stats.hp"),
+        ("_ = mutable &g[i]", 9, "g[i]"), ("let x = mutable &g[0].slots[1]", 13, "g[0].slots[1]"),
+        ("a = if c { mutable &a } else { a }", 16, "a"),
+    ])
+    func `'mutable' of a '&' is reported wherever it stands, with the 'mutable' of the place to write`(
+        statement: String, column: Int, place: String,
+    ) {
+        #expect(messages(of: statement) == [
+            "\(column): error[E0290]: 'mutable' takes a place, not a reference; write 'mutable \(place)'",
+        ])
+    }
+
+    @Test(arguments: [("show(mutable &makeEnemy())", 18), ("read(mutable &makeEnemy().stats.hp)", 18)])
+    func `'mutable' of a '&' of a value that no local holds reports the '&' as any lend of one`(
+        statement: String, column: Int,
+    ) {
+        #expect(messages(of: statement) == [
+            "\(column): error[E0286]: lending a value that no local holds isn't supported; put it in a 'let' and "
+                + "lend that",
+        ])
+    }
+
+    @Test func `'mutable' of a '&' of a name that is no place reports only the name`() {
+        #expect(messages(of: "show(mutable &nope)") == ["19: error[E0206]: 'nope' isn't declared"])
     }
 
     @Test func `a call that fails for its arguments' count reports nothing of a '&' among them`() {
@@ -170,7 +197,7 @@ struct ReferenceParameterTests {
     }
 
     @Test func `a call of a function whose parameter is 'mutable &T' reports nothing more`() {
-        let body = "    var x = 1\n    bump(x)\n    bump(&x)\n    print(x)"
+        let body = "    var x = 1\n    bump(x)\n    bump(&x)\n    bump(mutable x)\n    print(x)"
         let source = "func main() {\n\(body)\n}\nfunc bump(_ n: mutable &Int) {}"
         #expect(errors(source) == [.unsupportedConvention(convention: "mutable &")])
     }

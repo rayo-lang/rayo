@@ -88,9 +88,8 @@ extension ExpressionChecker {
         }
     }
 
-    /// `lent`, a `mutable &` of a place, as it stands where a position expects what `expected` names. A `ref var`
-    /// takes the place itself, checking its type as it would the value's, and reports nothing more, since the
-    /// `ref var` is reported as unsupported. Reports the `mutable &` anywhere else.
+    /// `lent`, a `mutable` of a place, where a position expects what `expected` names. A `ref var` takes the place,
+    /// and any other position reports the `mutable`.
     func mutablyLent(_ lent: MutablyLentPlace, to expected: Expectation) -> CheckedExpr? {
         switch expected.recipient {
         case .declaration(.refVar)?: typeFitted(lent.placeExpression, to: expected)
@@ -119,6 +118,17 @@ extension ExpressionChecker {
             let place = sourceName(of: handed)
             file.errors.report(.referenceOutlivesPlace(binding: binding, place: place), at: handed.place.range)
         }
+    }
+
+    /// Reports `lent`, a `&` written after a `mutable` at `range`, naming the `mutable` of its place to write. A `&`
+    /// of a value that no local holds is reported as unsupported.
+    func reportMutableOfReference(_ lent: LentPlace, in range: SourceRange) {
+        guard let local = lent.place.local else {
+            file.errors.report(.unsupportedLentValue, at: lent.range)
+            return
+        }
+        let place = sourceName(of: HandedPlace(local: local, place: lent.place))
+        file.errors.report(.mutableOfReference(place: place), at: range)
     }
 
     /// The name of `place` as the source writes it, such as `e.stats.hp` or `g[i][0]`, for an error to name it by.

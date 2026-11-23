@@ -68,10 +68,11 @@ struct ParserErrorTests {
 
     @Test(arguments: [
         "func f() { g(&e) }", "func f() { g(&e.stats.hp, by: &a[i].n) }", "func f() {\n    g(&e\n        .hp)\n}",
-        "func f() { g(mutable &e) }", "func f() { ref let x = mutable &e.stats[i] }", "func f() { g(&make()) }",
-        "func f() { ref let x = &make(1).stats[0].hp }", "func f() { g(mutable &make()) }",
+        "func f() { g(mutable e) }", "func f() { ref let x = mutable e.stats[i] }", "func f() { g(&make()) }",
+        "func f() { ref let x = &make(1).stats[0].hp }", "func f() { g(mutable make()) }",
+        "func f() { ref var x = mutable make(1).stats[0].hp }", "func f() { g(mutable &e) }",
     ])
-    func `'&' and 'mutable &' take a name, and the calls, members and elements after it`(source: String) {
+    func `'&' and 'mutable' take a name, and the calls, members and elements after it`(source: String) {
         #expect(errors(source) == [])
     }
 
@@ -80,10 +81,12 @@ struct ParserErrorTests {
         ("func f() { g(&(e).hp) }", .missingLentName(found: .token("("))),
         ("func f() { g(&1) }", .missingLentName(found: .token("1"))),
         ("func f() { g(mutable &1) }", .missingLentName(found: .token("1"))),
-        ("func f() { g(mutable e) }", .missingExpression(found: .token("mutable"))),
+        ("func f() { g(mutable) }", .missingMutablyLentName(found: .token(")"))),
+        ("func f() { g(mutable (e).hp) }", .missingMutablyLentName(found: .token("("))),
+        ("func f() { g(mutable 1) }", .missingMutablyLentName(found: .token("1"))),
         ("func f() {\n    a & b\n}", .unendedStatement(found: .token("&"))),
     ])
-    func `'&' needs a name first, stands only before a place, and 'mutable' needs a '&'`(
+    func `'&' and 'mutable' need a name first, and '&' stands only before a place`(
         source: String, expected: ErrorCode,
     ) {
         #expect(errors(source) == [expected])
