@@ -150,7 +150,7 @@ struct PersistentArray<Element: Equatable>: Equatable {
                 }
             }
         }
-        return switch consume children {
+        return switch children {
         case .first: first
         case .second: second
         case .new(let children): Branch(children, count: first.count)
@@ -180,7 +180,7 @@ struct PersistentArray<Element: Equatable>: Equatable {
                 mergedSlots(firstElements, secondElements, count: first.count, isSame: ==, combining: combine)
             }
         }
-        return switch consume elements {
+        return switch elements {
         case .first: first
         case .second: second
         case .new(let elements): Leaf(elements, count: first.count)
@@ -250,9 +250,8 @@ private enum MergedSlots<Slot> {
     case new(Slots<Slot>)
 }
 
-/// Combines the first `count` slots of two nodes in turn. The result is one of the nodes where it matches that node
-/// by `isSame`, and new slots are made only from the first slot where it matches neither. Slots that match each other
-/// combine to themselves, so they are left as they are.
+/// Combines the first `count` slots of two nodes, leaving slots that match each other as they are. The result is
+/// one node's slots where it matches that node by `isSame`, and new slots from the first slot where it matches neither.
 private func mergedSlots<Slot>(
     _ first: Span<Slot>, _ second: Span<Slot>, count: Int, isSame: (Slot, Slot) -> Bool,
     combining combine: (Slot, Slot) -> Slot,

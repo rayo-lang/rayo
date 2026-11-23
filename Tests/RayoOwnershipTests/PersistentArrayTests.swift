@@ -39,8 +39,8 @@ struct PersistentArrayTests {
     }
 
     @Test func `a merge that matches one array for a while, then neither, keeps every combined element`() {
-        // The first leaf matches the first array up to index 40, the second leaf matches neither from its start, and
-        // later leaves match the second array.
+        // The leaf from 32 matches the second array at 40, then neither at 41. The branch over the first 1024 matches
+        // the first array at its first leaf, then neither; the branch from 1024 matches the second array.
         var first = PersistentArray(Array(repeating: 0, count: 2000))
         var second = first
         first[3] = 5
