@@ -67,7 +67,7 @@ low[0] = 0                                          // writes samples[0]
 - **Through a shared reference.** `&r` of a place that holds a `&T` carries what `r` carries, and leaves `r` itself unborrowed. A `&T` is implicitly copyable, so a copy of `r` would give the same reference, and the new one needs nothing of the place that holds `r`.
 - **Through a mutable reference.** `&r` or `mutable r` of a place that holds a `mutable &T` keeps `r` borrowed until the new reference's last use, shared for `&r` and exclusively for `mutable r`, and carries what `r` carries too. While the new reference is used, `r` can't reach the place in a way that conflicts with it, so the two are never two ways to change one place.
 
-`mutable r` needs `r` changeable and holding a `mutable &T`, since writing through a reference needs both ([above](#forwarding-through-a-reference)). A mutable reference is passed on for change with `mutable r` too, as `chunk` is below, since a bare place given where a `mutable &T` is expected is a compile error ([below](#places-given-to-a-position)).
+`mutable r` needs `r` changeable and holding a `mutable &T`, since writing through a reference needs both ([above](#forwarding-through-a-reference)). A mutable reference is passed on for change as `mutable r`, as `chunk` is below, since every lend for change is marked ([below](#every-lend-for-change-is-marked)).
 
 **So a function can be given one mutable reference twice, one call after the other**, and the reference stays usable after each:
 
@@ -146,7 +146,7 @@ let run: [Int] = hits.span          // error: '[Int]' is unsized; declare 'run' 
 
 **Any other bare place is a compile error that names the marks that fit**, except in the cases [below](#unmarked-places). Where no `&T` is expected, code writes `&` to lend a place ([05](../05-protocols-generics-and-closures/implicit-conversions.md#places-lent-where-a-reference-is-expected)). The last expression of an `if` or `when` arm or of an `unsafe` block stands in its position, and writes its mark there, as does each operand of `??` ([Bindings](bindings.md#if-and-when-as-values)).
 
-**The value a position takes has the type it expects, so a mark that doesn't fit is a compile error.** A `&T` parameter takes a shared reference, a `mutable &T` parameter a mutable one, and a `T` parameter a `T` ([Parameters](parameters.md#parameters)). So `&boss` given to an owning parameter is a compile error. So is a bare `boss` given where a `mutable &T` is expected, and the error names `mutable boss`. A lend for change is never implied: it changes the caller's place, where a shared lend only reads, so the code shows it where the place is lent. A value given to a `&T` parameter is lent as a temporary, as `&makeEnemy()` lends one ([above](#making-a-reference)):
+**The value a position takes has the type it expects, so a mark that doesn't fit is a compile error.** A `&T` parameter takes a shared reference, a `mutable &T` parameter a mutable one, and a `T` parameter a `T` ([Parameters](parameters.md#parameters)). So `&boss` given to an owning parameter is a compile error, and so is a bare `boss` given to a `mutable &T` one ([below](#every-lend-for-change-is-marked)). A value given to a `&T` parameter is lent as a temporary, as `&makeEnemy()` lends one ([above](#making-a-reference)):
 
 ```swift
 func keep(_ e: Enemy) { … }         // owns its argument
@@ -159,6 +159,16 @@ show(makeEnemy())                   // lends a temporary enemy, which the statem
 keep(copy boss)                     // fine: a copy of the enemy
 let hp = boss.hp                    // a Float is implicitly copyable: a copy, with nothing written
 ```
+
+### Every lend for change is marked
+
+**Every lend for change is marked with `mutable`, a forwarded one included.** A lend for change changes the caller's place, where a shared lend only reads, so the line that takes the borrow shows it. So a bare place given where a `mutable &T` is expected, or given to a `ref var`, is a compile error that names `mutable p`, as `heal(boss)` above is. A place that holds a mutable reference is lent on the same way: a function given `s` passes it on as `scale(mutable s)`, and `ref var t = mutable r` reborrows through `r` ([above](#reborrowing)).
+
+**A change made in place takes no mark**, since the change shows where it happens, and the place must be changeable ([Changeable places](bindings.md#changeable-places)):
+
+- a `mutating` method's receiver ([below](#unmarked-places));
+- the left side of `=`, or of a compound assignment such as `+=`;
+- a write through a closure's captures ([05](../05-protocols-generics-and-closures/functions-and-closures.md#capturing-places)).
 
 ### Unmarked places
 
@@ -178,4 +188,4 @@ static func * (lhs: Vec3, rhs: Float) -> Vec3 { … }         // a Vec3 is impli
 - **A copyable `const`**, which gives a new value each time ([Constants](moving-values-out.md#constants));
 - **A conversion that makes a value from the place**, such as a copyable value's conversion to or from its static type ([Conversions](bindings.md#conversions));
 - **A part of a temporary**, such as `makeEnemy().pos`, which dies with its statement, so the position takes it as a value, moving it out where [What can be moved from](moving-values-out.md#what-can-be-moved-from) allows;
-- **A place that holds a reference, given to a `ref let` or `ref var`**, which reborrows through it, as `ref var t = r` does for a `mutable &T` in `r` ([above](#reborrowing)).
+- **A place that holds a shared reference, given to a `ref let`**, which reborrows through it, as `ref let e = r` does for a `&T` in `r`, since a shared reborrow only reads ([above](#reborrowing)).

@@ -34,7 +34,7 @@ let all = consume enemies            // a move: 'enemies' can't be used until it
 | Form | Like the parameter | Meaning | Cost |
 | --- | --- | --- | --- |
 | `ref let x = &place` | `_ x: &T` | A shared **borrow** of `place`, of any type: `place` can't be changed, moved or destroyed while `x` is live | None |
-| `ref var x = mutable place` | `_ x: mutable &T` | A mutable **borrow** of a [changeable place](#changeable-places): `place` is reachable only through `x` while `x` is live | None |
+| `ref var x = mutable place` | `_ x: mutable &T` | A mutable **borrow** of a [changeable place](#changeable-places): `place` is reachable only through `x` while `x` is live. Given a place that holds a `mutable &T`, it reborrows through it ([below](#bindings-that-refer-to-a-place)) | None |
 | `let x = &place`, `let x: &T = place`, `var x = mutable place` | | The binding holds a reference to `place`, which borrows it as a `ref` binding would, and a `var` may later point it elsewhere ([below](#bindings-that-own-a-value)) | The reference's own bytes ([References](references.md#layout)) |
 | `let x = consume place`, `var x = consume place` | `_ x: T` | A **move** from a place the code owns ([What can be moved from](moving-values-out.md#what-can-be-moved-from)): `place` can't be used until it gets a new value | A `memcpy` at most |
 | `let x = copy place`, `var x = copy place` | | An independent **copy** of a copyable value; a move-only one is copied with `alloc place.clone()` | A `memcpy` |
@@ -47,7 +47,7 @@ let all = consume enemies            // a move: 'enemies' can't be used until it
 **A binding that is a place it borrows is a borrowing binding**, and can't be consumed, since the place's value has another owner. A declaration or a condition makes one only with `ref`. A `&T` or `mutable &T` parameter is one ([Parameters](parameters.md#parameters)), and so is a `for` or `when` name whose subject is a reference ([below](#for-and-when-names)).
 
 - **`ref let` and `ref var` declare locals**, so they appear only in a function or closure body. A borrow lasts no longer than the body that makes it ([How long a borrow lasts](#how-long-a-borrow-lasts)).
-- **A `ref let` takes a shared reference, and a `ref var` a mutable one**: `&p` or `mutable p` of a place, or a reference value, such as a place that holds one or a call that returns one. A `ref var` needs a mutable reference, since it may change the place.
+- **A `ref let` takes a shared reference, and a `ref var` a mutable one**: `&p` or `mutable p` of a place, a reborrow through a place that holds a reference ([References](references.md#reborrowing)), or a call that returns a reference. A `ref var` needs a mutable reference, since it may change the place.
 - **`var` on a borrowing binding means the place may change through it, never that the name may point elsewhere.** So `x = q` on a `ref var` writes `q` into the place `x` names. A `ref` binding never points elsewhere, though a `var` that holds a reference does ([below](#bindings-that-own-a-value)).
 - **Views taken from a `ref let` depend on the place itself** ([02](../02-views-and-dependencies/dependency-projection-and-results.md#rule-1-projection)).
 - **No borrowing binding may bind an under-aligned place**: that is a compile error, since a load or store of its type at that address may be invalid, and fault on some targets ([04](../04-types/structs.md#packed-structs-and-under-aligned-places)).
@@ -57,6 +57,7 @@ let all = consume enemies            // a move: 'enemies' can't be used until it
 - `ref let x = p`, with a bare place `p` of a type that isn't a reference, says to write `&p`;
 - `ref let x = mutable p` says to declare `ref var`, since a `ref let` changes nothing;
 - `ref var x = &p` says to write `mutable p`;
+- `ref var x = p`, with a bare place `p`, says to write `mutable p`, whether `p` holds a reference or not, since a lend for change is always marked ([References](references.md#every-lend-for-change-is-marked));
 - a `ref let` or `ref var` given a value that isn't a reference says to write `let` or `var`, which own it.
 
 **A value that isn't a reference has no place to name.** A literal, an operator's result, `copy place`, `consume place`, what a value property's `get` returns, and a call's result of any type but a reference are such values. So is a part of a temporary, such as `makeEnemy().hp`, which a `let` owns instead ([below](#bindings-that-own-a-value)).
@@ -65,15 +66,16 @@ let all = consume enemies            // a move: 'enemies' can't be used until it
 
 **A place reached through a reference that a temporary holds lies outside the temporary**, as `rows()[0]` does where `rows()` returns a `&[Row]`. So does a place that a `where return outlives self` place property hands out from a temporary. So a `ref let` can name either, depending on what the temporary carries ([02](../02-views-and-dependencies/dependency-projection-and-results.md#temporaries)).
 
-**`ref var t = r`, where `r` is a changeable place holding a `mutable &T`, reborrows through `r`** ([References](references.md#reborrowing)). `t` names what `r` refers to, and `r` stays borrowed exclusively while `t` is used, so it isn't moved. `ref let e = r`, where `r` holds a `&T`, names what `r` refers to the same way.
+**`ref var t = mutable r`, where `r` is a changeable place holding a `mutable &T`, reborrows through `r`** ([References](references.md#reborrowing)). `t` names what `r` refers to, and `r` stays borrowed exclusively while `t` is used, so it isn't moved. `ref let e = r`, where `r` holds a `&T`, names what `r` refers to the same way, with no mark, since a shared reborrow only reads.
 
 ```swift
 ref var lead = mutable enemies[0]
 lead = makeEnemy()                   // writes the new enemy into enemies[0]; 'lead' still names it
 ref let hp = &makeEnemy().hp         // error: the enemy dies with the statement; write 'let hp = makeEnemy().hp'
 var pick = mutable enemies[1]
-ref var target = pick                // reborrows: 'target' names enemies[1], and 'pick' stays usable after it
+ref var target = mutable pick        // reborrows: 'target' names enemies[1], and 'pick' stays usable after it
 target.hp = 0
+ref var other = pick                 // error: write 'mutable pick'
 ```
 
 ## Bindings that own a value

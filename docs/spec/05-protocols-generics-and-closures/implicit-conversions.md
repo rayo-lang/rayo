@@ -95,7 +95,7 @@ picks.append(boss)                // the receiver binds Element to '&Enemy', so 
 
 **The conversion has three limits, each where lending would hide what the code does:**
 
-- **It never lends for change.** A `mutable &T` is expected only where code may change the place, and `mutable` is what shows a reader that it may. So a bare place given where a `mutable &T` is expected is the compile error that names `mutable p` ([01](../01-values-and-ownership/references.md#places-given-to-a-position)).
+- **It never lends for change.** A `mutable &T` is expected only where code may change the place, and `mutable` is what shows a reader that it may. So a bare place given where a `mutable &T` is expected is the compile error that names `mutable p` ([01](../01-values-and-ownership/references.md#every-lend-for-change-is-marked)).
 - **It applies only where a `&T`, or an optional, a result or a static type of one, is expected** ([above](#places-lent-where-a-reference-is-expected)). A `let` or `var` with no annotation, a `ref let`, and a loop's or a `when`'s subject expect no type, so each writes `&` to lend a place ([01](../01-values-and-ownership/bindings.md#bindings)). A function type is no reference either, so a closure in a place given where one is expected writes the mark its kind needs ([below](#function-values-of-closures-in-places)).
 - **It never moves or copies the place.** It makes the borrow `&p` makes, which the law of exclusivity checks as it checks any other, so `f(mutable x, x)` is a compile error, as `f(mutable x, &x)` is ([01](../01-values-and-ownership/exclusivity.md#the-law-of-exclusivity)).
 
