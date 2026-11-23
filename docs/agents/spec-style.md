@@ -30,7 +30,7 @@ The spec is **precise, plain and explained**: every rule stated exactly, with th
     - where a type parameter would otherwise bind to the place's own type, as in `remember(&name)` for a `func remember<T>(_ x: T)`;
     - to call the overload that takes a reference, where another takes the argument as written.
 
-  Every code example in the docs and in `examples/` follows this rule, other than the proof programs in `examples/v0.N/`, which keep `&` until the compiler builds the lend.
+  Every code example in the docs and in `examples/` follows this rule, other than the proof program in `examples/v0.1/`, which keeps the `&` that v0.1 needed, since the compiler lends a bare place from v0.2 on.
 - **A rule that serves more than games has a general motivation and lead example.** Rayo is a general systems language, so no construct or reason reads as existing for games. A game example may follow as a second case, as an ECS query follows a columnar store's.
 
 ## Terms and links

@@ -17,7 +17,7 @@ func main() {
 
     // A snapshot of the enemy with the most health, which the fight leaves as it is, so that the damage the enemy
     // takes can be measured once the fight is over.
-    let strongest = indexOfStrongest(in: &wave.enemies)
+    let strongest = indexOfStrongest(in: wave.enemies)
     let before = copy wave.enemies[strongest]
     print(strongest)
     print(before.stats.hp)
@@ -38,7 +38,7 @@ func main() {
         var i: UInt = 0
         while i < wave.enemies.count {
             if wave.enemies[i].stats.hp > 0 {
-                let taken = damage(from: strengths[round % 4] + Int(round), on: &wave.enemies[i])
+                let taken = damage(from: strengths[round % 4] + Int(round), on: wave.enemies[i])
                 wave.enemies[i].stats.hp -= taken
                 ref let row = if wave.enemies[i].stats.hp > 0 { &wounding } else { &felling }
                 ledger[row][blows] += 1
@@ -58,7 +58,7 @@ func main() {
 
     // How many enemies survive: every enemy but those a blow felled. Then whether each one does.
     print(wave.enemies.count - UInt(ledger[felling][blows]))
-    let standing = survivors(of: &wave.enemies)
+    let standing = survivors(of: wave.enemies)
     var i: UInt = 0
     while i < standing.count {
         print(standing[i])
