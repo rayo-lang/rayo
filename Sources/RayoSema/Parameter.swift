@@ -16,8 +16,8 @@ struct Parameter {
 }
 
 extension Parameter {
-    /// The parameter as the checked program declares it, which the parameter becomes once its type is known, and
-    /// which borrows a temporary where `borrowsTemporaries` says.
+    /// The parameter that the checked program declares as `parameter`, which borrows a temporary where
+    /// `borrowsTemporaries` says.
     init(_ parameter: FunctionParameter, borrowsTemporaries: Bool) {
         self.init(label: parameter.label, convention: parameter.convention, type: parameter.type,
                   spelledType: parameter.convention.spelling(of: parameter.type),

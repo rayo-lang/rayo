@@ -14,9 +14,9 @@ extension ExpressionChecker {
         }
     }
 
-    /// Reports `value`, which the source writes without a `&`, where `recipient` takes a reference and can't take it
-    /// so: a parameter that borrows its argument, given a value it can't be lent, or a `ref let`. A value of any other
-    /// recipient is written as it should be.
+    /// Reports `value`, which the source writes without a `&`, where `recipient` can't take it so: a parameter that
+    /// borrows its argument, given a value the call can't lend it, or a `ref let`, which takes only a `&`. A value of
+    /// any other recipient is written as it should be.
     func reportUnlent(_ value: CheckedExpr, to recipient: Recipient?) {
         switch recipient {
         case .parameter(let parameter)? where parameter.convention == .borrowed:
