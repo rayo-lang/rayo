@@ -1,5 +1,5 @@
 """Measures a release `rayoc` from outside, as a user runs it, over generated programs at several sizes: the
-instructions it retires and its peak memory, which the system reports for the process, and its wall-clock time.
+instructions it runs, its peak memory, which the system reports for the process, and its wall-clock time.
 
     python3 Benchmarks/benchmark.py                                    # builds rayoc, measures it, prints the results
     python3 Benchmarks/benchmark.py --save --code 'main, as merged'    # saves the results as the commit's baseline
@@ -12,11 +12,18 @@ costs the difference from `--check`, and a check whose cost grows faster than th
 a profiler then finds which check it is.
 
 A baseline is named by the commit it measured, and records what the code there is, the machine, the build and how each
-measure was taken. A comparison fails where the median instructions of a benchmark rose more than 5% over the
+measure was taken. A comparison fails where the median instructions of a benchmark rose past the threshold over the
 baseline's. Peak memory varies between runs of one rayoc by up to 11%, and wall-clock time with the machine's load, so
 both are reported and never compared; a machine that counts no instructions compares nothing.
-It runs on macOS, where `/usr/bin/time -l` gives the measures, and on Linux, where `perf stat` and `/usr/bin/time`
-give them.
+
+By default the system counts the instructions: on macOS `/usr/bin/time -l` gives the measures, and on Linux `perf
+stat` and `/usr/bin/time` give them. That count varies by up to 2.8% between runs, so the threshold is 5%. On Linux,
+`--counter valgrind` has Valgrind's Cachegrind count them instead, on a processor it simulates, so the count varies
+by under 0.001% between runs, even on a virtual machine whose processor counts nothing. Its threshold is 1%, which
+leaves out only the smallest rises. CI counts so, since GitHub's runners count nothing, and Valgrind runs rayoc about
+40 times slower, so CI measures small programs:
+
+    python3 Benchmarks/benchmark.py --counter valgrind --sizes 50,100,200 --stops check,compile-debug
 """
 
 import argparse
@@ -25,16 +32,16 @@ import json
 import os
 import platform
 import re
+import shutil
 import statistics
 import subprocess
 import sys
 import tempfile
 import time
+import typing
 
 BASELINES = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'baselines')
 DEFAULT_SIZES = '200,400,800,1600'
-DEFAULT_RUNS = 3
-DEFAULT_THRESHOLD = 5.0
 UNCOUNTED = "This machine didn't count the instructions rayoc retired, so nothing was compared with the baseline."
 
 # The points rayoc stops at, each with the arguments that stop it there. A dump is written to /dev/null.
@@ -146,33 +153,86 @@ def linux_measures(perf_output, time_output):
         fields = line.split(',')
         if len(fields) > 2 and fields[2].startswith('instructions') and fields[0].isdigit():
             instructions = int(fields[0])
-    return {'instructions': counted(instructions), 'peak_memory_bytes': int(time_output.split()[-1]) * 1024}
+    return {'instructions': counted(instructions), 'peak_memory_bytes': largest_resident_set(time_output)}
 
 
-def measure_once(command, directory):
-    """The measures of one run of `command`, which must succeed: its instructions, its peak memory and its wall time."""
-    report = os.path.join(directory, 'measures.txt')
-    if sys.platform == 'darwin':
-        wrapped = ['/usr/bin/time', '-l', '-o', report, *command]
-    else:
-        counts = os.path.join(directory, 'counts.txt')
-        wrapped = ['perf', 'stat', '-x,', '-e', 'instructions:u', '-o', counts,
-                   '/usr/bin/time', '-f', '%M', '-o', report, *command]
+def largest_resident_set(time_output):
+    """The largest resident set, in bytes, that `/usr/bin/time -f %M` wrote in kilobytes."""
+    return int(time_output.split()[-1]) * 1024
 
+
+def cachegrind_instructions(output):
+    """The instructions that Cachegrind's output file gives in its summary."""
+    found = re.search(r'^summary:\s+(\d+)', output, re.MULTILINE)
+    if not found:
+        raise ValueError("Cachegrind's output gives no summary")
+    return int(found.group(1))
+
+
+def run_timed(wrapped, command, env=None):
+    """The wall-clock seconds that `wrapped`, which runs `command`, took; `command` must succeed."""
     start = time.perf_counter()
-    result = subprocess.run(wrapped, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+    result = subprocess.run(wrapped, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, env=env)
     seconds = time.perf_counter() - start
     if result.returncode != 0:
         raise RuntimeError(f"'{' '.join(command)}' failed: {result.stderr.decode('utf-8', 'replace')}")
+    return seconds
 
-    with open(report, encoding='utf-8') as f:
-        reported = f.read()
+
+def read(path):
+    with open(path, encoding='utf-8') as f:
+        return f.read()
+
+
+def system_measures(command, directory):
+    """The measures of one run of `command`, which must succeed: its instructions and its peak memory as the system
+    reports them, and its wall time."""
+    report = os.path.join(directory, 'measures.txt')
     if sys.platform == 'darwin':
-        found = macos_measures(reported)
-    else:
-        with open(counts, encoding='utf-8') as f:
-            found = linux_measures(f.read(), reported)
-    return {**found, 'wall_seconds': seconds}
+        seconds = run_timed(['/usr/bin/time', '-l', '-o', report, *command], command)
+        return {**macos_measures(read(report)), 'wall_seconds': seconds}
+
+    counts = os.path.join(directory, 'counts.txt')
+    seconds = run_timed(['perf', 'stat', '-x,', '-e', 'instructions:u', '-o', counts,
+                         '/usr/bin/time', '-f', '%M', '-o', report, *command], command)
+    return {**linux_measures(read(counts), read(report)), 'wall_seconds': seconds}
+
+
+def valgrind_measures(command, directory):
+    """The measures of `command` on Linux, which must succeed: the instructions Cachegrind counts, and the peak memory
+    and wall time of a run outside Valgrind, which slows it many times over and adds memory of its own."""
+    # Cachegrind with its cache and branch simulations off only counts instructions, the cheapest of Valgrind's
+    # tools that does. Swift seeds its hashing randomly, which would change the count from run to run.
+    counts = os.path.join(directory, 'cachegrind.out')
+    run_timed(['valgrind', '--tool=cachegrind', '--cache-sim=no', '--branch-sim=no',
+               f'--cachegrind-out-file={counts}', *command], command,
+              env={**os.environ, 'SWIFT_DETERMINISTIC_HASHING': '1'})
+
+    report = os.path.join(directory, 'measures.txt')
+    seconds = run_timed(['/usr/bin/time', '-f', '%M', '-o', report, *command], command)
+    return {'instructions': cachegrind_instructions(read(counts)),
+            'peak_memory_bytes': largest_resident_set(read(report)), 'wall_seconds': seconds}
+
+
+class InstructionCounter(typing.NamedTuple):
+    """A way to count rayoc's instructions, with the runs and the threshold that suit how much its count varies."""
+    measure: typing.Callable
+    runs: int
+    threshold: float
+    method: str
+
+
+COUNTERS = {
+    # The system's count varies between runs of one rayoc by up to 2.8%.
+    'system': InstructionCounter(system_measures, runs=3, threshold=5.0,
+                                 method="Instructions and peak memory are as the system reports them for rayoc's "
+                                        'process.'),
+    # Valgrind's count varies by under 0.001% between runs, so one run gives it and a small rise is real.
+    'valgrind': InstructionCounter(valgrind_measures, runs=1, threshold=1.0,
+                                   method="Instructions are as Valgrind's Cachegrind counts them, within 0.001% from "
+                                          'run to run, and peak memory as the system reports it for a run outside '
+                                          'Valgrind.'),
+}
 
 
 def median_measures(runs):
@@ -183,9 +243,10 @@ def median_measures(runs):
     return {key: median(key) for key in ('instructions', 'peak_memory_bytes', 'wall_seconds')}
 
 
-def measure_all(rayoc, sources, wanted, runs):
-    """The median measures of each benchmark over `sources` whose name holds `wanted`, over `runs` runs of `rayoc`
-    each, printing each as it is measured."""
+def measure_all(rayoc, sources, options):
+    """The median measures of each benchmark over `sources` that `options` selects, over its runs of `rayoc` each,
+    with its counter, printing each as it is measured."""
+    measure_once = COUNTERS[options.counter].measure
     results = {}
     with tempfile.TemporaryDirectory() as directory:
         for program, source in sources:
@@ -194,10 +255,10 @@ def measure_all(rayoc, sources, wanted, runs):
                 f.write(source)
             for stop, arguments in STOP_POINTS:
                 name = f'{stop}/{program}'
-                if wanted and wanted not in name:
+                if stop not in options.stops or (options.filter and options.filter not in name):
                     continue
                 filled = [argument.format(object=os.path.join(directory, 'out.o')) for argument in arguments]
-                measured = [measure_once([rayoc, *filled, path], directory) for _ in range(runs)]
+                measured = [measure_once([rayoc, *filled, path], directory) for _ in range(options.runs)]
                 results[name] = median_measures(measured)
                 print(row(name, results[name]), flush=True)
     return results
@@ -250,11 +311,11 @@ def change(old, new):
     return '-' if not old or new is None else f'{(new - old) * 100 / old:+.1f}%'
 
 
-def summary(results, measured, baseline=None, found=()):
-    """A Markdown report of `results`, the measures of `measured`, with each change from `baseline` and each measure
-    in `found` that rose past the threshold over it, if there is a baseline."""
+def summary(results, measured, baseline=None, found=(), counter='system'):
+    """A Markdown report of `results`, the measures of `measured` taken with `counter`, with each change from
+    `baseline` and each measure in `found` that rose past the threshold over it, if there is a baseline."""
     uncounted = all(measures['instructions'] is None for measures in results.values())
-    lines = [f'### Benchmarks of {measured}', '']
+    lines = [f'### Benchmarks of {measured}', '', COUNTERS[counter].method, '']
     if baseline is None:
         lines += ['| Benchmark | Instructions | Peak memory | Wall time |', '| --- | ---: | ---: | ---: |']
         lines += [f"| {name} | {' | '.join(shown(measures))} |" for name, measures in results.items()]
@@ -288,7 +349,7 @@ def commit_name(package):
     return commit + '-dirty' if git(package, 'status', '--porcelain', '--untracked-files=no') else commit
 
 
-def machine():
+def machine(counter):
     """The machine and toolchain the measures were taken on, since measures from two machines don't compare."""
     if sys.platform == 'darwin':
         processor = subprocess.run(['sysctl', '-n', 'machdep.cpu.brand_string'], capture_output=True, text=True)
@@ -297,8 +358,11 @@ def machine():
         with open('/proc/cpuinfo', encoding='utf-8') as f:
             name = next((line.split(':', 1)[1].strip() for line in f if line.startswith('model name')), 'unknown')
     swift = subprocess.run(['swift', '--version'], capture_output=True, text=True).stdout.splitlines()
-    return {'processor': name, 'cores': os.cpu_count(), 'system': platform.platform(),
-            'swift': swift[0] if swift else 'unknown'}
+    found = {'processor': name, 'cores': os.cpu_count(), 'system': platform.platform(),
+             'swift': swift[0] if swift else 'unknown'}
+    if counter == 'valgrind':
+        found['valgrind'] = subprocess.run(['valgrind', '--version'], capture_output=True, text=True).stdout.strip()
+    return found
 
 
 def built_rayoc(package):
@@ -309,38 +373,73 @@ def built_rayoc(package):
     return os.path.join(directory, 'rayoc')
 
 
+def stop_points(text):
+    """The stop points `text` names, separated by commas, in the order rayoc reaches them."""
+    named = text.split(',')
+    unknown = [stop for stop in named if stop not in dict(STOP_POINTS)]
+    if unknown:
+        raise argparse.ArgumentTypeError(f"rayoc has no stop point {', '.join(unknown)}")
+    return [stop for stop, _ in STOP_POINTS if stop in named]
+
+
 def arguments_parser():
     parser = argparse.ArgumentParser(prog='benchmark.py')
     parser.add_argument('--package', default=os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                         help="the checkout of the compiler's package to build and measure; this one unless named")
     parser.add_argument('--filter', help='measure only the benchmarks whose names hold this text, such as check/')
+    parser.add_argument('--stops', type=stop_points, default=[stop for stop, _ in STOP_POINTS],
+                        help='the stop points to measure, separated by commas, such as check,compile-debug; all '
+                             'unless named')
     parser.add_argument('--sizes', default=DEFAULT_SIZES,
                         help='the copies of a loop each program is made with, separated by commas')
-    parser.add_argument('--runs', type=int, default=DEFAULT_RUNS, help='the runs to take the median of')
+    parser.add_argument('--counter', choices=COUNTERS, default='system',
+                        help="what counts rayoc's instructions: the system, or Valgrind on Linux, whose count varies "
+                             'by under 0.001%% between runs but which runs rayoc about 40 times slower')
+    parser.add_argument('--runs', type=int, help="the runs to take the median of; the counter's unless named")
     parser.add_argument('--save', action='store_true', help="save the results as the baseline of the package's commit")
     parser.add_argument('--code', help='what the code at the commit is, which a saved baseline and a summary record')
     parser.add_argument('--compare', metavar='COMMIT', help='compare with the baseline of this commit')
-    parser.add_argument('--threshold', type=float, default=DEFAULT_THRESHOLD,
-                        help='the percentage rise in instructions a comparison fails past')
+    parser.add_argument('--threshold', type=float,
+                        help="the percentage rise in instructions a comparison fails past; the counter's unless named")
     parser.add_argument('--summary', metavar='FILE', help='add a Markdown report of the results to this file')
     return parser
 
 
-def main(arguments):
+def parse_arguments(arguments):
+    """The options `arguments` give, with the counter's runs and threshold where they name none."""
     options = arguments_parser().parse_args(arguments)
+    counter = COUNTERS[options.counter]
+    if options.runs is None:
+        options.runs = counter.runs
+    if options.threshold is None:
+        options.threshold = counter.threshold
+    return options
+
+
+def main(arguments):
+    options = parse_arguments(arguments)
     if options.save and not options.code:
         print('benchmark.py: --save needs --code, to say what the code at the commit is', file=sys.stderr)
+        return 2
+    if options.counter == 'valgrind' and not shutil.which('valgrind'):
+        print('benchmark.py: --counter valgrind needs Valgrind, which runs only on Linux', file=sys.stderr)
         return 2
     baseline = None
     if options.compare:
         # Read before measuring, so a missing baseline fails at once rather than after every run.
         with open(os.path.join(BASELINES, options.compare + '.json'), encoding='utf-8') as f:
             baseline = json.load(f)
+        # Baselines saved before Valgrind could count were counted by the system.
+        counted_with = baseline.get('counter', 'system')
+        if counted_with != options.counter:
+            print(f'benchmark.py: the baseline {options.compare} counted instructions with the {counted_with} '
+                  f'counter, and this run uses the {options.counter} counter', file=sys.stderr)
+            return 2
 
     name = commit_name(options.package)
     rayoc = built_rayoc(options.package)
     sources = programs([int(size) for size in options.sizes.split(',')])
-    results = measure_all(rayoc, sources, options.filter, options.runs)
+    results = measure_all(rayoc, sources, options)
     for program, _ in sources:
         costs = stage_costs(results, program)
         if costs:
@@ -348,10 +447,10 @@ def main(arguments):
 
     if options.save:
         saved = {
-            'commit': name, 'code': options.code, 'machine': machine(),
-            'build': "rayoc built with 'swift build -c release'",
-            'measured': f'median of {options.runs} runs of each benchmark, with no warm-up run; instructions retired '
-                        'and peak memory as the system reports them for the process, and wall-clock time',
+            'commit': name, 'code': options.code, 'machine': machine(options.counter),
+            'build': "rayoc built with 'swift build -c release'", 'counter': options.counter,
+            'measured': f'Median of {options.runs} runs of each benchmark, with no warm-up run. '
+                        f'{COUNTERS[options.counter].method}',
             'programs': PROGRAM_DESCRIPTIONS,
             'date': datetime.datetime.now(datetime.timezone.utc).isoformat(timespec='seconds'),
             'results': results,
@@ -371,7 +470,7 @@ def main(arguments):
     if options.summary:
         measured = f'rayoc at {name}' + (f' ({options.code})' if options.code else '')
         with open(options.summary, 'a', encoding='utf-8') as f:
-            f.write(summary(results, measured, baseline, found))
+            f.write(summary(results, measured, baseline, found, options.counter))
     return 1 if found else 0
 
 

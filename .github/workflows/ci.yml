@@ -76,9 +76,9 @@ jobs:
           fi
           if grep -q -E "$docs_paths" <<< "$changed" || [ -n "$deleted" ]; then docs=true; else docs=false; fi
           # The benchmarks measure the rayoc that the compiler's sources and manifest build, with a script of their
-          # own, in a job that the workflow and the macOS toolchain's action set up.
+          # own, in a job that the workflow and the Linux toolchain's action set up.
           benchmark_paths='^(Sources|Benchmarks)/|^Package\.swift$|^\.github/'
-          benchmark_paths+='(workflows/ci\.yml$|actions/macos-toolchain/)'
+          benchmark_paths+='(workflows/ci\.yml$|actions/linux-toolchain/)'
           if grep -q -E "$benchmark_paths" <<< "$changed"; then benchmarks=true; else benchmarks=false; fi
           echo "code=$code" >> "$GITHUB_OUTPUT"
           echo "docs=$docs" >> "$GITHUB_OUTPUT"
@@ -98,87 +98,16 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     container: swift:${{ needs.changes.outputs.swift-release }}-noble
-    env:
-      # The fingerprint apt.llvm.org publishes for the key that signs its packages.
-      LLVM_KEY_FINGERPRINT: 6084F3CF814B57C1CF12EFD515CF4D18AF4F7421
-      # Where the LLVM packages are kept between runs. Raising the revision fetches apt.llvm.org's newest build of
-      # the release, since the cache otherwise keeps the build it first fetched.
-      LLVM_PACKAGES: /var/cache/rayo-llvm
-      LLVM_PACKAGES_REVISION: 1
     steps:
       - uses: actions/checkout@v7
 
-      # The cached packages are what LLVM needs on top of the packages the container's image holds, at their exact
-      # versions. A new build of the image can change those, so the cache is keyed on them too.
-      - name: Name the LLVM packages' cache
-        id: image
-        run: |
-          packages=$(dpkg-query -W -f='${Package}=${Version}\n' | git hash-object --stdin | cut -c 1-16)
-          echo "key=llvm-$LLVM_MAJOR_VERSION-noble-$packages-r$LLVM_PACKAGES_REVISION" >> "$GITHUB_OUTPUT"
-      - name: Restore the LLVM packages
-        id: llvm-packages
-        uses: actions/cache/restore@v6
-        with:
-          path: ${{ env.LLVM_PACKAGES }}
-          key: ${{ steps.image.outputs.key }}
-      - name: Fetch the LLVM packages
-        if: steps.llvm-packages.outputs.cache-hit != 'true'
-        run: |
-          # Fetch Ubuntu's packages from Azure's mirror of the archive rather than archive.ubuntu.com, which has
-          # stalled for minutes at a time from GitHub's runners. A server that stalls fails the step within
-          # minutes rather than holding the job until it times out.
-          sed -i -E 's#https?://(archive|security)\.ubuntu\.com#http://azure.archive.ubuntu.com#' \
-            /etc/apt/sources.list.d/ubuntu.sources
-          printf 'Acquire::Retries "3";\nAcquire::http::Timeout "30";\nAcquire::https::Timeout "30";\n' \
-            > /etc/apt/apt.conf.d/80-rayo-ci
-          apt-get update
-          apt-get install -y --no-install-recommends ca-certificates curl gnupg
-
-          # apt trusts every key in the keyring, so it gets the one key with the published fingerprint and no other
-          # key the download might hold.
-          keys=$(mktemp -d)
-          curl -fsSL https://apt.llvm.org/llvm-snapshot.gpg.key -o "$keys/llvm.asc"
-          gpg --homedir "$keys" --batch --import "$keys/llvm.asc"
-          gpg --homedir "$keys" --batch --export "$LLVM_KEY_FINGERPRINT" > /usr/share/keyrings/llvm.gpg
-          if [ ! -s /usr/share/keyrings/llvm.gpg ]; then
-            echo "::error::apt.llvm.org's key file holds no key with fingerprint $LLVM_KEY_FINGERPRINT"
-            exit 1
-          fi
-
-          # Fetch LLVM, clang and LLD with each dependency the container lacks, into the directory the cache keeps,
-          # without apt's working files. The pin keeps the major release: apt.llvm.org serves only the newest build
-          # of it, so no exact build can be named.
-          suite="llvm-toolchain-noble-$LLVM_MAJOR_VERSION"
-          echo "deb [signed-by=/usr/share/keyrings/llvm.gpg] https://apt.llvm.org/noble/ $suite main" \
-            > /etc/apt/sources.list.d/llvm.list
-          apt-get update
-          mkdir -p "$LLVM_PACKAGES/partial"
-          version="1:$LLVM_MAJOR_VERSION.1.*"
-          apt-get install -y --no-install-recommends --download-only -o Dir::Cache::Archives="$LLVM_PACKAGES" \
-            "llvm-$LLVM_MAJOR_VERSION-dev=$version" "clang-$LLVM_MAJOR_VERSION=$version" \
-            "lld-$LLVM_MAJOR_VERSION=$version"
-          rm -rf "$LLVM_PACKAGES/partial" "$LLVM_PACKAGES/lock"
-      - name: Install LLVM
-        id: llvm
-        # The cache holds each package LLVM needs that the container lacks, so apt installs them from their files
-        # alone, with no package index and no network. apt rather than dpkg, since only apt orders the packages so
-        # that each one's pre-dependencies are configured before it is unpacked.
-        run: |
-          apt-get install -y --no-install-recommends --no-download -o Dir::Cache::Archives="$LLVM_PACKAGES" \
-            "$LLVM_PACKAGES"/*.deb
-          echo "version=$(dpkg-query -W -f='${Version}' "llvm-$LLVM_MAJOR_VERSION-dev")" >> "$GITHUB_OUTPUT"
-      # Only a push to main saves the packages, as it does the build, so pull requests share main's one copy.
-      - name: Save the LLVM packages
-        if: github.event_name == 'push' && steps.llvm-packages.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v6
-        with:
-          path: ${{ env.LLVM_PACKAGES }}
-          key: ${{ steps.llvm-packages.outputs.cache-primary-key }}
+      - uses: ./.github/actions/linux-toolchain
+        id: toolchain
 
       - uses: ./.github/actions/swift-test
         with:
           platform: linux
-          llvm-version: ${{ steps.llvm.outputs.version }}
+          llvm-version: ${{ steps.toolchain.outputs.llvm-version }}
           changed-paths: ${{ needs.changes.outputs.test-paths }}
           # One platform builds the release toolchain users run, and runs the proof programs with it; what differs
           # between platforms the debug tests cover on each.
@@ -188,7 +117,7 @@ jobs:
       # so it runs here alone, whether or not the tests passed. It runs once LLVM is installed, since LLVM's
       # packages bring the `python3` it runs with.
       - name: Check the imports that the manifest can't limit
-        if: ${{ !cancelled() && steps.llvm.outcome == 'success' }}
+        if: ${{ !cancelled() && steps.toolchain.outcome == 'success' }}
         run: python3 scripts/check_imports.py
 
   macos:
@@ -312,25 +241,33 @@ jobs:
           changed-paths: ${{ needs.changes.outputs.test-paths }}
 
   # The benchmarks build a pull request's rayoc and the rayoc of its base, in one job on one machine, and run each on
-  # the same programs, so a rise in instructions past the threshold fails the job. They report peak memory and
-  # wall-clock time and never compare them, and a runner that counts no instructions compares nothing. The CI check
-  # leaves the job out, since a change may cost more on purpose: its pull request says why. A push to main only
-  # builds its release rayoc, which it saves for pull requests to start from.
+  # the same programs, so a rise in instructions past the threshold fails the job. GitHub's runners are virtual
+  # machines whose processors count no instructions, so Valgrind counts them, within 0.001% from run to run, and the
+  # job reports peak memory and wall-clock time from runs outside it and never compares them. The CI check leaves the
+  # job out, since a change may cost more on purpose: its pull request says why. A push to main only builds its
+  # release rayoc, which it saves for pull requests to start from.
   benchmarks:
-    name: Benchmark on macOS
+    name: Benchmark on Linux
     needs: changes
     if: needs.changes.outputs.benchmarks == 'true'
-    runs-on: xcode-27
+    runs-on: ubuntu-latest
     timeout-minutes: 60
+    container: swift:${{ needs.changes.outputs.swift-release }}-noble
     env:
-      HOMEBREW_NO_AUTO_UPDATE: 1
-      HOMEBREW_NO_INSTALL_CLEANUP: 1
-      # Three sizes show how a cost grows, and leave out the largest, whose release compiles take most of a run.
-      SIZES: 200,400,800
+      # Valgrind runs rayoc about 40 times slower, so the job measures three small sizes, which still show how a
+      # cost grows, at checking and a debug compile, which take about two minutes a side. Printing costs little past
+      # checking, and LLVM's optimisations make most of a release compile's cost.
+      SIZES: 50,100,200
+      STOPS: check,compile-debug
     steps:
       - uses: actions/checkout@v7
-      - uses: ./.github/actions/macos-toolchain
+      - uses: ./.github/actions/linux-toolchain
         id: toolchain
+        with:
+          packages: valgrind time
+      # The container runs as root, and git refuses a checkout another user owns, which the runner's user does.
+      - name: Let git read the checkout
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
       # A build is reused only by the same Swift compiler and LLVM, as the test jobs' are. Only a push to main saves
       # one, under its commit, so a pull request whose base is that commit starts from its build, and any other
@@ -342,7 +279,7 @@ jobs:
           COMMIT: ${{ github.event.pull_request.base.sha || github.sha }}
         run: |
           toolchain=$( (swift --version 2>&1; echo "$LLVM_VERSION") | git hash-object --stdin | cut -c 1-16)
-          prefix="benchmark-build-macos-$RUNNER_ARCH-$toolchain-"
+          prefix="benchmark-build-linux-$RUNNER_ARCH-$toolchain-"
           echo "prefix=$prefix" >> "$GITHUB_OUTPUT"
           echo "key=$prefix$COMMIT" >> "$GITHUB_OUTPUT"
       - name: Restore the build
@@ -383,7 +320,8 @@ jobs:
             exit 0
           fi
           git checkout --detach FETCH_HEAD
-          if ! python3 "$RUNNER_TEMP/benchmarks/benchmark.py" --package . --sizes "$SIZES" --save --code 'the base'
+          if ! python3 "$RUNNER_TEMP/benchmarks/benchmark.py" --package . --counter valgrind --sizes "$SIZES" \
+            --stops "$STOPS" --save --code 'the base'
           then
             echo "::notice::The base '$BASE' couldn't be built or measured, so the pull request is measured alone."
             exit 0
@@ -396,8 +334,9 @@ jobs:
           BASE_COMMIT: ${{ steps.base.outputs.commit }}
         run: |
           git checkout --detach "$HEAD_COMMIT"
-          python3 "$RUNNER_TEMP/benchmarks/benchmark.py" --package . --sizes "$SIZES" --code 'the pull request' \
-            --summary "$GITHUB_STEP_SUMMARY" ${BASE_COMMIT:+--compare "$BASE_COMMIT"}
+          python3 "$RUNNER_TEMP/benchmarks/benchmark.py" --package . --counter valgrind --sizes "$SIZES" \
+            --stops "$STOPS" --code 'the pull request' --summary "$GITHUB_STEP_SUMMARY" \
+            ${BASE_COMMIT:+--compare "$BASE_COMMIT"}
 
   docs:
     name: Check docs
