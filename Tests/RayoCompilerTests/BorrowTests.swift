@@ -112,20 +112,21 @@ struct BorrowTests {
         ])
     }
 
-    // A branch that borrows through another `ref let` keeps that one's borrow too, while the branch that gives a value
-    // borrows nothing; where the branches join, each holds the borrows the other still needs.
+    // A branch that borrows through another `ref let` keeps that one's borrow too, while the other branch borrows a
+    // place apart from it; where the branches join, each holds the borrows the other still needs.
     @Test(arguments: [
-        ("\(enemy)\n    let c = false\n    ref let st = &e.stats\n    ref let deep = if c { &st.hp } else { 5 }\n"
-            + "    print(deep)\n    e.stats.hp = 2\n    print(e.stats.hp)", []),
+        ("\(enemy)\n    let c = false\n    let n = 5\n    ref let st = &e.stats\n"
+            + "    ref let deep = if c { &st.hp } else { &n }\n    print(deep)\n    e.stats.hp = 2\n"
+            + "    print(e.stats.hp)", []),
         ("\(enemy)\n    let c = false\n    ref let st = &e.stats\n"
             + "    ref let deep = if c { &st.hp } else { &e.slots[1] }\n    print(deep)\n    e.stats.hp = 2\n"
             + "    print(e.stats.hp)", []),
-        ("\(enemy)\n    let c = false\n    ref let st = &e.stats\n    ref let deep = if c { &st.hp } else { 5 }\n"
-            + "    e.stats.hp = 2\n    print(deep)", [
-                "6:5: error[E0313]: 'e.stats.hp' can't change while 'e.stats' is borrowed",
-                "4:18: note: borrowed here",
+        ("\(enemy)\n    let c = false\n    let n = 5\n    ref let st = &e.stats\n"
+            + "    ref let deep = if c { &st.hp } else { &n }\n    e.stats.hp = 2\n    print(deep)", [
+                "7:5: error[E0313]: 'e.stats.hp' can't change while 'e.stats' is borrowed",
+                "5:18: note: borrowed here",
             ]),
-    ])
+    ] as [(String, [String])])
     func `a 'ref let' of an 'if' with one branch borrowing through another 'ref let' keeps that borrow`(
         body: String, expected: [String],
     ) {

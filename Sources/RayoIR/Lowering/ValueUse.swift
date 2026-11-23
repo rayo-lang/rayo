@@ -10,6 +10,6 @@ enum ValueUse {
     case take
     /// Borrows the value, as the declaration of a `ref let` does: a place that a local holds is read through an
     /// access that the local's value then depends on, so the place keeps its value, and can't change or move while
-    /// the local is used. Any other value is taken, so the local owns it.
+    /// the local is used. Checking gives a `ref let` no other value.
     case borrow
 }

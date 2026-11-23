@@ -363,8 +363,8 @@ public enum ErrorCode: Sendable, Hashable {
         "'{place}' ends with its block before '{binding}' does; declare 'let' and write 'copy' or 'consume' before it")
     case referenceOutlivesPlace(binding: String, place: String)
 
-    @Code(280, error: "'{binding}' has no place to refer to; declare it 'let' or 'var' to own its value")
-    case referenceToValue(binding: String)
+    @Code(280, error: "a 'ref let' refers to a place, not a value; declare 'let' or 'var' to own the value")
+    case referenceToValue
 
     @Code(281, error: "'ref var' isn't supported")
     case unsupportedReferenceVar

@@ -43,13 +43,16 @@ extension ExpressionChecker {
         file.errors.reportKeepingMeaning(code, at: handed.place.range)
     }
 
-    /// Reports `value`, given to a `ref let`, where it is a place rooted in a local, with the `&` to write, even where
-    /// its type is implicitly copyable, since a copy is a value, and the `ref let` refers to the place. The `ref let`
-    /// still refers to the place, so the error leaves the body's meaning whole. Any other value gives the `ref let` a
-    /// value of its own, which the declaration reports where no branch of it gives a place.
+    /// Reports `value`, given to a `ref let`, which the source writes without a `&`. A place rooted in a local is
+    /// reported with the `&` to write, even where its type is implicitly copyable, since a copy is a value, and the
+    /// `ref let` refers to the place; it still refers to the place, so that error leaves the body's meaning whole. Any
+    /// other value, such as a literal, a copy or a call's result, has no place to refer to, so the `ref let` fails.
     private func reportUnreferenced(_ value: CheckedExpr) {
         // A value that stands here is no `if`, since each branch of an `if` stands in its place on its own.
-        guard let handed = value.handedPlaces.first else { return }
+        guard let handed = value.handedPlaces.first else {
+            file.errors.report(.referenceToValue, at: value.range)
+            return
+        }
         file.errors.reportKeepingMeaning(.unreferencedPlace(place: sourceName(of: handed)), at: handed.place.range)
     }
 

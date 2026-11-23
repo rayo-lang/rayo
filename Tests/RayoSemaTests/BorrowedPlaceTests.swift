@@ -92,12 +92,11 @@ struct BorrowedPlaceTests {
         #expect(messages(of: statement) == [])
     }
 
-    // A `ref let` takes a reference to the place it refers to. A branch of an `if` that gives a value beside one that
-    // gives a reference gives the `ref let` a value of its own.
+    // A `ref let` takes a reference to the place it refers to, on each branch of an `if`.
     @Test(arguments: [
         "ref let x = &a", "ref let x = &e.stats", "ref let x = &g[i][0]", "ref let x = &e.slots[1]",
         "ref let x: Int = &a", "ref let x = if c { &g[0] } else { &g[1] }",
-        "ref let x = if c { &e.stats.hp } else { 1 }\n    print(x)",
+        "ref let x = if c { &e.stats.hp } else { &b }\n    print(x)",
     ])
     func `a 'ref let' takes '&' of a local, or of a field or an element of one`(statement: String) {
         #expect(messages(of: statement) == [])
@@ -157,12 +156,17 @@ struct BorrowedPlaceTests {
     }
 
     // A `ref let` refers to a place, so a value that no place holds, a place in a temporary among them, gives it
-    // nothing to refer to.
-    @Test(arguments: ["ref let x = 1", "ref let x = copy a", "ref let x = makeEnemy().stats", "ref let x = a + b"])
-    func `a 'ref let' given a value names the binding, and says to declare 'let' or 'var'`(statement: String) {
-        #expect(messages(of: statement) == [
-            "13: error[E0280]: 'x' has no place to refer to; declare it 'let' or 'var' to own its value",
-        ])
+    // nothing to refer to. Each branch of an `if` stands in the `ref let`'s position, so each that gives a value is
+    // reported, even beside one that gives a place.
+    @Test(arguments: [
+        ("ref let x = 1", [17]), ("ref let x = copy a", [17]), ("ref let x = makeEnemy().stats", [17]),
+        ("ref let x = a + b", [17]), ("ref let x = if c { &e.stats.hp } else { 1 }", [45]),
+        ("ref let x = if c { copy a } else { 1 }", [24, 40]),
+    ])
+    func `a 'ref let' given a value says to declare 'let' or 'var'`(statement: String, columns: [Int]) {
+        #expect(messages(of: statement) == columns.map {
+            "\($0): error[E0280]: a 'ref let' refers to a place, not a value; declare 'let' or 'var' to own the value"
+        })
     }
 
     // A local that a branch declares ends with the branch, while a `ref let` outside it lives on, so the `ref let`

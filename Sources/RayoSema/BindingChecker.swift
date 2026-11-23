@@ -78,11 +78,9 @@ struct BindingChecker {
         case .let, .var:
             expressions.reportHandedPlaces(of: value) { .ownerBorrowsPlace(keyword: kind.keyword, place: $0) }
 
-        // A `ref let` refers to a place, so it needs one, and one that lasts as long as it does.
+        // A `ref let` refers to a place, which each branch of its value gives, as its position reported, and one that
+        // lasts as long as the `ref let` does.
         case .refLet:
-            if value.handedPlaces.isEmpty {
-                errors.report(.referenceToValue(binding: binding.name), at: binding.nameRange)
-            }
             expressions.reportEndedPlaces(of: value, referredToBy: binding.name)
 
         case .refVar:
