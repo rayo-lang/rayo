@@ -1,5 +1,5 @@
 import RayoCheckedProgram
-import RayoIR
+@testable import RayoIR
 import Testing
 
 /// IR that uses a local on some path after a retirement ends its life, and what the verifier says is wrong with it.
@@ -39,6 +39,90 @@ struct LocalLifeTests {
             """))
         #expect(IRVerifier.verify(program, from: .ownership) == nil)
     }
+
+    @Test func `a block that no path reaches may use a retired local, since it never runs`() throws {
+        let program = try IRParser.program(from: assigningThreeLocals("""
+              retire %0
+              return
+            bb1:
+              begin a0 read %0 @1:1-1:2
+              _ = call builtin "print(_: &Int)"(a0) @1:1-1:2
+              end a0
+              return
+            """))
+        #expect(IRVerifier.verify(program, from: .ownership) == nil)
+    }
+
+    @Test func `checking eight times as many loops in a row takes under twenty times as long`() throws {
+        let short = try IRParser.program(from: retiringLoops(50))
+        let long = try IRParser.program(from: retiringLoops(400))
+        #expect(IRVerifier.verify(long, from: .ownership) == nil)
+
+        // This check takes about nine times as long, and one that grows with the square up to sixty-four.
+        let times = try fastestTimes(over: short, long, runs: 3, measuring: timeToCheckLocalLives)
+        #expect(times.long < times.short * 20)
+    }
+}
+
+/// How long the local-life check takes over `program`'s `main`. It throws at a violation, which cuts the work short.
+private func timeToCheckLocalLives(_ program: IRProgram) throws -> Duration {
+    let body = try #require(program.bodies[FunctionID(index: 0)])
+    let clock = ContinuousClock()
+    let start = clock.now
+    try LocalLifeVerifier(body: body, of: "main()").verify()
+    return clock.now - start
+}
+
+/// A program whose `main` runs `loops` loops in a row, each with locals of its own that it retires as it ends.
+private func retiringLoops(_ loops: Int) -> String {
+    let locals = (0..<loops).map { loop in
+        """
+          var %\(3 * loop) c\(loop): UInt @1:1-1:1
+          temp %\(3 * loop + 1): Bool
+          let %\(3 * loop + 2) v\(loop): Int @1:1-1:1
+        """
+    }
+    let blocks = (0..<loops).map { loop in
+        let (counter, test, value) = (3 * loop, 3 * loop + 1, 3 * loop + 2)
+        let (start, header, body) = (3 * loop, 3 * loop + 1, 3 * loop + 2)
+        return """
+            bb\(start):
+            \(retiringLoop(loop - 1))
+              declare %\(counter)
+              %\(counter) @1:1-1:1 = operand UInt 0 @1:1-1:1
+              goto bb\(header)
+            bb\(header):
+              declare %\(test)
+              %\(test) @1:1-1:1 = less read %\(counter) @1:1-1:1, UInt 8 @1:1-1:1
+              branch read %\(test) @1:1-1:1, bb\(body), bb\(start + 3)
+            bb\(body):
+              retire %\(test)
+              declare %\(value)
+              %\(value) @1:1-1:1 = call builtin "Int(_: UInt)"(read %\(counter) @1:1-1:1) @1:1-1:1
+              begin a\(loop) read %\(value) @1:1-1:1
+              _ = call builtin "print(_: &Int)"(a\(loop)) @1:1-1:1
+              end a\(loop)
+              retire %\(value)
+              %\(counter) @1:1-1:1 = add checked read %\(counter) @1:1-1:1, UInt 1 @1:1-1:1
+              goto bb\(header)
+            """
+    }
+    return """
+        main "main()"
+        func "main()"() -> Void {
+        \(locals.joined(separator: "\n"))
+        \(blocks.joined(separator: "\n"))
+        bb\(3 * loops):
+        \(retiringLoop(loops - 1))
+          return
+        }
+        """
+}
+
+/// The retirements of the count and the test of loop `loop` as it ends, or none before the first loop.
+private func retiringLoop(_ loop: Int) -> String {
+    guard loop >= 0 else { return "" }
+    return "  retire %\(3 * loop + 1)\n  retire %\(3 * loop)"
 }
 
 private let retiredUses = [
