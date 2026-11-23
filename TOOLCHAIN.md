@@ -224,4 +224,3 @@ Each row says what a module or test target holds, and changes only when one is a
 | `Tests/RayoLLVMTests` | Tests of the code Rayo IR compiles to |
 | `Tests/SnapshotTesting` | Snapshot testing for other test targets: comparing a test's text with a file kept beside it |
 | `Tests/RayoLLVMTestSupport` | C stand-ins for the runtime's functions in the LLVM tests |
-| `Benchmarks` | The script that measures a release `rayoc` from outside, over programs at several sizes |
