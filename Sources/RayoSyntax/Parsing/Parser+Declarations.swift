@@ -3,14 +3,13 @@ internal import RayoSource
 
 /// Parses declarations: functions with their parameters, and structs with their fields and members.
 extension Parser {
-    /// Parses the file's top-level declarations, up to its end.
-    mutating func parseFileDeclarations() -> [Declaration] {
+    mutating func parseFile() -> SourceFile {
         var declarations: [Declaration] = []
         while true {
             // Parse declarations up to the end of the file or a `}` that closes no block.
             declarations += parseDeclarations()
             // The declarations run to the end of the file.
-            if atEnd { return declarations }
+            if atEnd { return SourceFile(declarations: declarations, source: bytes, tokens: tokens) }
 
             // A `}` that closes no block ends the sequence early; it is reported, and the declarations go on after it.
             report(.unmatchedBrace)

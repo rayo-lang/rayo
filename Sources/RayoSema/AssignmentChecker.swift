@@ -60,7 +60,7 @@ struct AssignmentChecker {
     /// The error for an assignment into `temporary`, which ends with its statement. It names the temporary as the
     /// source writes it.
     private func refusal(toChange temporary: CheckedExpr) -> ErrorCode {
-        .assignToTemporary(temporary: expressions.file.text(of: temporary.range))
+        .assignToTemporary(temporary: expressions.file.spelling(of: temporary.range))
     }
 
     /// Checks the value an assignment gives its target. It is checked against the target's type where that is known,
@@ -137,7 +137,7 @@ extension AssignmentChecker: PlaceRules {
     func error(naming nonPlace: NonPlaceName, _ name: String) -> ErrorCode {
         switch nonPlace {
         // `_` names no place; it only drops a value.
-        case .underscore: .assignToNonLocal
+        case .underscore: .assignToUnderscore
         case .function: .assignToFunction(name: name)
         case .type: .assignToType(name: name)
         }

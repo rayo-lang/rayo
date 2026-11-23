@@ -48,7 +48,7 @@ struct UnusedValueTests {
         ("_ = nope", [ErrorCode.notDeclared(name: "nope")]),
         ("_ = _", [.underscoreValue]),
         ("_ == 1", [.underscoreValue]),
-        ("(_) = 1", [.assignToNonLocal]),
+        ("(_) = 1", [.assignToUnderscore]),
         ("_ = 1\nprint(_)", [.underscoreValue]),
     ])
     func droppedChecked(body: String, expected: [ErrorCode]) {

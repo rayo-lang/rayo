@@ -20,7 +20,7 @@ struct LocalTests {
         ("let x = 1\nx(2)", .notAFunction(name: "x")),
         ("print = 3", .assignToFunction(name: "print")),
         ("main += 2", .assignToFunction(name: "main")),
-        ("_ += 1", .assignToNonLocal),
+        ("_ += 1", .assignToUnderscore),
         ("print(_)", .underscoreValue),
     ])
     func rejected(body: String, expected: ErrorCode) {
@@ -43,6 +43,11 @@ struct LocalTests {
 
     @Test func `a '_' read as a value is told that it can only be assigned to`() {
         #expect(errorLines(inMain: "print(_)") == ["2:7: error[E0212]: '_' can only be assigned to"])
+    }
+
+    @Test(arguments: ["_ += 1", "(_) = 1", "_.hp = 1"])
+    func `a '_' changed any way but '_ = value' is told to write that`(body: String) {
+        #expect(errorLines(inMain: body) == ["2:1: error[E0223]: only '_ = value' can assign to '_'"])
     }
 
     @Test("a declaration that fails still declares its name, so its uses report nothing more", arguments: [

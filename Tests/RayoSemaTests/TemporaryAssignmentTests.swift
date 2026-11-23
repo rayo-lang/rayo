@@ -24,9 +24,19 @@ struct TemporaryAssignmentTests {
         #expect(errorLines(inMain: body, beside: declarations) == [expected])
     }
 
-    @Test func `the temporary is named as the source writes it`() {
-        let expected = "2:3: error[E0291]: 'spawn(hp:  1+2)' is a temporary; keep it in a 'var'"
-        #expect(errorLines(inMain: "  spawn(hp:  1+2).hp = 0", beside: declarations) == [expected])
+    @Test(arguments: [
+        ("  spawn(hp:  1+2).hp = 0", "2:3", "spawn(hp: 1+2)"),
+        ("spawn(hp: 1 +\n    2).hp = 0", "2:1", "spawn(hp: 1 + 2)"),
+        ("spawn(hp: /* full */ 100).hp = 0", "2:1", "spawn(hp: 100)"),
+        ("(makeEnemy()).hp = 0", "2:1", "makeEnemy()"),
+        ("((makeEnemy())).hp = 0", "2:1", "makeEnemy()"),
+        ("(makeHP()) + (makeHP()) = 1", "2:1", "(makeHP()) + (makeHP())"),
+    ])
+    func `the temporary is named as the source writes it, on one line, without comments or parentheses around it`(
+        body: String, position: String, temporary: String,
+    ) {
+        let expected = "\(position): error[E0291]: '\(temporary)' is a temporary; keep it in a 'var'"
+        #expect(errorLines(inMain: body, beside: declarations) == [expected])
     }
 
     @Test func `a temporary that fails is reported for that alone`() {

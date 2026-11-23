@@ -166,7 +166,7 @@ extension Parser {
     /// or an integer literal as the source writes it.
     private var memberSpelling: String? {
         switch current.kind {
-        case .intLiteral: text(of: current.range)
+        case .intLiteral: bytes.text(of: current.range)
         default: current.labelSpelling
         }
     }

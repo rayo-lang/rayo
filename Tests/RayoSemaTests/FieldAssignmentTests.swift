@@ -25,7 +25,7 @@ struct FieldAssignmentTests {
         ("e.armor = true", .typeMismatch(expected: "Int", found: "Bool"), "true"),
         ("e.stats = made()", .typeMismatch(expected: "Stats", found: "Enemy"), "made()"),
         ("made().armor = 1", .assignToTemporary(temporary: "made()"), "made()"),
-        ("_.armor = 1", .assignToNonLocal, "_"),
+        ("_.armor = 1", .assignToUnderscore, "_"),
         ("Enemy.armor = 1", .assignToType(name: "Enemy"), "Enemy"),
         ("made.armor = 1", .assignToFunction(name: "made"), "made"),
         ("nope.armor = 1", .notDeclared(name: "nope"), "nope"),
