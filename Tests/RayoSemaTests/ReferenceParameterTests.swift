@@ -114,7 +114,7 @@ struct ReferenceParameterTests {
         ("let x = mutable &a", 13), ("a = mutable &a", 9),
     ])
     func `'mutable &' outside a 'ref let' or 'ref var' is reported as unsupported`(statement: String, column: Int) {
-        #expect(messages(of: statement) == ["\(column): error[E0290]: 'mutable &' isn't supported"])
+        #expect(messages(of: statement) == ["\(column): error[E0289]: 'mutable &' isn't supported"])
     }
 
     @Test func `a call that fails for its arguments' count reports nothing of a '&' among them`() {

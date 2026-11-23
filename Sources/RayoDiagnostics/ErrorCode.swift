@@ -390,10 +390,7 @@ public enum ErrorCode: Sendable, Hashable {
     @Code(288, error: "a '{keyword}' holding a reference isn't supported; declare 'ref let', or remove the '&'")
     case unsupportedHeldReference(keyword: String)
 
-    @Code(289, error: "'mutable &' lends for change, and a 'ref let' is read-only; declare 'ref var'")
-    case mutableReferenceToReferenceLet
-
-    @Code(290, error: "'mutable &' isn't supported")
+    @Code(289, error: "'mutable &' isn't supported")
     case unsupportedMutableReference
 
     // MARK: Ownership

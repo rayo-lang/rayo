@@ -98,8 +98,6 @@ extension ExpressionChecker {
     func mutablyLent(_ lent: MutablyLentPlace, to expected: Expectation) -> CheckedExpr? {
         switch expected.recipient {
         case .declaration(.refVar)?: typeFitted(lent.placeExpression, to: expected)
-        // A `ref let` is read-only, so the fix is to declare the `ref var` that the `mutable &` asks for.
-        case .declaration(.refLet)?: refused(.mutableReferenceToReferenceLet, at: lent.range)
         default: refused(.unsupportedMutableReference, at: lent.range)
         }
     }

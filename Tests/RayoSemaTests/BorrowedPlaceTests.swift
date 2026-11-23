@@ -117,12 +117,10 @@ struct BorrowedPlaceTests {
         ])
     }
 
-    // A `mutable &` lends its place for change, which a `ref let` never does.
+    // A `mutable &` lends its place for change, which only a `ref var` takes, and rayoc builds no `ref var`.
     @Test(arguments: [("ref let x = mutable &a", 17), ("ref let x = if c { &a } else { mutable &b }", 36)])
-    func `a 'ref let' given 'mutable &' says to declare 'ref var'`(statement: String, column: Int) {
-        #expect(messages(of: statement) == [
-            "\(column): error[E0289]: 'mutable &' lends for change, and a 'ref let' is read-only; declare 'ref var'",
-        ])
+    func `a 'ref let' given 'mutable &' reports the 'mutable &' as unsupported`(statement: String, column: Int) {
+        #expect(messages(of: statement) == ["\(column): error[E0289]: 'mutable &' isn't supported"])
     }
 
     // Each branch of an `if` stands in the `ref let`'s position, so branches of two types are reported as an `if`'s.
