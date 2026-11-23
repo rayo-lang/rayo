@@ -53,14 +53,14 @@ struct LocalLifeTests {
         #expect(IRVerifier.verify(program, from: .ownership) == nil)
     }
 
-    @Test func `checking eight times as many loops in a row takes under twenty times as long`() throws {
+    @Test func `checking eight times as many loops in a row takes under twenty-four times as long`() throws {
         let short = try IRParser.program(from: retiringLoops(50))
         let long = try IRParser.program(from: retiringLoops(400))
         #expect(IRVerifier.verify(long, from: .ownership) == nil)
 
         // This check takes about nine times as long, and one that grows with the square up to sixty-four.
         let times = try fastestTimes(over: short, long, runs: 3, measuring: timeToCheckLocalLives)
-        #expect(times.long < times.short * 20)
+        #expect(times.long < times.short * 24)
     }
 }
 

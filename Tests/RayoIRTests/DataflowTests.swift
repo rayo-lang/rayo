@@ -97,6 +97,29 @@ struct DataflowTests {
     }
 
     @Test(arguments: [
+        (DataflowDirection.forward, [1, 2, 3], [Set(), Set([1]), Set([1, 2])]),
+        (DataflowDirection.backward, [3, 2, 1], [Set(), Set([3]), Set([2, 3])]),
+    ])
+    func `a walk of effects lends each effect once, with the state just before it in the analysis's direction`(
+        direction: DataflowDirection, columns: [Int], expected: [Set<Int>],
+    ) throws {
+        let blocks = """
+            bb0:
+              \(reading(1))
+              \(reading(2))
+              return read %0 @2:3-2:3
+            """
+        let results = try solve(EvaluatedOperands(direction: direction), blocks, result: "Int")
+        var visited: [(column: Int, columns: Set<Int>)] = []
+        results.walkEffects(of: BlockID(index: 0)) { effect, state in
+            guard case .read(_, let range) = effect else { return }
+            visited.append((range.start.column, state.columns))
+        }
+        #expect(visited.map(\.column) == columns)
+        #expect(visited.map(\.columns) == expected)
+    }
+
+    @Test(arguments: [
         DataflowDirection.forward, .backward,
     ])
     func `solving eight times as many loops in a row crosses well under sixty-four times as many effects`(
