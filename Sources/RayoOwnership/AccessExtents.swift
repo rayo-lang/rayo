@@ -19,9 +19,12 @@ struct AccessExtents {
     init(_ body: IRBody, uses: DataflowResults<AccessUseState>) {
         self.body = body
         self.uses = uses
-        dependencies = DataflowSolver.solve(from: DependencyState(), through: body, knowing: ())
-        let begun = Set(body.begunAccesses.keys)
-        unbegun = DataflowSolver.solve(from: UnbegunAccessState(begun), through: body, knowing: ())
+
+        // The states index accesses by their IDs, so they span every ID the body begins.
+        let accessCount = (body.begunAccesses.keys.lazy.map(\.index).max() ?? -1) + 1
+        let entry = DependencyState(entering: body, accessCount: accessCount)
+        dependencies = DataflowSolver.solve(from: entry, through: body, knowing: ())
+        unbegun = DataflowSolver.solve(from: UnbegunAccessState(accessCount: accessCount), through: body, knowing: ())
     }
 
     /// The accesses live at each point of `block`: those that code after the point uses, those the values it reads
@@ -55,7 +58,7 @@ struct AccessExtents {
             guard let points = needed[index] else { return nil }
             var held = points
             unbegun.walk(BlockID(index: index)) { point, state in
-                held[point] = points[point].subtracting(state.accesses)
+                for access in points[point] where state.contains(access) { held[point].remove(access) }
             }
             return held
         }

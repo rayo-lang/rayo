@@ -1,4 +1,4 @@
-import RayoOwnership
+@testable import RayoOwnership
 import RayoDiagnostics
 import RayoIR
 import RayoCheckedProgram
@@ -322,4 +322,29 @@ struct AccessExtentTests {
               return
             """))
     }
+
+    @Test func `checking eight times as many loops in a row takes under twenty times as long`() throws {
+        let short = try program(of: [loopingFunction(loops: 50)] + callees, from: .lowering)
+        let long = try program(of: [loopingFunction(loops: 400)] + callees, from: .lowering)
+
+        // This check takes about eight times as long. One that carries every access through every block takes about
+        // twenty-five, as its work that grows only with the length dilutes the square's sixty-four.
+        let times = try fastestTimes(over: short, long, runs: 3, measuring: timeToCheckExclusivity)
+        #expect(times.long < times.short * 20)
+    }
+}
+
+/// How long the exclusivity check takes over the first function of `program`, given what code after each of its points
+/// uses. It requires that the check finds no conflict, so the time is that of a body the stage accepts.
+private func timeToCheckExclusivity(_ program: IRProgram) throws -> Duration {
+    let body = try #require(program.bodies[FunctionID(index: 0)])
+    let places = PlaceTypes(body: body, types: program.types)
+    let uses = DataflowSolver.solve(from: AccessUseState(), through: body, knowing: places)
+    let clock = ContinuousClock()
+    let start = clock.now
+    let errors = ExclusivityChecker.check(places, uses: uses).errors
+    let elapsed = clock.now - start
+
+    try #require(errors.isEmpty)
+    return elapsed
 }
