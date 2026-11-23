@@ -76,7 +76,7 @@ struct BindingChecker {
         // A `let` or `var` owns its value, while a place's value has an owner already, so a place it is given says how
         // the binding takes the value, or that the binding refers to the place.
         case .let, .var:
-            expressions.reportHandedPlaces(of: value) { .ownerBorrowsPlace(keyword: kind.rawValue, place: $0) }
+            expressions.reportHandedPlaces(of: value) { .ownerBorrowsPlace(keyword: kind.keyword, place: $0) }
 
         // A `ref let` refers to a place, so it needs one, and one that lasts as long as it does.
         case .refLet:

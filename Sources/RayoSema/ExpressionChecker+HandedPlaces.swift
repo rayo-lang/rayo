@@ -67,7 +67,7 @@ extension ExpressionChecker {
 
         // A `let` or a `var` would hold the reference as a value.
         case .declaration(let kind)?:
-            refused(.unsupportedHeldReference(keyword: kind.rawValue), at: lent.range)
+            refused(.unsupportedHeldReference(keyword: kind.keyword), at: lent.range)
 
         // No other position takes a reference.
         case nil:
