@@ -11,7 +11,7 @@
 
 **`ref` marks a binding that is a place.** It takes a reference and names the place the reference refers to: `ref let` names it read-only, and `ref var` names it for change. A `let` or `var` holds a value, which it owns, and that value may be a reference: `let best = &enemies[0]` holds a `&Enemy`. A condition's binding writes the same four words with the same meanings ([below](#conditions)). A `for` name or a `when` payload name writes none of them, since its subject says what it is ([below](#for-and-when-names)).
 
-**An initializer given a place writes `&`, `mutable &`, `consume` or `copy` before it**, as every position does, unless the place's type is implicitly copyable ([References](references.md#places-given-to-a-position)). So each binding shows what it does to the place it is given:
+**An initializer given a place writes `&`, `mutable &`, `consume` or `copy` before it**, as every position does, unless the place's type is implicitly copyable, or the binding is annotated with a `&T`, which lends it ([References](references.md#places-given-to-a-position)). So each binding shows what it does to the place it is given:
 
 ```swift
 var enemies = loadEnemies()
@@ -19,6 +19,7 @@ var enemies = loadEnemies()
 ref let seen = &enemies[0]           // names the enemy, read-only: nothing copied
 ref var boss = mutable &enemies[0]   // names it for change: boss.hp = 0 changes enemies[0]
 let best = &enemies[1]               // holds a '&Enemy', a reference to the enemy
+let top: &Enemy = enemies[1]         // the same: the annotation expects a reference, so 'enemies[1]' is lent
 var spare = copy enemies[0]          // a second enemy of its own
 let last = enemies[1]                // error: write 'copy' or '&' before 'enemies[1]'
 let hp = enemies[1].hp               // a Float is implicitly copyable: a copy, with nothing written
@@ -34,7 +35,7 @@ let all = consume enemies            // a move: 'enemies' can't be used until it
 | --- | --- | --- | --- |
 | `ref let x = &place` | `_ x: &T` | A shared **borrow** of `place`, of any type: `place` can't be changed, moved or destroyed while `x` is live | None |
 | `ref var x = mutable &place` | `_ x: mutable &T` | A mutable **borrow** of a [changeable place](#changeable-places): `place` is reachable only through `x` while `x` is live | None |
-| `let x = &place`, `var x = mutable &place` | | The binding holds a reference to `place`, which borrows it as a `ref` binding would, and a `var` may later point it elsewhere ([below](#bindings-that-own-a-value)) | The reference's own bytes ([References](references.md#layout)) |
+| `let x = &place`, `let x: &T = place`, `var x = mutable &place` | | The binding holds a reference to `place`, which borrows it as a `ref` binding would, and a `var` may later point it elsewhere ([below](#bindings-that-own-a-value)) | The reference's own bytes ([References](references.md#layout)) |
 | `let x = consume place`, `var x = consume place` | `_ x: T` | A **move** from a place the code owns ([What can be moved from](moving-values-out.md#what-can-be-moved-from)): `place` can't be used until it gets a new value | A `memcpy` at most |
 | `let x = copy place`, `var x = copy place` | | An independent **copy** of a copyable value; a move-only one is copied with `alloc place.clone()` | A `memcpy` |
 | `let x = f()`, `var x = f()` | | The binding owns the value, even a move-only scoped value such as a `mutable &[T]` or a lock guard ([02](../02-views-and-dependencies/scoped-values.md#scoped-values)); `_ = consume x` ends it early | None |
@@ -79,16 +80,16 @@ target.hp = 0
 
 **A `let` or `var` declaration owns the value it holds**, as a binding of a call's result does, and a reference is a value like any other. So it can move its value on, and a `let` still can't change it. A condition's `let` or `var` owns an optional's payload by the same rules ([below](#conditions)).
 
-- **A `let` or `var` given a place writes a mark before it** ([above](#bindings)). Leaving it out is a compile error that names the marks that fit, since the place's value already has an owner. That holds as well for an expression the initializer hands its position to: the last expression of an `if` or `when` arm or of an `unsafe` block ([below](#if-and-when-as-values)), or an operand of `??` ([04](../04-types/enums.md#optionals)).
+- **A `let` or `var` given a place writes a mark before it** ([above](#bindings)). Leaving it out is a compile error that names the marks that fit, since the place's value already has an owner, unless the binding's annotation is a `&T`, which lends the place ([05](../05-protocols-generics-and-closures/implicit-conversions.md#places-lent-where-a-reference-is-expected)). That holds as well for an expression the initializer hands its position to: the last expression of an `if` or `when` arm or of an `unsafe` block ([below](#if-and-when-as-values)), or an operand of `??` ([04](../04-types/enums.md#optionals)).
 - **A `let` or `var` given `&p` or `mutable &p` holds the reference**, which borrows `p` as its kind says until the binding's last use ([References](references.md#making-a-reference)).
 - **Writing through a reference that a `let` or `var` holds follows the rule for writing through any reference**, which only a `var` holding a `mutable &T` meets ([References](references.md#forwarding-through-a-reference)).
-- **An assignment from a place writes a mark**, as every position does ([Moves](moves-copies-destruction.md#moves)).
+- **An assignment from a place writes a mark**, as every position does, unless it assigns a place of type `&T`, which lends it ([Moves](moves-copies-destruction.md#moves)).
 
-**Assigning to a `var` that holds a reference points it elsewhere.** `best = &e` makes `best` refer to `e`, and the place it referred to is free once nothing else depends on it. What the `var` depends on from then on follows the dependency rules ([02](../02-views-and-dependencies.md#dependencies)):
+**Assigning to a `var` that holds a reference points it elsewhere.** `best = e` makes `best` refer to `e`, and the place it referred to is free once nothing else depends on it. What the `var` depends on from then on follows the dependency rules ([02](../02-views-and-dependencies.md#dependencies)):
 
 ```swift
 var best = &enemies[0]
-for e in &enemies { if e.hp > best.hp { best = &e } }   // points 'best' at the enemy with the most hp
+for e in &enemies { if e.hp > best.hp { best = e } }    // points 'best' at the enemy with the most hp
 print("best hp \(best.hp)")
 ```
 
@@ -249,7 +250,7 @@ when &state {
 
 ### `for` and `when` names
 
-**A `for` name and a `when` payload name are bare, and what each one is follows from the subject.** A loop or a match binds all its names from one subject, so the subject says once what they all are. A subject is written as an argument is: `&s`, `mutable &s`, `consume s`, or a value, such as a call's result or a range. A bare place is a compile error, unless its type is implicitly copyable, in which case the loop or the `when` takes a copy ([References](references.md#places-given-to-a-position)).
+**A `for` name and a `when` payload name are bare, and what each one is follows from the subject.** A loop or a match binds all its names from one subject, so the subject says once what they all are. A subject is `&s`, `mutable &s`, `consume s`, or a value, such as a call's result or a range. A bare place is a compile error, unless its type is implicitly copyable, in which case the loop or the `when` takes a copy, since a subject expects no type that would lend it ([References](references.md#places-given-to-a-position)).
 
 | Subject | Each name |
 | --- | --- |
@@ -300,7 +301,7 @@ A `_` is fine inside a pattern that binds another name, as in `ref let (a, _) = 
 
 ```swift
 ref let (a, _) = &pair                    // fine: binds 'a'
-let _ = save(&level)                      // error: binds no name
+let _ = save(level)                       // error: binds no name
 let lo = 0, _ = f()                       // error: the second binding binds no name
 ref let (_, _) = &pair                    // error: binds no name
 if let _ = target { ... }                 // error: binds no name; write 'target != nil'
@@ -375,12 +376,12 @@ The hidden local is declared where the binding is, and destroyed with it if its 
 
 ```swift
 let total: Int = n                          // 'n' is an Int32: the widened Int is a new value 'total' owns
-let all: &[Enemy] = &enemies                // refers to the List's elements, and borrows 'enemies'
+let all: &[Enemy] = enemies                 // refers to the List's elements, and borrows 'enemies'
 var spare: Enemy? = copy boss               // wrapping a copy of the enemy
 let pick: Enemy? = boss                     // error: wrapping takes the enemy; write 'copy' or 'consume'
 var last: Enemy? = consume boss             // or wrapping the enemy itself, moved out of 'boss'
 var target: Handle<Enemy>? = h              // a Handle is implicitly copyable: wrapping a copy, and 'h' stays usable
-var d: &any Drawable = &sprite              // refers to 'sprite', and may later refer to another value
+var d: &any Drawable = sprite               // refers to 'sprite', and may later refer to another value
 ```
 
 ## Changeable places
@@ -413,5 +414,5 @@ heal(mutable &x)                   // error: the same
 
 ```swift
 let r = renderer.weak()
-_ = r.value?.submit(&mesh)         // fine: an object's value is changeable through a let of a weak pointer
+_ = r.value?.submit(mesh)          // fine: an object's value is changeable through a let of a weak pointer
 ```

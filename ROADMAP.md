@@ -20,8 +20,8 @@ The first version proves the language end to end with the smallest set of featur
 
 v0.1 adds:
 
-- functions with labeled parameters, results and recursion, where a `&T` parameter borrows the place a call lends it with `&a`, as `show(&boss)`, and an `Int` or `Bool` parameter `x: T` owns a copy of its argument ([01](docs/spec/01-values-and-ownership/parameters.md#parameters));
-- the compile errors for a place given to a `&T` parameter without `&`, which names `&`, and for `&a` given to a parameter that isn't a reference, which names the parameter's type ([01](docs/spec/01-values-and-ownership/references.md#places-given-to-a-position));
+- functions with labeled parameters, results and recursion, where a `&T` parameter borrows the place a call gives it, as `show(boss)`, and an `Int` or `Bool` parameter `x: T` owns a copy of its argument ([01](docs/spec/01-values-and-ownership/parameters.md#parameters));
+- a place given to a `&T` parameter is lent, with or without `&`, and the compile error for `&a` given to a parameter that isn't a reference, which names the parameter's type ([01](docs/spec/01-values-and-ownership/references.md#places-given-to-a-position));
 - `Int` and `Bool`, with integer literals, the arithmetic operators `+`, `-`, `*`, `/` and `%`, unary `-`, the comparisons, and `&&`, `||` and `!`;
 - overflow, which panics in a debug build and wraps in a release build, and division by zero, which panics in both;
 - `let` and `var` locals, assignment and compound assignment;
@@ -114,12 +114,13 @@ Statements and control flow:
 Ownership and borrowing:
 
 - `ref var` bindings, as `ref var m = mutable &p`, and the errors for a `ref var` given `&p` and a `ref let` given `mutable &p` ([01](docs/spec/01-values-and-ownership/bindings.md#bindings-that-refer-to-a-place)): v0.2 builds `ref let` alone;
-- `&` and `mutable &` of a temporary, as `show(&makeEnemy())`, and the compile error for a value given to a `&T` parameter ([01](docs/spec/01-values-and-ownership/references.md#making-a-reference)): v0.1 to v0.3 lend only a local or a parameter, or a field or an element of one;
+- `&` and `mutable &` of a temporary, as `heal(mutable &makeEnemy())`, and a value lent to a `&T` parameter, as `show(makeEnemy())` ([01](docs/spec/01-values-and-ownership/references.md#making-a-reference)): v0.1 to v0.3 lend only a local or a parameter, or a field or an element of one;
 - `consume` of any other place, such as a parameter that owns its argument, or a temporary ([01](docs/spec/01-values-and-ownership/moving-values-out.md#moving-values-out)): v0.2 builds `consume` of a local or a field of one;
 - `ImplicitlyCopyable`, its conformances declared by a struct or an enum, and the other implicitly copyable types, such as tuples, `Handle` and `T?` ([01](docs/spec/01-values-and-ownership/moves-copies-destruction.md#implicitly-copyable-types)): v0.2 copies `Int`, `UInt` and `Bool` implicitly, and v0.2.5 `Float` and `Double`;
 - implicit copies in the positions v0.2 doesn't build, such as a condition's binding, a `for` or `when` name and a tuple literal's element ([01](docs/spec/01-values-and-ownership/moves-copies-destruction.md#implicit-copies));
 - `copy` of a field of a temporary, as `copy makeEnemy().stats`, and a `let` of one, which owns it ([01](docs/spec/01-values-and-ownership/moves-copies-destruction.md#copies)): v0.1 copies a field of a local or a `&T` parameter, and v0.2 borrows one with a `ref let`;
 - references held as values, as `let best = &enemies[0]` holds a `&Enemy`, and the other views, which are [scoped values](docs/spec/02-views-and-dependencies/scoped-values.md), with the dependencies that check them ([01](docs/spec/01-values-and-ownership/references.md#references), [02](docs/spec/02-views-and-dependencies.md#dependencies)): v0.1 and v0.2 build references only as `&T` parameters and `ref let` bindings;
+- a place lent wherever else a `&T` is expected, as `let top: &Enemy = enemies[0]` lends one, and the conversions of the reference it makes, as to a `&[T]` ([05](docs/spec/05-protocols-generics-and-closures/implicit-conversions.md#places-lent-where-a-reference-is-expected)): v0.1 lends a place given to a `&T` parameter;
 - closures and function values ([05](docs/spec/05-protocols-generics-and-closures/functions-and-closures.md#closure-kinds));
 - handles and objects ([03](docs/spec/03-handles-and-objects.md#03--handles-and-objects)).
 

@@ -25,6 +25,12 @@ The spec is **precise, plain and explained**: every rule stated exactly, with th
 - **An exception sits next to its rule**, so a reader who finds the rule also finds what it doesn't cover.
 - **Each rule is stated once**, in the section that owns it. Other sections link to it. A numbered landing page introduces and links its subchapters; the subchapter owns the detailed rules.
 - **A rule whose consequence isn't obvious gets an example**: a short code block of what compiles and what doesn't, with the reason in a trailing comment, as in `// error: 'seen' is still used below`. Example code may draw on the spec's running game code, such as `Enemy`, `world` and `Mesh`.
+- **Example code writes `&` only where it is required or picks an overload.** A place given where a `&T` is expected is lent with nothing written ([05](../spec/05-protocols-generics-and-closures/implicit-conversions.md#places-lent-where-a-reference-is-expected)), so code there writes the bare form, as `show(boss)` does. `mutable &` is always written, and `&` in three cases:
+    - where nothing expects a `&T`, as in `let best = &enemies[0]`, a `ref let`, or a loop's or a `when`'s subject;
+    - where a type parameter would otherwise bind to the place's own type, as in `print(&name)`;
+    - to call the overload that takes a reference, where another takes the argument as written.
+
+  Every code example in the docs and in `examples/` follows this rule.
 - **A rule that serves more than games has a general motivation and lead example.** Rayo is a general systems language, so no construct or reason reads as existing for games. A game example may follow as a second case, as an ECS query follows a columnar store's.
 
 ## Terms and links

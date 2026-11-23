@@ -28,6 +28,15 @@ func f(_ x: Int) { … }      // wins for an Int argument: it alone declares no 
 func f<T>(_ x: T) { … }     // needs no conversion either, but declares T
 ```
 
+**A place lent where a `&T` is expected is a conversion, so of two overloads that differ only in whether they take an argument by reference, the one that takes it as written wins** ([Implicit conversions](implicit-conversions.md#places-lent-where-a-reference-is-expected)). A `&Int` converts to no `Int`, so `&a` picks the overload that takes a reference. A bare place of a type that isn't implicitly copyable picks the owning overload the same way, and then writes `consume` or `copy` as an owning parameter needs ([01](../01-values-and-ownership/references.md#places-given-to-a-position)).
+
+```swift
+func g(_ x: Int) { … }      // g(a) calls this one: it takes 'a' as written
+func g(_ x: &Int) { … }     // g(&a) calls this one, since '&a' is a '&Int'
+func h(_ e: Enemy) { … }    // h(boss) calls this one, and is an error: write 'consume boss' or 'copy boss'
+func h(_ e: &Enemy) { … }   // h(&boss) calls this one
+```
+
 **These steps resolve each call on its own, without backtracking**, so type checking stays local ([11](../11-compilation-model.md#type-checking-is-local)).
 
 **A call `T(x)` with one unlabeled literal argument makes the literal a `T`**, as `x as T` does, so `Float(0)` is the `Float` zero.

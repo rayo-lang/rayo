@@ -6,22 +6,24 @@ Most changes of type are written out, especially when they may lose information.
 
 ```swift
 var target: Handle<Enemy>? = h                  // T to T?: a Handle is implicitly copyable, so 'h' is copied in
-let seen: &any Drawable = &sprite               // a '&Sprite' to a reference to an existential
-let text: &Text = &name                         // a '&String' to a reference to its text
+let top: &Enemy = enemies[0]                    // a place to a shared reference to it
+let seen: &any Drawable = sprite                // 'sprite' is lent, and its '&Sprite' converts to a reference to an existential
+let text: &Text = name                          // 'name' is lent, and its '&String' converts to a reference to its text
 func sum<T: Numeric>(_ xs: &[T]) -> T           // takes a reference to any run of T
-let total = sum(&scores)                        // 'scores' is a List<Int>: '&scores' converts, binding T to Int
+let total = sum(scores)                         // 'scores' is a List<Int>: it is lent, and the reference converts, binding T to Int
 var w: Box<any Widget> = alloc Box(Slider(…))   // Box<Slider> to Box<any Widget>: no new allocation
 let pickMax: (Int, Int) -> Int = max            // a named function to a function type
 ```
 
-**An implicit conversion makes a value of the type its context expects, with no conversion written.** Numbers widen along their fixed order ([04](../04-types/numbers-and-math.md#conversions)). Otherwise there are eight kinds of implicit conversion, each decided by the expected type alone, so type checking stays local ([11](../11-compilation-model.md#type-checking-is-local)). All are free except two: moving a closure into a `Closure`, which may allocate, and an error's `@converts` initializer, which runs. The eight are:
+**An implicit conversion makes a value of the type its context expects, with no conversion written.** Numbers widen along their fixed order ([04](../04-types/numbers-and-math.md#conversions)). Otherwise there are nine kinds of implicit conversion, each decided by the expected type alone, so type checking stays local ([11](../11-compilation-model.md#type-checking-is-local)). All are free except two: moving a closure into a `Closure`, which may allocate, and an error's `@converts` initializer, which runs. The nine are:
 
+- **A place to a shared reference to it.** Where a `&T` is expected, a place whose own type doesn't fit is lent shared, as `&` written before it would lend it ([below](#places-lent-where-a-reference-is-expected)).
 - **`T` → `T?` and `T` → `T!E`.** Where a `U?` or a `U!E` is expected, a value that converts to `U` (below) converts and is then wrapped, as `.some` or `.success`, in the same local step, as a named `@c func` passed for a nullable C callback is. It takes the value ([01](../01-values-and-ownership/bindings.md#conversions)). So `return v` in a function that can fail returns `.success(v)` ([10](../10-errors-and-safety/typed-errors.md#propagating-errors-with-try)). No conversion goes the other way: a `Result` value gives up its success value only to `try` or a `.success` pattern. A call or an `await` that can't fail has its success type to begin with ([10](../10-errors-and-safety/typed-errors.md#what-a-failure-type-names)).
 - **References to existentials** ([`any P`: explicit dynamic dispatch](protocols-and-generics.md#any-p-explicit-dynamic-dispatch)):
     - A `&T`, for a `T` that meets every protocol of the composition, converts to a `&any P`, and a `mutable &T` to a `mutable &any P`. The new reference refers to the same place, and borrows it as the first one did ([01](../01-values-and-ownership/bindings.md#conversions)).
     - An existential of `P` converts to one of `Q` when `P` implies `Q`, as `any Widget` does to `any Drawable` when `Widget` inherits `Drawable`, or `any P & Sendable` to `any P`. So a `&any P` converts to a `&any Q`, a `mutable &any P` to a `mutable &any Q`, and an unscoped existential to one of `Q`, which keeps its allocation and takes the value.
 - **References to runs** ([04](../04-types/collections.md#collections-and-strings)):
-    - A `&List<T>` converts to a `&[T]` of its elements, a `mutable &List<T>` to a `mutable &[T]`, and a `&String` to a `&Text` of its text. The new reference refers to storage the first one reaches, and borrows the collection as the first one did, so it copies and allocates nothing ([01](../01-values-and-ownership/bindings.md#conversions)). So a function takes a `&[T]` or a `&Text`, and its callers lend what they own. A parameter of type `&[T]`, with `T` a type parameter, takes a `&List<U>` the same way, binding `T` to `U`, as `sum(&scores)` above does.
+    - A `&List<T>` converts to a `&[T]` of its elements, a `mutable &List<T>` to a `mutable &[T]`, and a `&String` to a `&Text` of its text. The new reference refers to storage the first one reaches, and borrows the collection as the first one did, so it copies and allocates nothing ([01](../01-values-and-ownership/bindings.md#conversions)). So a function takes a `&[T]` or a `&Text`, and its callers lend what they own. A parameter of type `&[T]`, with `T` a type parameter, takes a `&List<U>` the same way, binding `T` to `U`, as `sum(scores)` above does.
 - **Static values** ([02](../02-views-and-dependencies/scoped-values.md#converting-to-and-from-a-static-type)):
     - A static value converts to its plain type, as a `static &Text` does to a `&Text`, referring to the same data. So a literal goes wherever a `&Text` is expected.
     - A value converts to its static type where it depends only on static storage and immortal data, as a reference to a global `let` does. Where a `static U` is expected, a value that converts to `U` (above) converts and then becomes static, in the same local step, as `T` → `T?` wraps one. A value that depends on anything else never converts, since it may refer to memory that can be freed.
@@ -45,6 +47,63 @@ let pickMax: (Int, Int) -> Int = max            // a named function to a functio
 **A function value that can't fail doesn't convert to a type that fails with anything but `Never`**, since it returns a `T`, laid out differently from a `T!E`, and a wrapper would need storage to hold it. A named function converts, through a wrapper the compiler makes ([Function-typed values](functions-and-closures.md#function-typed-values)). Other code writes a new closure literal that calls the function value.
 
 **`x as T` expects a `T`, as an annotation does.** So `x` takes one of the implicit conversions above or a numeric widening ([04](../04-types/numbers-and-math.md#conversions)), or, for a literal, becomes a `T` ([04](../04-types/collections.md#literals)). It never tests a type at run time. Anything else is explicit, such as `box[as: T.self]` ([`any P`: explicit dynamic dispatch](protocols-and-generics.md#unscoped-existentials)).
+
+## Places lent where a reference is expected
+
+**Where a `&T` is expected, a place converts to a shared reference to itself, lent as `&p` would lend it.** A borrow costs the caller nothing, and a bare place never moves, since a move writes `consume` ([01](../01-values-and-ownership/references.md#places-given-to-a-position)). So a `&` there would tell a reader nothing the expected type doesn't, and a call that only reads its arguments reads as plainly as a receiver or an operator, which take their places with no mark ([01](../01-values-and-ownership/references.md#unmarked-places)). A `&p` written there lends the same way.
+
+```swift
+func show(_ e: &Enemy) { … }
+func total(_ xs: &[Int]) -> Int { … }
+
+show(boss)                        // lends 'boss' shared
+let top: &Enemy = enemies[0]      // holds a reference to enemies[0]
+total(scores)                     // lends the List<Int> 'scores', and the reference converts to '&[Int]'
+var lines = alloc List<&Text>()
+lines.append(name)                // 'append' takes an Element, here a '&Text', so 'name' is lent
+show(makeEnemy())                 // lends a temporary, which lives to the end of the statement
+```
+
+**A `&T` is expected in these positions:**
+
+- an argument whose parameter's type is a `&T`, given to a function, a method, a subscript, an initializer or an enum case, so a struct's `&T` field takes one too;
+- the initializer of a `let` or `var` annotated with a `&T`;
+- the right side of `=`, where the place it assigns is of type `&T`;
+- an element of a tuple or array literal whose expected element type is a `&T`, as a `[&T]`'s is;
+- the operand of `return`, in a function whose result type is a `&T`.
+
+A type parameter stands for a `&T` there once it is bound, as `List<&Text>`'s `Element` does for `append(name)` above.
+
+**The conversion lends only a place whose own type doesn't fit.** A place whose type is the expected one, or converts to it implicitly, is given as it is. So a place that holds a `&Enemy`, given where a `&Enemy` is expected, passes a copy of its reference, since a shared reference is implicitly copyable ([01](../01-values-and-ownership/references.md#making-a-reference)).
+
+**The reference it makes converts on as `&p`'s would, in the same local step**, so the conversions above follow it:
+
+- a `Circle` place reaches a `&any Drawable` where `Circle` conforms to `Drawable`, as `seen` above does;
+- a `List<Int>` place reaches a `&[Int]`, and a `String` place a `&Text`;
+- where a `(&T)?` or a `&T!E` is expected, the reference is wrapped, as `T` → `T?` wraps any value;
+- a place that holds a `mutable &T` reborrows through it, as `&r` does, and a place that holds any reference is lent itself only where a reference to a reference is expected ([01](../01-values-and-ownership/references.md#reborrowing)).
+
+**A value that isn't a place converts the same way, lending a temporary**, as `&makeEnemy()` does ([01](../01-values-and-ownership/references.md#making-a-reference)). So `show(makeEnemy())` above lends an enemy that its statement then destroys, and `let top: &Enemy = makeEnemy()` is the compile error for a binding given a reference to a temporary ([01](../01-values-and-ownership/bindings.md#bindings-that-refer-to-a-place)).
+
+**The conversion has three limits, each where lending would hide what the code does:**
+
+- **It never lends for change.** A `mutable &T` is expected only where code may change the place, and `mutable &` is what shows a reader that it may. So a bare place given to a `mutable &T` parameter is a compile error that says to write `mutable &` ([01](../01-values-and-ownership/references.md#places-given-to-a-position)).
+- **It applies only where a `&T` is expected.** A `let` or `var` with no annotation, a `ref let`, and a loop's or a `when`'s subject expect no type, so each writes `&` to lend a place ([01](../01-values-and-ownership/bindings.md#bindings)). A function type is no reference either, so a closure in a place given where one is expected writes the mark its kind needs ([below](#function-values-of-closures-in-places)).
+- **It never moves or copies the place.** It makes the borrow `&p` makes, which the law of exclusivity checks as it checks any other, so `f(mutable &x, x)` is a compile error, as `f(mutable &x, &x)` is ([01](../01-values-and-ownership/exclusivity.md#the-law-of-exclusivity)).
+
+**A bare place given for a parameter whose type is a type parameter binds the type parameter to the place's own type**, since nothing expects a `&T` until the type parameter is bound. A `some P` parameter counts, since it is an anonymous type parameter ([Protocols and generics](protocols-and-generics.md#protocols-and-generics)). Such a parameter owns its argument, so the place writes `consume` or `copy`, unless its type is implicitly copyable. Written with `&`, the place binds the type parameter to a reference:
+
+```swift
+func print(_ value: some Formattable)
+func largest<T: Comparable>(_ xs: &[T]) -> &T { … }
+
+print(&name)                      // binds the type to '&String': 'name' is lent
+print(name)                       // error: 'print' owns its argument, a String; write '&name', 'consume name' or 'copy name'
+print(count)                      // binds the type to Int, and copies 'count'
+let best = largest(scores)        // the parameter is a reference, so 'scores' is lent, binding T to Int
+```
+
+**Among overloads, the one that takes each argument as written wins over one this conversion lends it to** ([Functions and closures](functions-and-closures.md#functions-and-closures)).
 
 ## Conversions through a mutable reference
 
