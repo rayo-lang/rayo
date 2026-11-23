@@ -320,7 +320,8 @@ struct CallChecker {
         // Each untyped argument takes each remaining candidate's parameter type, and a candidate it doesn't fit drops
         // out.
         let typesFit = typedFit.filter { $0.takes(values, in: declarations, where: { $0.type == nil }) }
-        // Where every candidate owns a `&` argument, all stay, so the one reached reports how to write it.
+        // A candidate that owns a `&` argument drops out; where all do, all stay, so the one reached reports how to
+        // write it.
         let takingReferences = typesFit.filter { $0.takesReferences(in: values) }
         guard !takingReferences.isEmpty else { return (typesFit, false) }
 

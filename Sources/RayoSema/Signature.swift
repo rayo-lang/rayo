@@ -76,7 +76,7 @@ struct Signature: CustomStringConvertible {
 
 extension Signature {
     /// The signature of a built-in function, under the name a call writes to reach it. A borrowing built-in is lent
-    /// temporaries.
+    /// bare temporaries.
     init(of builtin: Builtin) {
         let parameters = builtin.parameters.map { Parameter($0, borrowsTemporaries: true) }
         self.init(name: builtin.name.spelling, target: .callee(.builtin(builtin)), parameters: parameters,
