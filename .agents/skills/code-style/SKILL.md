@@ -240,6 +240,8 @@ struct OwnedModule: ~Copyable {
 
 **A test file is named for the behaviour it covers**, such as `MoveTests.swift`, and may hold several suites of that behaviour. For test files, this replaces the file rule under [Files](#files). A helper that several test files share goes in a file named for what it helps with.
 
+**A test target holds functional tests, which check what code gives; performance, such as how a cost grows, is measured by the project's benchmarks, which run a release `rayoc` from outside.**
+
 ## Before you open a pull request
 
 Audit every file, type and function you add or change against this list, and fix what falls short:
