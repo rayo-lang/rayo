@@ -141,8 +141,12 @@ struct BorrowedPlaceTests {
         #expect(messages(of: statement) == [])
     }
 
-    // `&` of an array's count lends a temporary that holds the count, which rayoc lends nowhere.
-    @Test(arguments: [("ref let x = &e.slots.count", 17), ("ref let x = if c { &i } else { &e.slots.count }", 36)])
+    // `&` of an array's count, or of a call's result or a part of it, lends a temporary that holds the value, which
+    // rayoc lends nowhere.
+    @Test(arguments: [
+        ("ref let x = &e.slots.count", 17), ("ref let x = if c { &i } else { &e.slots.count }", 36),
+        ("ref let x = &makeEnemy()", 17), ("ref let x = &makeEnemy().stats.hp", 17),
+    ])
     func `a 'ref let' given '&' of a value that no local holds reports the lending as unsupported`(
         statement: String, column: Int,
     ) {

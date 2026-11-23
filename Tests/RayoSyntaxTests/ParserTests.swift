@@ -68,9 +68,10 @@ struct ParserErrorTests {
 
     @Test(arguments: [
         "func f() { g(&e) }", "func f() { g(&e.stats.hp, by: &a[i].n) }", "func f() {\n    g(&e\n        .hp)\n}",
-        "func f() { g(mutable &e) }", "func f() { ref let x = mutable &e.stats[i] }",
+        "func f() { g(mutable &e) }", "func f() { ref let x = mutable &e.stats[i] }", "func f() { g(&make()) }",
+        "func f() { ref let x = &make(1).stats[0].hp }", "func f() { g(mutable &make()) }",
     ])
-    func `'&' and 'mutable &' take a name and the members and elements after it`(source: String) {
+    func `'&' and 'mutable &' take a name, and the calls, members and elements after it`(source: String) {
         #expect(errors(source) == [])
     }
 
