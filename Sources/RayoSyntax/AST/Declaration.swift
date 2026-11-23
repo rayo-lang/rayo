@@ -29,7 +29,11 @@ public enum Declaration: Sendable {
         switch self {
         case .function: false
         case .structure: true
-        case .failed(let failed): failed.kind == .structure
+        case .failed(let failed):
+            switch failed.parts {
+            case .function: false
+            case .structure: true
+            }
         }
     }
 }

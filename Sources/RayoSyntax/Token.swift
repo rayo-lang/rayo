@@ -71,4 +71,17 @@ public struct Token: Sendable, Hashable, CustomStringConvertible {
         default: nil
         }
     }
+
+    /// Whether the token ends a statement or a declaration: a newline, a `;`, the `}` of its block, or the end of the
+    /// file.
+    var endsStatement: Bool { kind == .newline || kind == .eof || isPunct(.semicolon) || isPunct(.rbrace) }
+
+    /// The depth of brackets after the token, from `depth` before it. A closer that closes nothing leaves it at 0.
+    func bracketDepth(from depth: Int) -> Int {
+        switch kind {
+        case .punct(.lparen), .punct(.lbrace), .punct(.lbracket): depth + 1
+        case .punct(.rparen), .punct(.rbrace), .punct(.rbracket): max(depth - 1, 0)
+        default: depth
+        }
+    }
 }

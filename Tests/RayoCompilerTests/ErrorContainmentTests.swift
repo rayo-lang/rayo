@@ -67,6 +67,21 @@ struct ErrorContainmentTests {
         #expect(errors(source) == expected)
     }
 
+    @Test func `a declaration whose header fails to parse reports its syntax errors, and is checked no further`() {
+        let source = """
+            func main() {}
+            func f(x) {
+                let = 1
+                let flag: Bool = 1
+            }
+            struct S(a: Int, var b: Nope, var b: Int)
+            """
+        #expect(errors(source) == [
+            .missingParameterType(found: .token(")")), .missingBindingName(found: .token("=")),
+            .missingFieldKind(found: .token("a")),
+        ])
+    }
+
     @Test func `an unused value leaves its body's meaning whole, so the ownership checks still run on it`() {
         let source = """
             func g() -> Int { return 1 }

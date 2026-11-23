@@ -2,7 +2,7 @@ internal import RayoDiagnostics
 internal import RayoSource
 
 /// Parses the grammar's sequences of items: statements and declarations, one to a line or `;`, and the
-/// arguments and parameters a `(` opens, separated by commas.
+/// arguments, parameters and fields a `(` opens, separated by commas.
 extension Parser {
     /// Parses items separated by newlines or `;`, up to a `}` or the end of the file, which it leaves for the
     /// caller. An item that fails is skipped, and its error stays reported; `failed` gives what the sequence keeps in
@@ -50,37 +50,74 @@ extension Parser {
         return items
     }
 
+    /// After the `(` of a declaration's header: parses its comma-separated parameters or fields into `items`, and the
+    /// `)`. An item that fails is kept as a failed one, and the parser goes on to the next.
+    mutating func parseHeaderList<T: Sendable>(
+        into items: inout [HeaderItem<T>], ifUnclosed unclosed: ErrorCase,
+        _ item: (inout Parser) throws(ParseFailure) -> T,
+    ) throws(ParseFailure) {
+        while !current.isPunct(.rparen) {
+            let start = position
+            do {
+                items.append(.parsed(try item(&self)))
+            } catch {
+                skipFailedItem(openedSince: start)
+                items.append(.failed)
+                guard current.isPunct(.comma) || current.isPunct(.rparen) else { throw error }
+            }
+            // An item without a comma after it is the last.
+            if !consume(.comma) { break }
+        }
+        try expect(.rparen, else: unclosed)
+    }
+
+    /// Skips the rest of a failed header item, which began at the token at `start`, up to the comma or `)` after it.
+    /// A `{` stops it only where the list's `)` isn't ahead, since then the `{` may begin the body.
+    private mutating func skipFailedItem(openedSince start: Int) {
+        let open = bracketsLeftOpen(since: start)
+        let listClosesAhead = closingParenthesisAhead(insideBrackets: open) != nil
+        let stops: [Punct] = listClosesAhead ? [.comma, .rparen] : [.comma, .rparen, .lbrace]
+        recover(upTo: stops, insideBrackets: open)
+    }
+
+    /// Skips the rest of a declaration's header that failed, up to the `{` of a body. Where a `)` at this level comes
+    /// first, the skip goes past it, so a `{` inside the header's list isn't taken for the body.
+    mutating func skipHeader() {
+        if let ahead = closingParenthesisAhead() {
+            for _ in 0...ahead { advance() }
+        }
+        recover(upTo: [.lbrace])
+    }
+
     private mutating func skipSeparators() {
         while current.kind == .newline || current.isPunct(.semicolon) { advance() }
     }
 
-    /// Skips the rest of an item that failed, up to the newline or `;` that ends it, the `}` after it, or the end
-    /// of the file.
-    private mutating func recover() {
-        var depth = 0
-        loop: while !atEnd {
-            switch current.kind {
-            // A bracket the item opens is skipped whole, up to the bracket that closes it.
-            case .punct(.lbrace), .punct(.lparen), .punct(.lbracket):
-                depth += 1
+    /// How many tokens past the current one the `)` at its level comes, or nil where the declaration ends first. `open`
+    /// counts the brackets the current token is inside, which close before that level.
+    private func closingParenthesisAhead(insideBrackets open: Int = 0) -> Int? {
+        var depth = open
+        var ahead = 0
+        while true {
+            let token = peek(ahead)
+            if token.kind == .eof { return nil }
+            // At the parser's level, a `)` closes the bracket it is in, unless the declaration ends first.
+            if depth == 0, token.isPunct(.rparen) { return ahead }
+            if depth == 0, token.endsStatement { return nil }
+            depth = token.bracketDepth(from: depth)
+            ahead += 1
+        }
+    }
 
-            // A `}` outside the item's brackets closes its block, which the sequence stops at; inside, it closes one.
-            case .punct(.rbrace):
-                if depth == 0 { break loop }
-                depth -= 1
-
-            // A `)` or `]` closes one of the item's brackets; a stray one is skipped.
-            case .punct(.rparen), .punct(.rbracket):
-                if depth > 0 { depth -= 1 }
-
-            // A newline or `;` outside the item's brackets ends it; inside them, it is skipped.
-            case .newline, .punct(.semicolon):
-                if depth == 0 { break loop }
-
-            // Every other token is skipped.
-            default:
-                break
-            }
+    /// Skips the rest of an item that failed, up to the newline or `;` that ends it, the `}` after it, the end of the
+    /// file, or one of `stops` outside the item's brackets. `open` counts those it opened before it failed.
+    mutating func recover(upTo stops: [Punct] = [], insideBrackets open: Int = 0) {
+        var depth = open
+        while !atEnd {
+            // Outside the item's brackets, the end of its statement or one of `stops` ends it.
+            if depth == 0, atStatementEnd || stops.contains(where: current.isPunct) { return }
+            // Every other token is skipped, a bracket with all it holds, and a stray closer on its own.
+            depth = current.bracketDepth(from: depth)
             advance()
         }
     }

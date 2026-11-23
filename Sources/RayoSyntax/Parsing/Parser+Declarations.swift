@@ -22,9 +22,9 @@ extension Parser {
         parseLines(ifUnended: ErrorCode.unendedDeclaration) { parser throws(DeclarationFailure) in
             try parser.parseDeclaration()
         } ifFailed: { failure, range in
-            // A declaration that failed is kept as a failed one of its kind; text that began none keeps nothing.
-            failure.kind.map {
-                .failed(FailedDecl(kind: $0, name: failure.name, nameRange: failure.nameRange, range: range))
+            // A declaration that failed is kept with what the parser read of it; text that began none keeps nothing.
+            failure.parts.map {
+                .failed(FailedDecl(name: failure.name, nameRange: failure.nameRange, parts: $0, range: range))
             }
         }
     }
@@ -44,24 +44,36 @@ extension Parser {
         }
     }
 
-    /// After the `func`: `identifier '(' parameters ')' ('->' type)? block`. A function that fails throws its name,
-    /// where it read it.
+    /// After the `func`: `identifier '(' parameters ')' ('->' type)? block`. A function whose header fails still has
+    /// its body parsed, where a `{` comes next, and throws what it read.
     private mutating func parseFunction() throws(DeclarationFailure) -> FuncDecl {
-        var name: (text: String, range: SourceRange)?
+        let header = parseFunctionHeader()
+
+        // After a header whose rest was skipped, only a `{` begins the body. A body that fails is reported, and kept
+        // as none.
+        let body: Block? = if header.readToEnd || current.isPunct(.lbrace) { try? parseBlock() } else { nil }
+
+        guard let function = header.declaration(body: body) else { throw header.failure(body: body) }
+        return function
+    }
+
+    /// Reads a function's header, up to its body. A parameter that fails is kept as a failed one, and any other error
+    /// skips the rest of the header, up to the `{` of a body.
+    private mutating func parseFunctionHeader() -> FunctionHeader {
+        var header = FunctionHeader()
         do throws(ParseFailure) {
-            let (readName, nameRange) = try expectIdentifier(else: ErrorCode.missingFunctionName)
-            name = (readName, nameRange)
+            header.name = try expectIdentifier(else: ErrorCode.missingFunctionName)
             try expect(.lparen, else: ErrorCode.missingParameterList)
-            let parameters = try parseList(upTo: .rparen, ifUnclosed: ErrorCode.unclosedParameters) {
+            try parseHeaderList(into: &header.parameters, ifUnclosed: ErrorCode.unclosedParameters) {
                 parser throws(ParseFailure) in
                 try parser.parseParameter()
             }
-            let result = consume(.arrow) ? try parseType() : nil
-            let body = try parseBlock()
-            return FuncDecl(name: readName, nameRange: nameRange, parameters: parameters, result: result, body: body)
+            header.result = consume(.arrow) ? try parseType() : nil
+            header.readToEnd = true
         } catch {
-            throw DeclarationFailure(kind: .function, name: name?.text, nameRange: name?.range)
+            skipHeader()
         }
+        return header
     }
 
     /// `(label | '_')? identifier ':' ('mutable'? '&')? type ('=' expression)?`, where a label may be a keyword.
@@ -106,22 +118,36 @@ extension Parser {
         return nil
     }
 
-    /// After the `struct`: `identifier ('(' fields ')')? ('{' declarations '}')?`. A struct that fails throws its name,
-    /// where it read it.
+    /// After the `struct`: `identifier ('(' fields ')')? ('{' declarations '}')?`. A struct whose header fails still
+    /// has its body parsed, where a `{` comes next, and throws what it read.
     private mutating func parseStruct() throws(DeclarationFailure) -> StructDecl {
-        var name: (text: String, range: SourceRange)?
-        do throws(ParseFailure) {
-            // Read the name, and the fields where the header has them.
-            let (readName, nameRange) = try expectIdentifier(else: ErrorCode.missingStructName)
-            name = (readName, nameRange)
-            let fields = consume(.lparen) ? try parseFields() : []
+        let header = parseStructHeader()
 
-            // A struct may leave its body out.
-            let members = consume(.lbrace) ? try parseMembers() : []
-            return StructDecl(name: readName, nameRange: nameRange, fields: fields, members: members)
+        // A struct may leave its body out. A body that fails is reported, and kept as none.
+        let members: [Declaration]? = if consume(.lbrace) { try? parseMembers() } else { [] }
+
+        guard let structure = header.declaration(members: members) else { throw header.failure(members: members) }
+        return structure
+    }
+
+    /// Reads a struct's header, up to its body. A field that fails is kept as a failed one, and any other error skips
+    /// the rest of the header, up to the `{` of a body.
+    private mutating func parseStructHeader() -> StructHeader {
+        var header = StructHeader()
+        do throws(ParseFailure) {
+            header.name = try expectIdentifier(else: ErrorCode.missingStructName)
+            // A struct may leave its fields out.
+            if consume(.lparen) {
+                try parseHeaderList(into: &header.fields, ifUnclosed: ErrorCode.unclosedFields) {
+                    parser throws(ParseFailure) in
+                    try parser.parseField()
+                }
+            }
+            header.readToEnd = true
         } catch {
-            throw DeclarationFailure(kind: .structure, name: name?.text, nameRange: name?.range)
+            skipHeader()
         }
+        return header
     }
 
     /// After the `{` of a struct's body: its members, which are declarations, and the `}` that closes it.
@@ -129,13 +155,6 @@ extension Parser {
         let members = parseDeclarations()
         try expect(.rbrace, else: ErrorCode.unclosedStructBody)
         return members
-    }
-
-    /// After the `(` of a struct's header: its fields and the `)`.
-    private mutating func parseFields() throws(ParseFailure) -> [FieldDecl] {
-        try parseList(upTo: .rparen, ifUnclosed: ErrorCode.unclosedFields) { parser throws(ParseFailure) in
-            try parser.parseField()
-        }
     }
 
     /// `('var' | 'let') identifier (':' type)? ('=' expression)?`.
@@ -161,5 +180,58 @@ extension Parser {
             // Any other token begins no field.
             throw fail(ErrorCode.missingFieldKind)
         }
+    }
+}
+
+/// What the parser read of a function's header, from its name to its result type.
+private struct FunctionHeader {
+    var name: (text: String, range: SourceRange)?
+    var parameters: [HeaderItem<Param>] = []
+    var result: TypeExpr?
+    /// Whether the parser read the header to its end, rather than skipping the rest of it after an error.
+    var readToEnd = false
+
+    /// The function that the header and `body` declare, or nil where any part of either failed.
+    func declaration(body: Block?) -> FuncDecl? {
+        guard readToEnd, let name, let body, let parameters = parameters.allParsed() else { return nil }
+        return FuncDecl(name: name.text, nameRange: name.range, parameters: parameters, result: result, body: body)
+    }
+
+    /// The failure of a function whose header or `body` failed, with what the parser read of them.
+    func failure(body: Block?) -> DeclarationFailure {
+        let parts = FailedDeclParts.function(parameters: parameters, result: result, body: body)
+        return DeclarationFailure(parts: parts, name: name?.text, nameRange: name?.range)
+    }
+}
+
+/// What the parser read of a struct's header: its name and its fields.
+private struct StructHeader {
+    var name: (text: String, range: SourceRange)?
+    var fields: [HeaderItem<FieldDecl>] = []
+    /// Whether the parser read the header to its end, rather than skipping the rest of it after an error.
+    var readToEnd = false
+
+    /// The struct that the header and `members` declare, or nil where any part of either failed.
+    func declaration(members: [Declaration]?) -> StructDecl? {
+        guard readToEnd, let name, let members, let fields = fields.allParsed() else { return nil }
+        return StructDecl(name: name.text, nameRange: name.range, fields: fields, members: members)
+    }
+
+    /// The failure of a struct whose header or body failed, with what the parser read of them.
+    func failure(members: [Declaration]?) -> DeclarationFailure {
+        let parts = FailedDeclParts.structure(fields: fields, members: members ?? [])
+        return DeclarationFailure(parts: parts, name: name?.text, nameRange: name?.range)
+    }
+}
+
+private extension Array {
+    /// The items of a header's list, or nil where any of them failed.
+    func allParsed<Item>() -> [Item]? where Element == HeaderItem<Item> {
+        var parsed: [Item] = []
+        for element in self {
+            guard case .parsed(let item) = element else { return nil }
+            parsed.append(item)
+        }
+        return parsed
     }
 }

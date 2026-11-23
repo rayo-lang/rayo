@@ -1,8 +1,8 @@
 package import RayoDiagnostics
 internal import RayoSource
 
-/// A recursive-descent parser. It reports what it can't parse and recovers at the next statement, so one
-/// run lists every syntax error, after the lexer's.
+/// A recursive-descent parser. It reports what it can't parse and recovers at the next statement, parameter or field,
+/// so one run lists every syntax error, after the lexer's.
 package struct Parser: ~Copyable {
     /// The `ErrorCode` case of a syntax error, which takes what the parser found where it expected something
     /// else.
@@ -11,7 +11,8 @@ package struct Parser: ~Copyable {
     /// The source, as UTF-8.
     let bytes: [UInt8]
     let tokens: [Token]
-    private var position = 0
+    /// The index of the current token.
+    private(set) var position = 0
     private var diagnostics: [Diagnostic]
 
     /// A parser of `bytes`, held as UTF-8, which lex to `tokens`, at the first token, with the lexer's errors,
@@ -46,9 +47,7 @@ package struct Parser: ~Copyable {
     /// The range of the token before the current one.
     var previousRange: SourceRange { tokens[max(position - 1, 0)].range }
 
-    var atStatementEnd: Bool {
-        current.kind == .newline || current.isPunct(.semicolon) || current.isPunct(.rbrace) || atEnd
-    }
+    var atStatementEnd: Bool { current.endsStatement }
 
     func peek(_ ahead: Int = 1) -> Token {
         tokens[min(position + ahead, tokens.count - 1)]
@@ -56,6 +55,11 @@ package struct Parser: ~Copyable {
 
     /// The range from the start of `start` to the end of the token before the current one.
     func range(from start: SourceRange) -> SourceRange { SourceRange(start.start, previousRange.end) }
+
+    /// How many brackets the tokens from the one at `start` up to the current one open and leave unclosed.
+    func bracketsLeftOpen(since start: Int) -> Int {
+        tokens[start..<position].reduce(0) { depth, token in token.bracketDepth(from: depth) }
+    }
 
     /// Moves past the current token, unless it ends the file, and returns it.
     @discardableResult

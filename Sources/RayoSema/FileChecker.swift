@@ -27,8 +27,9 @@ final class FileChecker {
         declarations = Declarations(names: TopLevelNames(of: file))
         // A function that failed to parse is declared before any other, so every use of its name finds it. A type that
         // failed to parse is declared with the other types' names.
-        for case .failed(let declaration) in file.declarations where declaration.kind == .function {
-            if let name = declaration.name { declarations.declareUnparsedFunction(named: name) }
+        for case .failed(let declaration) in file.declarations {
+            guard case .function = declaration.parts, let name = declaration.name else { continue }
+            declarations.declareUnparsedFunction(named: name)
         }
     }
 
@@ -228,8 +229,8 @@ final class FileChecker {
     /// named `main`.
     var mainMayHaveFailed: Bool {
         file.declarations.contains { declaration in
-            guard case .failed(let failed) = declaration else { return false }
-            return failed.kind == .function && (failed.name == nil || failed.name == "main")
+            guard case .failed(let failed) = declaration, case .function = failed.parts else { return false }
+            return failed.name == nil || failed.name == "main"
         }
     }
 
