@@ -243,15 +243,17 @@ each(enemies.span) { e in if e.hp < 10 { low.append(tag) } }        // a closure
 
 ### A19 · Enumerating while mutating, in parallel
 
-**A job system's parallel loop hands its body each element of a collection together with the element's index.** A sequential loop over a temporary does the same:
+**A job system's parallel loop hands its body each element of a collection together with the element's index.** A sequential loop does the same:
 
 ```swift
 grid.cells.forEachIndexedInParallel { i, cell in cell.value = f(i) }   // each call gets an element and its index
-for (i, e) in makeItems().mutableEnumerated() { … }                  // sequential, over a temporary whose elements it changes
+for (i, e) in items.mutableEnumerated() { … }                        // sequential, changing the elements of a 'var'
+for (i, e) in makeItems().mutableEnumerated() { … }                  // error: a temporary can't be changed; keep it in a 'var'
 ```
 
 - **Must accept** with the true index in every call and no copy of the collection. Show how the library's splitting keeps each part's starting index.
-- **Must accept** the sequential form over a temporary above, which changes its elements, with the true index in every iteration and no copy of the temporary.
+- **Must accept** the sequential form over `items` above, which changes its elements, with the true index in every iteration and no copy of the list.
+- **Must reject** the same loop over a temporary, whose changes would be lost with it, with an error that says to keep the list in a `var` ([01](../../spec/01-values-and-ownership/bindings.md#temporaries-are-read-only)).
 
 ### A20 · Mutating through a list of existential views
 
@@ -322,7 +324,7 @@ give(makeLoot().item)                                    // a field moved out of
 upload(builder.finish(builder.count))                    // 'finish' is consuming
 adopt(consume list, list.count)                          // 'adopt' owns its first parameter
 when connect().state { .open(buf) { … } … }              // matches part of a temporary whose type has a deinit
-when mutable connect() { .open(b) { b.append(0) } … }    // changes a payload in place
+when mutable conn { .open(b) { b.append(0) } … }         // changes a payload in place, in 'var conn = connect()'
 for s in consume tags { names.append(consume s) }        // 'tags' is an inline array of Strings
 ref let e = if c { &enemies[0] } else { &makeEnemy() }   // a place on one path, a temporary on the other
 ref let b = &attr ?? &Bounds(lo: 0, hi: 1)               // the same, through ??
