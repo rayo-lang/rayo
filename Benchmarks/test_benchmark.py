@@ -78,13 +78,12 @@ class MeasuresTests(unittest.TestCase):
         self.assertEqual(copies[0], copies[1])
 
     def test_the_scratch_directory_has_one_path_length_whatever_the_temporary_directory_is(self):
+        longer = self.enterContext(tempfile.TemporaryDirectory(prefix='a-longer-temporary-directory' * 3))
         lengths = []
-        for temporary in ('/tmp', '/tmp/' + 'a-longer-temporary-directory' * 3):
-            os.makedirs(temporary, exist_ok=True)
+        for temporary in ('/tmp', longer):
             with mock.patch.dict(os.environ, {'TMPDIR': temporary}), mock.patch('tempfile.tempdir', None):
                 with scratch_directory() as directory:
                     lengths.append(len(directory))
-        os.rmdir('/tmp/' + 'a-longer-temporary-directory' * 3)
 
         self.assertEqual(lengths[0], lengths[1])
 
