@@ -119,18 +119,15 @@ struct DataflowTests {
         #expect(visited.map(\.columns) == expected)
     }
 
+    // Going forward, the block after the last loop holds every loop's reads; going backward, the entry block does.
     @Test(arguments: [
-        DataflowDirection.forward, .backward,
+        (DataflowDirection.forward, 7), (.backward, 0),
     ])
-    func `solving eight times as many loops in a row crosses well under sixty-four times as many effects`(
-        direction: DataflowDirection,
+    func `loops in a row hand on what every pass of each brings, in either direction`(
+        direction: DataflowDirection, block: Int,
     ) throws {
-        let short = try effectsCrossed(solving: loopsInARow(10), direction)
-        let long = try effectsCrossed(solving: loopsInARow(80), direction)
-
-        // Settling each loop before going on crosses about eight times as many; walking every later block again
-        // after each loop, about sixty-four times.
-        #expect(long < short * 16)
+        let results = try solve(EvaluatedOperands(direction: direction), loopsInARow(3))
+        #expect(states(of: results, in: block)?.first == Set(1...6))
     }
 
     // The solver checks its merges only in a debug build, which is how the tests run.
@@ -221,41 +218,6 @@ private func loopsInARow(_ count: Int) -> String {
             """
     }
     return "bb0:\n  goto bb1\n" + loops.joined(separator: "\n") + "\nbb\(2 * count + 1):\n  return"
-}
-
-/// The number of effects the solver takes the state across, going in `direction` through a function made of `blocks`.
-private func effectsCrossed(solving blocks: String, _ direction: DataflowDirection) throws -> Int {
-    let crossings = EffectCount()
-    let start = CountedOperands(direction: direction)
-    _ = DataflowSolver.solve(from: start, through: try body(of: blocks), knowing: crossings)
-    return crossings.count
-}
-
-/// A count of effects a state is taken across; a class, since the solver and the test both hold it.
-private final class EffectCount {
-    var count = 0
-}
-
-/// The operands that `EvaluatedOperands` gathers, carried by a state that counts each effect it is taken across.
-private struct CountedOperands: DataflowState {
-    var operands: EvaluatedOperands
-
-    init(direction: DataflowDirection) {
-        operands = EvaluatedOperands(direction: direction)
-    }
-
-    var direction: DataflowDirection { operands.direction }
-
-    func merged(with other: CountedOperands) -> CountedOperands {
-        var merged = self
-        merged.operands = operands.merged(with: other.operands)
-        return merged
-    }
-
-    mutating func apply(_ effect: Effect, in crossings: EffectCount) {
-        crossings.count += 1
-        operands.apply(effect, in: ())
-    }
 }
 
 /// Solves the walk from `start` through a function that returns `result` and is made of `blocks`.

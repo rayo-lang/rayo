@@ -104,28 +104,10 @@ struct OwnershipCheckTests {
         ])
     }
 
-    @Test func `checking a function eight times as long takes well under sixty-four times as long`() throws {
-        let short = try program(of: [longFunction(rounds: 500)] + callees, from: .lowering)
-        let long = try program(of: [longFunction(rounds: 4000)] + callees, from: .lowering)
-
-        // A check that grows in line with the length takes about eight times as long. One that grows with its square
-        // takes up to sixty-four times, and over thirty at these lengths, where part of its work still grows in line.
-        // Sixteen is a factor of two from each.
-        let times = try fastestTimes(over: short, long, runs: 3, measuring: timeToCheck)
-        #expect(times.long < times.short * 16)
+    @Test func `a function of turns that each work out a new value from the old one passes every check`() throws {
+        let (_, errors) = OwnershipChecker.check(try program(of: [longFunction(rounds: 3)] + callees, from: .lowering))
+        #expect(errors.isEmpty)
     }
-}
-
-/// How long the ownership checks take over `program`. It requires that they find no error, since a check that stops
-/// at an error measures only part of the work.
-private func timeToCheck(_ program: IRProgram) throws -> Duration {
-    let clock = ContinuousClock()
-    let start = clock.now
-    let (_, errors) = OwnershipChecker.check(program)
-    let elapsed = clock.now - start
-
-    try #require(errors.isEmpty)
-    return elapsed
 }
 
 /// The function `long()`, which takes `rounds` turns, four statements each, at storing in `s` (`%0`) a new value

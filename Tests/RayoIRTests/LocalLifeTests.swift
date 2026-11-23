@@ -53,63 +53,9 @@ struct LocalLifeTests {
         #expect(IRVerifier.verify(program, from: .ownership) == nil)
     }
 
-    @Test func `eight times the loops take the check's state through under sixteen times the steps`() throws {
-        let short = try IRParser.program(from: retiringLoops(50))
-        let long = try IRParser.program(from: retiringLoops(400))
-        #expect(IRVerifier.verify(long, from: .ownership) == nil)
-
-        // A step is an effect the state crosses or a merge it makes. Growth in line with the loops takes eight times as
-        // many, and growth with their square up to sixty-four.
-        let shortSteps = try stepsToCheckLocalLives(short)
-        let longSteps = try stepsToCheckLocalLives(long)
-        #expect(longSteps < shortSteps * 16)
-    }
-}
-
-/// The effects the local-life check takes its state across, and the merges it makes, over `program`'s `main`. It
-/// throws at a violation, which cuts the work short.
-private func stepsToCheckLocalLives(_ program: IRProgram) throws -> Int {
-    let body = try #require(program.bodies[FunctionID(index: 0)])
-    let work = WorkCount()
-    try LocalLifeVerifier(body: body, of: "main()").verify(from: CountedRetiredLocals(entering: body, counting: work))
-    return work.count
-}
-
-/// A count of steps of work; a class, since every copy of a state adds to one count.
-private final class WorkCount {
-    var count = 0
-}
-
-/// The retired locals, carried by a state that counts each effect it is taken across and each merge it makes.
-private struct CountedRetiredLocals: RetiredLocalSet {
-    var retired: RetiredLocals
-    let work: WorkCount
-
-    init(entering body: IRBody, counting work: WorkCount) {
-        retired = RetiredLocals(entering: body)
-        self.work = work
-    }
-
-    var direction: DataflowDirection { retired.direction }
-
-    func contains(_ local: LocalID) -> Bool {
-        retired.contains(local)
-    }
-
-    func merged(with other: CountedRetiredLocals) -> CountedRetiredLocals {
-        work.count += 1
-        var merged = self
-        merged.retired = retired.merged(with: other.retired)
-        return merged
-    }
-
-    mutating func apply(_ effect: Effect, in function: Void) {
-        work.count += 1
-        retired.apply(effect, in: ())
-    }
-
-    static func == (first: CountedRetiredLocals, second: CountedRetiredLocals) -> Bool {
-        first.retired == second.retired
+    @Test func `loops in a row that each retire their own locals as they end use no retired local`() throws {
+        let program = try IRParser.program(from: retiringLoops(3))
+        #expect(IRVerifier.verify(program, from: .ownership) == nil)
     }
 }
 

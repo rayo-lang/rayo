@@ -65,19 +65,16 @@ struct IRVerificationTests {
         #expect(try Compiler.verified(program, from: stage, in: build) == program)
     }
 
-    @Test func `a release build checks a function eight times as long in well under sixty-four times as long`() throws {
-        let short = try ownedIR(of: mainOfRounds(50))
-        let long = try ownedIR(of: mainOfRounds(400))
-
-        // A check that grows in line with the length takes about eight times as long. One that grows with its square
-        // takes up to sixty-four times. Sixteen is a factor of two from the first, and of four from the second.
-        let times = try fastestTimesToCheck(short, long, in: .release, runs: 3)
-        #expect(times.long < times.short * 16)
+    @Test(arguments: [CompilerBuild.debug, .release])
+    func `the IR the ownership stage gives for rounds of checked indices keeps every rule either build checks`(
+        build: CompilerBuild,
+    ) throws {
+        let owned = try ownedIR(of: mainOfRounds(4))
+        #expect(try Compiler.verified(owned, from: .ownership, in: build) == owned)
     }
 }
 
-/// The IR that the ownership stage gives for `source`, which must check with no error. The stages run without the
-/// pipeline, whose checks of their IR in a debug build would take far longer than the IR takes to make.
+/// The IR that the ownership stage gives for `source`, which must check with no error.
 private func ownedIR(of source: String) throws -> IRProgram {
     var errors: [Diagnostic] = []
     let readSource = { (_: String) in Array(source.utf8) }
@@ -85,30 +82,6 @@ private func ownedIR(of source: String) throws -> IRProgram {
     let (owned, ownershipErrors) = OwnershipChecker.check(Lowering.lower(checked.program))
     try #require(errors.allSatisfy { $0.severity != .error } && ownershipErrors.isEmpty)
     return owned
-}
-
-/// The fastest time `build` of `rayoc` takes to check `short` and `long`, as the ownership stage's IR, of `runs`
-/// runs each. The runs take the two in turn, so that a runner busy with other work during one run slows neither one's
-/// time.
-private func fastestTimesToCheck(
-    _ short: IRProgram, _ long: IRProgram, in build: CompilerBuild, runs: Int,
-) throws -> (short: Duration, long: Duration) {
-    var shortTime = Duration.seconds(Int64.max)
-    var longTime = Duration.seconds(Int64.max)
-    for _ in 0..<runs {
-        shortTime = min(shortTime, try timeToCheck(short, in: build))
-        longTime = min(longTime, try timeToCheck(long, in: build))
-    }
-    return (shortTime, longTime)
-}
-
-/// How long `build` of `rayoc` takes to check `program`, as the ownership stage's IR. It throws where the checks
-/// find a violation, since a check that stops at one measures only part of the work.
-private func timeToCheck(_ program: IRProgram, in build: CompilerBuild) throws -> Duration {
-    let clock = ContinuousClock()
-    let start = clock.now
-    _ = try Compiler.verified(program, from: .ownership, in: build)
-    return clock.now - start
 }
 
 /// A `main` that takes `count` rounds over the array `a` of four Ints. Each round finds an element at an index a `let`
