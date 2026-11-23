@@ -399,6 +399,7 @@ var d: &any Drawable = sprite               // refers to 'sprite', and may later
 - a parameter that owns its argument, or `self` in a `consuming` method, a `deinit` or an initializer;
 - an owned capture of a `mutating` or `consuming` closure;
 - the place a `mutable &T` refers to, reached through a changeable place or a temporary that holds the reference ([References](references.md#forwarding-through-a-reference));
+- the place a place property's `mutate` hands out of a temporary exclusive view, such as a lock guard's `value` (below);
 - a `var` field, an element, or a property with a `mutate` or a `set` ([02](../02-views-and-dependencies/place-and-value-properties.md#place-and-value-properties)), of a changeable place.
 
 **Everything else is read-only, and so is whatever is reached through it**: a `let`, a `ref let`, a `&T` parameter, `self` in a plain method, a `let` field, a `const` and a global `let`. So is a `for` or `when` name whose subject is a shared reference, or that holds a copy, and the place any shared reference refers to. So is the place a `let` reaches through a reference it holds ([References](references.md#forwarding-through-a-reference)).
@@ -409,17 +410,27 @@ ref var y = mutable x              // error: a let is read-only, even one that o
 heal(mutable x)                    // error: the same
 ```
 
-**A temporary is read-only too, and so are its parts**, such as a call's result or what a `get` returns ([02](../02-views-and-dependencies/dependency-projection-and-results.md#temporaries)). It owns what it holds and is destroyed at the end of its statement, so a change to it would be lost before anything saw it. So lending a temporary for change, assigning into it or a part of it, and calling a `mutating` method on it are compile errors. The error names the temporary, and says to keep it in a `var`, or to change the storage itself.
+**A change to what a temporary owns is a compile error.** A temporary, such as a call's result or what a `get` returns, is destroyed at the end of its statement ([02](../02-views-and-dependencies/dependency-projection-and-results.md#temporaries)). So a change to it or a part of it would be lost before anything saw it. Lending a temporary for change, assigning into it or a part of it, and calling a `mutating` method on it are errors. The error names the temporary, and says to keep it in a `var`, or to change the storage itself.
 
-**A temporary may still be lent shared, or consumed**, as an owning parameter or a `consuming` method takes it, and a mutable reference it holds still writes through ([References](references.md#forwarding-through-a-reference)):
+**A change that goes through a temporary to storage it doesn't own is fine**, since that storage outlives the temporary:
+
+- **Through a mutable reference it holds.** Writing through the reference changes what it refers to, as `grid.row(3)[0] = 1` writes the grid where `row` returns a `mutable &[Float]` ([References](references.md#forwarding-through-a-reference)).
+- **Through a temporary that is an [exclusive view](../02-views-and-dependencies/dependency-projection-and-results.md#mutable-views).** A place property's `mutate` hands out a place in what the view views, as a lock guard's `value` or an `SoA` row's field does, since an exclusive view changes only what it views, never itself.
+
+**Which of the two a change is follows from types and declarations, never from a callee's body**, since that body can change while its caller stays the same. The temporary's type says whether it is a mutable reference or an exclusive view, and a member's declaration says whether it is a place property. So the temporary itself is never lent for change, even an exclusive view, since a callee given a `mutable &MutexGuard<Int>` may change the guard's own state.
+
+**A temporary may still be lent shared, or consumed**, as an owning parameter or a `consuming` method takes it:
 
 ```swift
 heal(mutable makeEnemy())          // error: 'makeEnemy()' is a temporary; keep it in a 'var'
 makeEnemy().hp = 0                 // error: the same
-makeIterator().next()              // error: 'next' is mutating; keep the iterator in a 'var', as 'var it = makeIterator()'
+makeIterator().next()              // error: 'next' changes the position the iterator owns; keep it in a 'var'
 show(makeEnemy())                  // fine: a shared lend
-grid.row(3)[0] = 1                 // fine where 'row' returns a 'mutable &[Float]': writes the grid
-scale(grid.row(3))                 // fine: passes that reference on
+grid.row(3)[0] = 1                 // fine: writes the grid
+scale(grid.row(3))                 // fine: passes the reference on
+m.lock().value += 1                // fine: writes the mutex's value through the guard
+particles.mutableRow(3).life = 0   // fine: writes the 'life' column
+hold(mutable m.lock())             // error: lends the guard itself for change
 ```
 
 **There are four exceptions, each with its own way of keeping exclusivity**, the first two checked at run time:
