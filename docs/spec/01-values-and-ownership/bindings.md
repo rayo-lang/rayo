@@ -425,14 +425,17 @@ _ = r.value?.submit(mesh)          // fine: an object's value is changeable thro
 
 ### Temporaries are read-only
 
-**A change to what a temporary owns is a compile error.** A temporary, such as a call's result or a literal, is destroyed at the end of its statement ([02](../02-views-and-dependencies/dependency-projection-and-results.md#temporaries)). So a change to it or a part of it is destroyed with it at the end of the statement, and outlasts nothing. Lending a temporary for change, assigning into it or a part of it, calling a `mutating` method on it, and calling a `mutating` function value it is or holds are errors ([05](../05-protocols-generics-and-closures/functions-and-closures.md#closure-kinds)). The error names the temporary, and says to keep it in a `var`, or to change the storage itself.
+**A change to what a temporary owns is a compile error.** A temporary, such as a call's result or a literal, is destroyed at the end of its statement ([02](../02-views-and-dependencies/dependency-projection-and-results.md#temporaries)). So a change to it or a part of it dies with it, and outlasts nothing.
 
-**A change that goes through a temporary to storage it doesn't own is fine in two cases**, since that storage outlives the temporary:
+Lending a temporary for change, assigning into it or a part of it, calling a `mutating` method on it, and calling a `mutating` closure it owns, such as a `Closure<mutating () -> Int>`, are errors ([05](../05-protocols-generics-and-closures/functions-and-closures.md#closure-kinds)). The error names the temporary, and says to keep it in a `var`, or to change the storage itself. A copy the language writes back, such as an aligned temporary, stays changeable ([above](#changeable-places)), since its change reaches the place it stands for.
+
+**A change that goes through a temporary to storage it doesn't own is fine in three cases**, since that storage outlives the temporary:
 
 - **Through a mutable reference it holds.** Writing through the reference changes what it refers to, as `grid.mutableRow(3)[0] = 1` writes the grid where `mutableRow` returns a `mutable &[Float]` ([References](references.md#forwarding-through-a-reference)).
 - **Through a temporary that is an [exclusive view](../02-views-and-dependencies/dependency-projection-and-results.md#mutable-views).** A place property's `mutate` hands out a place in what the view views, as a lock guard's `value` or an `SoA` row's field does, since an exclusive view changes only what it views, never itself.
+- **Calling a temporary of `mutating` function type.** A function value views its closure, which lies elsewhere, so the call changes only that closure ([05](../05-protocols-generics-and-closures/functions-and-closures.md#function-typed-values)).
 
-**Which of the two a change is follows from types and declarations, never from a callee's body**, since that body can change while its caller stays the same. The temporary's type says whether it is a mutable reference or an exclusive view, and a member's declaration says whether it is a place property. So the temporary itself is never lent for change, even an exclusive view. A callee given a `mutable &MutexGuard<Int>` may replace the guard as a whole, as assigning or swapping one does, which no member of an exclusive view does.
+**Which change it is follows from types and declarations, never from a callee's body**, since that body can change while its caller stays the same. The temporary's type says whether it is a mutable reference, an exclusive view or a function value, and a member's declaration says whether it is a place property. So the temporary itself is never lent for change, even an exclusive view. A callee given a `mutable &MutexGuard<Int>` may replace the guard as a whole, as assigning or swapping one does, which no member of an exclusive view does.
 
 **A temporary may still be lent shared, or consumed**, as an owning parameter or a `consuming` method takes it:
 
@@ -440,7 +443,7 @@ _ = r.value?.submit(mesh)          // fine: an object's value is changeable thro
 heal(mutable makeEnemy())          // error: 'makeEnemy()' is a temporary; keep it in a 'var'
 makeEnemy().hp = 0                 // error: the same
 makeIterator().next()              // error: 'next' changes the position the iterator owns; keep it in a 'var'
-makeCounter()()                    // error: the call changes the counter's captures; keep it in a 'var'
+makeCounter()()                    // error: the 'Closure<mutating () -> Int>' it returns owns the captures the call changes
 show(makeEnemy())                  // fine: a shared lend
 grid.mutableRow(3)[0] = 1          // fine: writes the grid
 scale(grid.mutableRow(3))          // fine: passes the reference on

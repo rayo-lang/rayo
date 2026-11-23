@@ -289,7 +289,7 @@ times(3) { lives[0] += 1 }                    // fine: captures 'lives' exclusiv
 lives[0] = 0                                  // fine: the literal's last use is above, so 'lives' is free again
 ```
 
-**A parameter of function type, or of `some F`, owns its function value or closure, as every `x: T` parameter owns its argument** ([01](../01-values-and-ownership/parameters.md#parameters)). So its body may call it whatever its kind: a `mutating` one from a changeable place, and a `consuming` one once. How a closure gets there depends on the parameter's type:
+**A parameter of function type, or of `some F`, owns its function value or closure, as every `x: T` parameter owns its argument** ([01](../01-values-and-ownership/parameters.md#parameters)). So its body may call it whatever its kind: a `mutating` one from a changeable place or a temporary of function type, and a `consuming` one once. How a closure gets there depends on the parameter's type:
 
 - **A closure passed for a function-type parameter is converted first** ([below](#function-typed-values)). So a local holding a `mutating` closure is passed as `mutable f`, and stays usable after the call. A local holding a `consuming` closure is passed as `consume f`, and the conversion consumes it.
 - **A closure passed for a `some F` parameter moves in**: a literal, or `consume f` of a local. A `mutable &some F` parameter borrows the caller's closure for change instead, as `mutable f` lends it, and a `&some F` parameter borrows it shared.
