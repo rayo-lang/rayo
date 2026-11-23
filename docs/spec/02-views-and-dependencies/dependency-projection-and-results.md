@@ -148,10 +148,13 @@ let hp = hpOf(&makeEnemy())                   // an error if 'hp' is used later:
 
 **A value that holds an inline array, such as a matrix of four `Vec4` columns, can lend its elements.** So a result keeps depending on the argument place, as every result of an unsealed type does.
 
-**A function value that its parameter owns absorbs, at the call, only what a call of it can store through its `keep` parameters** ([05](../05-protocols-generics-and-closures/functions-and-closures.md#what-a-closure-may-keep-keep)). So its type counts as sealed there when every `keep` parameter's type is. The same holds for a closure of concrete type owned through a `some F` parameter, or through a type parameter constrained to a function type. So this leaves only `src` borrowed:
+**A function value that its parameter owns absorbs nothing from the call's other arguments**, since a call of it stores nothing it derives from its arguments ([05](../05-protocols-generics-and-closures/functions-and-closures.md#a-closures-parameters-are-lent-for-the-call)). So its type counts as sealed there. The same holds for a closure of concrete type owned through a `some F` parameter, or through a type parameter constrained to a function type. So the temporary key below leaves nothing borrowed:
 
 ```swift
-forEachLine(&src) { line in lines.append(&line) }
+func forEachMatch(_ key: &Key, _ body: mutating (&Symbol) -> Void) { … }
+
+forEachMatch(&Key(text: "if", hash: h)) { s in count += 1 }   // 'count' takes on nothing from the temporary key
+print("\(count) matches")
 ```
 
 **A function value or a closure given to a `mutable &` parameter stays unsealed**, since the callee may replace it with another closure.

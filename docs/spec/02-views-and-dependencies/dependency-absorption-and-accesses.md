@@ -76,7 +76,7 @@ put(mutable &out)                       // 'out' depends on 'src' from here on
 
 **An argument that absorbs a place the closure captures exclusively also depends on the closure, exclusively, unless the call consumes it.** What the caller can see decides this, as it does for a result ([Closure calls](dependency-projection-and-results.md#closure-calls)).
 
-**The closure itself absorbs only what its `keep` arguments give it** ([05](../05-protocols-generics-and-closures/functions-and-closures.md#what-a-closure-may-keep-keep)). For a `keep &T` argument, that is its argument place and its set, as rule 3 counts them, never the place that holds a reference passed as the argument. For a `keep T` argument, it is the set alone. A `mutating` closure absorbs these into itself, and so into the places it depends on exclusively. Its other parameters are call-scoped, lent only for the call, so nothing it was lent reaches its captures. So a closure lent data for one call, such as a lock's, can't keep a view of it.
+**The closure itself absorbs nothing from its arguments**, since its parameters are lent for the one call ([05](../05-protocols-generics-and-closures/functions-and-closures.md#a-closures-parameters-are-lent-for-the-call)). So nothing it was lent reaches its captures, and a closure lent data for one call, such as a lock's, can't keep a view of it.
 
 **An access through a place property is a call to its accessor**, with `self` and the subscript's arguments, and its place depends on its sources ([Place and value properties](place-and-value-properties.md#what-a-place-depends-on)). No accessor code runs after the caller's access. So what the caller stores into a `mutate`'s place is a change to part of each source it depends on exclusively, and of what that source holds exclusively. Each of those takes it on (above). An argument that is no source, such as a key or a `mutable &` parameter no item names, takes on nothing.
 
@@ -139,10 +139,9 @@ let f = { [move s] in &s }     // error: the result refers to an owned capture
 
 - places captured by shared reference;
 - what any capture carries;
-- what parameters declared `keep` carry ([05](../05-protocols-generics-and-closures/functions-and-closures.md#what-a-closure-may-keep-keep));
 - static storage.
 
-**Parameters not declared `keep` are call-scoped**, lent only for one call, so a closure can return what depends on one, but can't store it:
+**A closure's parameters are lent for the one call** ([05](../05-protocols-generics-and-closures/functions-and-closures.md#a-closures-parameters-are-lent-for-the-call)), so a closure can return what depends on one, but can't store it:
 
 ```swift
 let names = alloc entries.map { &$0.name }   // the closure returns what depends on its parameter; storing it would be an error

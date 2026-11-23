@@ -37,7 +37,6 @@ let pickMax: (Int, Int) -> Int = max            // a named function to a functio
 - A literal that captures nothing, a named `@c func`, `@export`, imported or `extern c` function, or a `@c` value converts to a `@c` function pointer type ([C function pointers](functions-and-closures.md#c-function-pointers)). The pointer type must have the same types, or inside `unsafe` the same C representations, and must declare at least the converted function's stack need.
 - A Rayo function value converts to each of these, with every parameter's type unchanged ([01](../01-values-and-ownership/parameters.md#parameters)), within the limits that C function pointers set for `unsafe` and C functions ([C function pointers](functions-and-closures.md#c-function-pointers)):
     - a stronger kind: non-`mutating` to `mutating` or `consuming`, and `mutating` to `consuming`;
-    - a type whose parameters add `keep`;
     - the type without `@sendable` or `@noalloc`;
     - its `unsafe` form;
     - for a value that can't fail, the type whose result is a `T!Never` in place of its `T`, which is laid out the same, so a generic `R!E` binds `E` to `Never` ([10](../10-errors-and-safety/typed-errors.md#what-a-failure-type-names));
@@ -49,7 +48,7 @@ let pickMax: (Int, Int) -> Int = max            // a named function to a functio
 
 ## Conversions through a mutable reference
 
-**What a mutable reference refers to converts only to an unsized type.** A `mutable &List<T>` converts to a `mutable &[T]`, a `mutable &T` to a `mutable &any P`, and a `mutable &any P` to a `mutable &any Q` of an implied protocol (above). No other conversion changes what a `mutable &` refers to: no widening, no `T` → `T?`, no stronger closure kind and no added `keep`. Otherwise the callee could store a value of its own type in the caller's place, such as a `mutating` closure into a variable the caller still sees as a non-`mutating` one, which a job system may call on many threads.
+**What a mutable reference refers to converts only to an unsized type.** A `mutable &List<T>` converts to a `mutable &[T]`, a `mutable &T` to a `mutable &any P`, and a `mutable &any P` to a `mutable &any Q` of an implied protocol (above). No other conversion changes what a `mutable &` refers to: no widening, no `T` → `T?` and no stronger closure kind. Otherwise the callee could store a value of its own type in the caller's place, such as a `mutating` closure into a variable the caller still sees as a non-`mutating` one, which a job system may call on many threads.
 
 **The conversions to unsized types are safe through `mutable &`, since a place of unsized type is never assigned as a whole** ([01](../01-values-and-ownership/references.md#unsized-types)). So the callee can't store a value of another type there:
 

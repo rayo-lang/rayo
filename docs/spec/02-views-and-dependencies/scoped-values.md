@@ -100,7 +100,7 @@ extension Mutex {
 }
 ```
 
-The closure can compute any unscoped result from the protected data. It can't smuggle out a view of the data as its result, which would be scoped, or through its captures, since its parameter isn't declared `keep` ([05](../05-protocols-generics-and-closures/functions-and-closures.md#what-a-closure-may-keep-keep)).
+The closure can compute any unscoped result from the protected data. It can't smuggle out a view of the data as its result, which would be scoped, or through its captures, since a closure's parameters are lent for the one call ([05](../05-protocols-generics-and-closures/functions-and-closures.md#a-closures-parameters-are-lent-for-the-call)).
 
 **`~Scoped` is required implicitly in these places, where a value can outlive the function that stores it, or be reached without its borrows:**
 

@@ -291,32 +291,21 @@ func lock<R: ~Scoped>(_ body: consuming (mutable &T) -> R) -> R { … }   // Mut
 
 **The kinds nest.** A non-`mutating` value is accepted where a `mutating` or `consuming` one is expected, and a `mutating` one where a `consuming` one is. That holds for values only, never for what a `mutable &` refers to ([Implicit conversions](implicit-conversions.md#conversions-through-a-mutable-reference)), and it never adds ownership ([below](#function-typed-values)).
 
-## What a closure may keep: `keep`
+## A closure's parameters are lent for the call
 
-A closure can't keep what it is lent for one call, such as the data behind a lock, unless the parameter is declared `keep`:
+A closure's parameters are lent for the one call, so a closure never keeps what its caller lends it:
 
 ```swift
 m.lock { d in kept = &d.items.span }              // error: 'd' is lent only for the call
-forEachLine(&src) { lines.append(&$0) }           // fine: forEachLine's closure takes a 'keep' parameter
 let names = alloc entries.map { &$0.name }        // fine: the closure returns a reference into its parameter, and keeps none
+for line in src.lines() { lines.append(&line) }   // fine: a loop over an iterator collects what it hands out
 ```
 
-**Closure parameters are call-scoped.** Nothing that depends on one may be stored into the closure's captures, by rule 5 ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-5-the-callee-side)) for a closure body. A call absorbs nothing into the captures, by rule 4 ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-4-absorption)). A closure may still return what depends on a parameter, as the `map` above does. The call's result, and every absorbing argument, by rule 4 ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-4-absorption)), still depend on what the closure captures, since the closure is the call's `self`.
+**A closure stores nothing it derives from its arguments into its captures.** Rule 5 rejects such a store in a closure body ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-5-the-callee-side)), and a call absorbs nothing from its arguments into the closure, by rule 4 ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-4-absorption)). A closure may still return what depends on a parameter, as the `map` above does. The call's result, and every absorbing argument, by rule 4, still depend on what the closure captures, since the closure is the call's `self`.
 
-**`keep` on a parameter of a function type lets the closure store what it derives from that parameter into its captures**, as `forEachLine`'s closure may:
+**The closure's caller may lend data that stays safe only for the call**, as an `RwLock`'s `read` lends its data while it holds the lock, and releases the lock when the closure returns ([07](../07-concurrency/synchronization.md#locks-mutex-and-rwlock)). A dependency says what a value borrows, never that the borrow ends with a call, so a view of the data kept in the closure's captures would outlive the lock. Since no closure keeps what it is lent, such a caller needs no rule of its own.
 
-```swift
-func forEachLine(_ text: &Text, _ body: mutating (keep &Text) -> Void) { … }   // 'body' may keep the lines
-```
-
-**`keep` marks a parameter of type `T` or `&T`**, and `keep` on a `mutable &T` parameter is a compile error.
-
-**A call absorbs what the `keep` argument gives the closure, with the kinds of rule 3, into every place the closure depends on exclusively** ([02](../02-views-and-dependencies/dependency-projection-and-results.md#rule-3-call-results)). So `lines` above ends up depending on `src`, and the calling function must be allowed that store by its own rule 5.
-
-- **A `keep &T` parameter lends its argument place.** `&x` of it refers to the place the argument refers to, so the closure may keep that reference, or one to a part of the place. So the call absorbs the argument place and its dependency set, as rule 3 makes a result depend on both ([02](../02-views-and-dependencies/dependency-projection-and-results.md#rule-3-call-results)). It never absorbs the place that holds a reference passed as the argument, such as a local or a temporary that holds a `&T`, since a copy of the reference reaches the same place. So `body(&tmp)` lends the local `tmp`, which the caller's rule 5 allows only where `tmp` lives as long as the closure. A closure that keeps references to a list's elements takes `keep &[T]`.
-- **A `keep T` parameter gives the closure its value too**, which it may move into its captures with what that value carries. So a closure may append its `keep List<&Text>` parameter to a captured list: a move-only value that no `&T` parameter could give up. The parameter's own storage belongs to the call, as a local's does, so a closure that keeps `&x` of it is rejected.
-- **`keep` makes a `&T` argument the caller's place**, never a copy of its bits, since the closure may view it after the call. A conversion that adds `keep` stays sound, since the caller's place is always a valid argument ([01](../01-values-and-ownership/parameters.md#borrowed-arguments)).
-- **`keep` is part of the type.** A closure type without it is accepted where one with it is expected, not the reverse, since a plain closure's receiver relies on nothing flowing into its captures.
+**A callback that collects what it is handed is a loop over an iterator instead.** An iterator over shared elements hands out elements that outlive the iteration, since `SharedIterator` declares `next()` `where return outlives self` ([02](../02-views-and-dependencies/dependency-lifetimes.md#staying-valid-after-a-parameter-moves-on-outlives)). So `lines` above depends on `src`, never on the iterator, and the loop's body may store each line.
 
 ## Unscoped closures: `Closure<F>`
 
