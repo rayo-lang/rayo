@@ -50,13 +50,13 @@ public struct SourceFile: Sendable {
     }
 
     /// Whether the spelling puts a space between `previous` and `next`: where the source has a gap between them,
-    /// except just inside `( )` or `[ ]`, before a `,`, and before a member's `.` that starts its own line.
+    /// except just inside `( )` or `[ ]`, before a `,` or a `;`, and before a member's `.` that starts its own line.
     private static func isSpaced(_ previous: Token, _ next: Token) -> Bool {
         let hasGap = previous.range.end.offset < next.range.start.offset
         let opensBracket = previous.isPunct(.lparen) || previous.isPunct(.lbracket)
         let closesBracket = next.isPunct(.rparen) || next.isPunct(.rbracket)
-        return hasGap && !opensBracket && !closesBracket && !next.isPunct(.comma)
-            && !startsMemberLine(previous, next)
+        let separates = next.isPunct(.comma) || next.isPunct(.semicolon)
+        return hasGap && !opensBracket && !closesBracket && !separates && !startsMemberLine(previous, next)
     }
 
     /// Whether `next` is a member's `.` that starts its own line, after `previous` ends the value it is a member of.
