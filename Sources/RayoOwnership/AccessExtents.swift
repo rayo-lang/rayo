@@ -19,9 +19,18 @@ struct AccessExtents {
     init(_ body: IRBody, uses: DataflowResults<AccessUseState>) {
         self.body = body
         self.uses = uses
-        dependencies = DataflowSolver.solve(from: DependencyState(), through: body, knowing: ())
-        let begun = Set(body.begunAccesses.keys)
-        unbegun = DataflowSolver.solve(from: UnbegunAccessState(begun), through: body, knowing: ())
+
+        let (dependencyEntry, unbegunEntry) = Self.entryStates(of: body)
+        dependencies = DataflowSolver.solve(from: dependencyEntry, through: body, knowing: ())
+        unbegun = DataflowSolver.solve(from: unbegunEntry, through: body, knowing: ())
+    }
+
+    /// The dependence and unbegun-access states on entry to `body`, which the extents carry through it.
+    private static func entryStates(of body: IRBody) -> (dependencies: DependencyState, unbegun: UnbegunAccessState) {
+        // The states index accesses by their IDs, so they span every ID the body begins.
+        let highestID = body.begunAccesses.keys.max()
+        let accessCount = highestID.map { $0.index + 1 } ?? 0
+        return (DependencyState(entering: body, accessCount: accessCount), UnbegunAccessState(accessCount: accessCount))
     }
 
     /// The accesses live at each point of `block`: those that code after the point uses, those the values it reads
@@ -55,7 +64,7 @@ struct AccessExtents {
             guard let points = needed[index] else { return nil }
             var held = points
             unbegun.walk(BlockID(index: index)) { point, state in
-                held[point] = points[point].subtracting(state.accesses)
+                held[point] = points[point].filter { !state.contains($0) }
             }
             return held
         }

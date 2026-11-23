@@ -25,6 +25,15 @@ struct PersistentArrayTests {
         #expect(PersistentArray(Array(0..<999)) != original)
     }
 
+    @Test func `writing the element an array already holds leaves it as it was`() {
+        let original = PersistentArray(Array(0..<1000))
+        var rewritten = original
+        rewritten[500] = 500
+
+        #expect(rewritten == original)
+        #expect((0..<1000).map { rewritten[$0] } == Array(0..<1000))
+    }
+
     @Test(arguments: [0, 1, 31, 32, 33, 1023, 1025, 40_000])
     func `an array of any count holds the elements it is made of, whatever part of a node it fills`(count: Int) {
         var array = PersistentArray(Array(0..<count))
