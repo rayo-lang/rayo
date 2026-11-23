@@ -1,4 +1,5 @@
 import Testing
+import RayoCheckedProgram
 import RayoDiagnostics
 
 struct ParameterTests {
@@ -93,6 +94,18 @@ struct ParameterTests {
             """
         let locals = "let a = 1\n    let b: UInt = 1"
         #expect(errors("func main() {\n    \(locals)\n    \(call)\n}\n\(declarations)") == expected)
+    }
+
+    // A `mutable &T` parameter holds a reference too, but a bare one given to a `&T` parameter reborrows through it,
+    // as `&r` does, so only a shared reference fits a `&T` with no conversion.
+    @Test(arguments: [
+        (LocalKind.refLet, true), (.parameter(.borrowed), true), (.parameter(.mutable), false),
+        (.parameter(.owned), false), (.let, false), (.var, false),
+    ])
+    func `a 'ref let' and a parameter that borrows its argument hold a shared reference, and no other local does`(
+        kind: LocalKind, holdsSharedReference: Bool,
+    ) {
+        #expect(kind.holdsSharedReference == holdsSharedReference)
     }
 
     @Test("a function the file declares hides every prelude function of its name")

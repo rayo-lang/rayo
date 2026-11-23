@@ -334,23 +334,37 @@ struct CallChecker {
         return (unconverted.isEmpty ? takingReferences : unconverted, true)
     }
 
-    /// Whether each of `values`, in turn, counts as a reference among `candidates`: a `&` of a place, a place whose
-    /// own type is a reference already, and a bare place that every candidate borrows, since lending it then tells
-    /// none of them apart.
+    /// Whether each of `values`, in turn, counts as a shared reference among `candidates`: a `&` of a place, a place
+    /// whose own type is a shared reference already, and a bare place that every candidate borrows, since lending it
+    /// then tells none of them apart.
     private func countedAsReferences(_ values: [CheckedValue], by candidates: [Signature]) -> [Bool] {
         values.indices.map { index in
-            values[index].lendsPlace || holdsReference(values[index])
+            values[index].lendsPlace || holdsSharedReference(values[index])
                 || candidates.allSatisfy { $0.parameters[index].convention == .borrowed }
         }
     }
 
-    /// Whether `value` names, with no step into it, a local that holds a reference, such as a `ref let` or a parameter
-    /// that borrows its argument, so that the value's own type is a reference to the type of what the local refers
-    /// to.
-    private func holdsReference(_ value: CheckedValue) -> Bool {
-        guard case .typed(let typed) = value, case .place(let place) = typed.kind, place.steps.isEmpty,
-              let local = place.local else { return false }
-        return expressions.names[local].kind.holdsReference
+    /// Whether `value`'s own type is a shared reference, `&T`, where `T` is the type of what it refers to: it names,
+    /// with no step into it, a local that holds one, such as a `ref let` or a parameter that borrows its argument, or
+    /// it is an `if` whose every branch that runs to its end ends in such a value, as an `if` of `&` places lends one.
+    private func holdsSharedReference(_ value: CheckedValue) -> Bool {
+        switch value {
+        case .typed(let typed): namesSharedReference(typed)
+        case .waiting(let ifValue as IfValue): endsInSharedReferences(ifValue)
+        case .waiting: false
+        }
+    }
+
+    /// Whether `value` names, with no step into it, a local that holds a shared reference.
+    private func namesSharedReference(_ value: CheckedExpr) -> Bool {
+        guard case .place(let place) = value.kind, place.steps.isEmpty, let local = place.local else { return false }
+        return expressions.names[local].kind.holdsSharedReference
+    }
+
+    /// Whether every branch of `ifValue` that runs to its end ends in a value whose own type is a shared reference.
+    private func endsInSharedReferences(_ ifValue: IfValue) -> Bool {
+        let reached = ifValue.ends.filter(\.isReached)
+        return !reached.isEmpty && reached.allSatisfy { $0.value.map(holdsSharedReference) ?? false }
     }
 
     /// Reports `values`, which several of `candidates`, the functions the call names as `name`, fit by type, though
