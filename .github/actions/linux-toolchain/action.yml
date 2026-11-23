@@ -1,0 +1,101 @@
+name: Set up the Linux toolchain
+description: >-
+  Installs LLVM, clang and LLD from apt.llvm.org in Swift's Ubuntu container, with any other packages a job names,
+  from packages that only a push to main caches.
+
+inputs:
+  packages:
+    description: The Ubuntu packages a job needs besides LLVM's, separated by spaces.
+    required: false
+    default: ""
+
+outputs:
+  llvm-version:
+    description: The exact build of LLVM installed, which a cached build depends on.
+    value: ${{ steps.llvm.outputs.version }}
+
+runs:
+  using: composite
+  steps:
+    # The cache is keyed on the image's exact packages, which a new image can change. Raising the revision fetches
+    # apt.llvm.org's newest build of the release, which the cache otherwise never does.
+    - name: Name the packages' cache
+      id: image
+      shell: bash
+      env:
+        PACKAGES: ${{ inputs.packages }}
+      run: |
+        revision=1
+        packages=$(dpkg-query -W -f='${Package}=${Version}\n' | git hash-object --stdin | cut -c 1-16)
+        key="llvm-$LLVM_MAJOR_VERSION-noble-$packages-r$revision"
+        if [ -n "$PACKAGES" ]; then
+          key+="-with-$(printf '%s' "$PACKAGES" | tr -s ' ' '-')"
+        fi
+        echo "key=$key" >> "$GITHUB_OUTPUT"
+        echo "path=/var/cache/rayo-llvm" >> "$GITHUB_OUTPUT"
+    - name: Restore the packages
+      id: cache
+      uses: actions/cache/restore@v6
+      with:
+        path: ${{ steps.image.outputs.path }}
+        key: ${{ steps.image.outputs.key }}
+    - name: Fetch the packages
+      if: steps.cache.outputs.cache-hit != 'true'
+      shell: bash
+      env:
+        # The fingerprint apt.llvm.org publishes for the key that signs its packages.
+        LLVM_KEY_FINGERPRINT: 6084F3CF814B57C1CF12EFD515CF4D18AF4F7421
+        CACHED: ${{ steps.image.outputs.path }}
+        PACKAGES: ${{ inputs.packages }}
+      run: |
+        # Fetch Ubuntu's packages from Azure's mirror of the archive rather than archive.ubuntu.com, which has
+        # stalled for minutes at a time from GitHub's runners. A server that stalls fails the step within
+        # minutes rather than holding the job until it times out.
+        sed -i -E 's#https?://(archive|security)\.ubuntu\.com#http://azure.archive.ubuntu.com#' \
+          /etc/apt/sources.list.d/ubuntu.sources
+        printf 'Acquire::Retries "3";\nAcquire::http::Timeout "30";\nAcquire::https::Timeout "30";\n' \
+          > /etc/apt/apt.conf.d/80-rayo-ci
+        apt-get update
+        apt-get install -y --no-install-recommends ca-certificates curl gnupg
+
+        # apt trusts every key in the keyring, so it gets the one key with the published fingerprint and no other
+        # key the download might hold.
+        keys=$(mktemp -d)
+        curl -fsSL https://apt.llvm.org/llvm-snapshot.gpg.key -o "$keys/llvm.asc"
+        gpg --homedir "$keys" --batch --import "$keys/llvm.asc"
+        gpg --homedir "$keys" --batch --export "$LLVM_KEY_FINGERPRINT" > /usr/share/keyrings/llvm.gpg
+        if [ ! -s /usr/share/keyrings/llvm.gpg ]; then
+          echo "::error::apt.llvm.org's key file holds no key with fingerprint $LLVM_KEY_FINGERPRINT"
+          exit 1
+        fi
+
+        # Fetch LLVM's packages and the job's, with what the container lacks, into the cached directory.
+        # The pin names only LLVM's major release, since apt.llvm.org serves only its newest build.
+        suite="llvm-toolchain-noble-$LLVM_MAJOR_VERSION"
+        echo "deb [signed-by=/usr/share/keyrings/llvm.gpg] https://apt.llvm.org/noble/ $suite main" \
+          > /etc/apt/sources.list.d/llvm.list
+        apt-get update
+        mkdir -p "$CACHED/partial"
+        version="1:$LLVM_MAJOR_VERSION.1.*"
+        # The packages are words, split where they have spaces.
+        apt-get install -y --no-install-recommends --download-only -o Dir::Cache::Archives="$CACHED" \
+          "llvm-$LLVM_MAJOR_VERSION-dev=$version" "clang-$LLVM_MAJOR_VERSION=$version" \
+          "lld-$LLVM_MAJOR_VERSION=$version" $PACKAGES
+        rm -rf "$CACHED/partial" "$CACHED/lock"
+    - name: Install the packages
+      id: llvm
+      shell: bash
+      env:
+        CACHED: ${{ steps.image.outputs.path }}
+      # Installs from the cached files alone, with no package index or network. apt, not dpkg, configures each
+      # package's pre-dependencies before it unpacks the package.
+      run: |
+        apt-get install -y --no-install-recommends --no-download -o Dir::Cache::Archives="$CACHED" "$CACHED"/*.deb
+        echo "version=$(dpkg-query -W -f='${Version}' "llvm-$LLVM_MAJOR_VERSION-dev")" >> "$GITHUB_OUTPUT"
+    # Only a push to main saves the packages, as it does the build, so pull requests share main's one copy.
+    - name: Save the packages
+      if: github.event_name == 'push' && steps.cache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v6
+      with:
+        path: ${{ steps.image.outputs.path }}
+        key: ${{ steps.cache.outputs.cache-primary-key }}
