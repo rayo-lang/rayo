@@ -55,7 +55,7 @@ package struct DataflowSolver<State: DataflowState> {
         while let block = pending.pop() {
             // A block that no state has reached yet has nothing to hand on.
             guard var state = boundaryStates[block.index] else { continue }
-            state.apply(acrossBlock: block, effects: effects[block.index], in: function)
+            state.apply(across: effects[block.index], in: function)
 
             // Each block the state flows into is pending again where the state adds to its own.
             for next in blocks(after: block) where merge(state, intoBoundaryOf: next) {

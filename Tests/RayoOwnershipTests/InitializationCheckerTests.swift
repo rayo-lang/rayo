@@ -899,12 +899,12 @@ struct FieldMoveTests {
         ])
     }
 
-    @Test func `checking eight times as many loops in a row takes well under sixty-four times as long`() throws {
+    @Test func `checking eight times as many loops in a row takes under thirty-two times as long`() throws {
         let short = try program(of: [loopingFunction(loops: 50)] + callees, from: .lowering)
         let long = try program(of: [loopingFunction(loops: 400)] + callees, from: .lowering)
 
-        // Each loop adds blocks and locals. This check takes about fourteen times as long, since each block's state
-        // has a bit per local, 64 to a word. One that carries each local through each block takes up to sixty-four.
+        // Each loop adds blocks and locals. This check takes about eleven times as long: eight, and a little more as
+        // the tree that holds the locals deepens. One that carries every local through every block takes sixty-four.
         let times = try fastestTimes(over: short, long, runs: 3, measuring: timeToCheckInitialization)
         #expect(times.long < times.short * 32)
     }

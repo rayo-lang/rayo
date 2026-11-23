@@ -9,102 +9,26 @@ enum InitializationChecker {
     /// Reports the uses of places that may hold no value, and the assignments to `let`s that may already have been
     /// assigned, in `places.body`.
     static func errors(in places: PlaceTypes) -> [Diagnostic] {
-        let tracked = TrackedPlaces(places.body)
-        let start = InitializationState(entering: places.body, tracking: tracked)
-        let transfer = InitializationTransfer(places.body, tracking: tracked)
-        let results = DataflowSolver.solve(from: start, through: places.body, knowing: transfer)
-        let walk = Walk(places.body, settledOn: results, tracking: tracked)
-        guard !walk.findings.isEmpty else { return [] }
-
-        // The moves behind each error are found only once an error needs them.
-        let isReached = places.body.blocks.indices.map { results.boundaryState(of: BlockID(index: $0)) != nil }
-        let moves = ReachingMoves(places.body, isReached: isReached, takingMoves: walk.takingMoves)
+        let start = InitializationState(entering: places.body)
+        let results = DataflowSolver.solve(from: start, through: places.body, knowing: ())
         var errors = FunctionErrors(places: places)
-        for finding in walk.findings {
-            switch finding {
-            case .use(let place, let range, let missing, let point):
-                errors.use(place, at: range, missing: missing, moves: moves.moves(of: missing.place, reaching: point))
-            case .store(let destination, let isUnassignedOnSomePath):
-                errors.store(to: destination, unassignedOnSomePath: isUnassignedOnSomePath)
-            }
+        for (index, block) in places.body.blocks.enumerated() {
+            // A block that no path reaches has no state, and nothing in it is checked.
+            guard let entry = results.boundaryState(of: BlockID(index: index)) else { continue }
+            check(block, from: entry, into: &errors)
         }
         return errors.diagnostics
     }
-}
 
-/// What a walk of each reached block of a body finds in the settled states, in the order of the blocks and their
-/// effects.
-private struct Walk {
-    /// A use or a store that may be wrong, depending on what the paths to it left in its place.
-    enum Finding {
-        /// A use of a place, or a store to a part of a local, where the place, or the value around the part, may hold
-        /// no value.
-        case use(Place, at: SourceRange, missing: MissingValue, before: EffectPoint)
-        /// A store to a whole local that some path to it has assigned before.
-        case store(Destination, isUnassignedOnSomePath: Bool)
-    }
-
-    private(set) var findings: [Finding] = []
-    /// The moves before which the moved place holds a value on some path.
-    private(set) var takingMoves: Set<EffectPoint> = []
-
-    init(_ body: IRBody, settledOn results: DataflowResults<InitializationState>, tracking places: TrackedPlaces) {
-        for (index, block) in body.blocks.enumerated() {
-            // A block that no path reaches has no state, and nothing in it is checked.
-            let id = BlockID(index: index)
-            guard var state = results.boundaryState(of: id) else { continue }
-            for (ordinal, effect) in block.effects.joined().enumerated() {
-                record(effect, before: EffectPoint(block: id, ordinal: ordinal), in: state, among: places)
-                state.apply(effect, among: places)
-            }
+    /// Hands `errors` what each statement of `block`, and its terminator, may find missing, where the locals hold
+    /// `state` on entry to the block. It carries that one state through the block, so no statement copies it.
+    private static func check(_ block: BasicBlock, from state: InitializationState, into errors: inout FunctionErrors) {
+        var state = state
+        for effect in block.effects.joined() {
+            state.apply(
+                effect, use: { errors.use($0, at: $1, missing: $2) }, store: { errors.store(to: $0, holding: $1) },
+            )
         }
-    }
-
-    /// Records what `effect` may find wrong where the places hold `state` just before it.
-    private mutating func record(
-        _ effect: Effect, before point: EffectPoint, in state: InitializationState, among places: TrackedPlaces,
-    ) {
-        switch effect {
-        // A read uses the place and leaves its value in it.
-        case .read(let place, let range):
-            recordUse(of: place, at: range, before: point, in: state, among: places)
-
-        // An access uses its place, whose value it reads or changes.
-        case .begin(_, let access):
-            recordUse(of: access.place, at: access.range, before: point, in: state, among: places)
-
-        // A move uses the place, and takes its value where some path leaves one there.
-        case .move(let place, let range):
-            recordUse(of: place, at: range, before: point, in: state, among: places)
-            guard let number = places.number(of: place) else { preconditionFailure("every moved place is tracked") }
-            if state.holds(.holdsValue, of: number) { takingMoves.insert(point) }
-
-        // A store to a whole local gives it a value, whatever it held. A store to a part changes part of a value that
-        // the local must already hold around it.
-        case .store(let destination):
-            let local = destination.place.root
-            if destination.place.steps.isEmpty {
-                guard state.holds(.assigned, of: local.index) else { return }
-                findings.append(.store(destination, isUnassignedOnSomePath: state.holds(.unassigned, of: local.index)))
-            } else if let missing = state.missingValue(forStoreTo: destination.place, among: places) {
-                findings.append(.use(destination.place, at: destination.range, missing: missing, before: point))
-            }
-
-        // Reaching a place through an access and ending one use only the value that the access's beginning used, a
-        // dependence leaves its place's value as it is, and a declaration, a retirement or leaving the function uses
-        // none.
-        case .use, .end, .depend, .declare, .retire, .exit:
-            break
-        }
-    }
-
-    private mutating func recordUse(
-        of place: Place, at range: SourceRange, before point: EffectPoint, in state: InitializationState,
-        among places: TrackedPlaces,
-    ) {
-        // A place that holds its whole value on every path leaves nothing to record.
-        guard let missing = state.missingValue(forUseOf: place, among: places) else { return }
-        findings.append(.use(place, at: range, missing: missing, before: point))
     }
 }
 
@@ -131,36 +55,29 @@ private struct FunctionErrors {
         Array(firstUses.values) + stores
     }
 
-    /// Reports a use of `place` where `missing` may hold no value, and where `moves` may have taken that value.
-    mutating func use(_ place: Place, at range: SourceRange, missing: MissingValue, moves: Set<SourceRange>) {
-        let state = PlaceState(
-            holdsValueOnSomePath: missing.holdsValueOnSomePath, isUnassignedOnSomePath: missing.isUnassignedOnSomePath,
-            moves: moves,
-        )
-
+    mutating func use(_ place: Place, at range: SourceRange, missing: MissingValue) {
         // The error names the local or part that may hold no value, and says how it leaves the place short.
         let missingName = name(of: missing.place)
         let code = switch missing.kind {
         // The place itself, or a place that holds it, may hold no value, and the error names that place.
         case .placeOrHolder:
-            useError(naming: missingName, holding: state)
+            useError(naming: missingName, holding: missing.state)
         // A field inside the place may have been moved out of it, so the place can't be used whole.
         case .insidePlace:
-            partlyMovedError(naming: name(of: place), movedField: missingName, holding: state)
+            partlyMovedError(naming: name(of: place), movedField: missingName, holding: missing.state)
         }
 
         // Of the uses with the same cause, only the first in the source is kept, with the moves that caused it.
-        let cause = Cause(place: missing.place, moves: moves)
-        keep(Diagnostic(code, at: range, labeling: labeledMoves(state)), for: cause)
+        let cause = Cause(place: missing.place, moves: missing.state.moves)
+        keep(Diagnostic(code, at: range, labeling: labeledMoves(missing.state)), for: cause)
     }
 
-    /// Reports a store to a whole local that some path to it has assigned, where it is a `let`.
-    mutating func store(to destination: Destination, unassignedOnSomePath: Bool) {
+    mutating func store(to destination: Destination, holding state: PlaceState) {
         // Only a `let`, whether it owns its value or borrows it, is assigned at most once on each path.
         guard case .source(let name, let kind, _, _) = places.body.locals[destination.place.root.index],
               kind == .let || kind == .refLet else { return }
-        let code = storeError(naming: name, unassignedOnSomePath: unassignedOnSomePath)
-        stores.append(Diagnostic(code, at: destination.range))
+        guard state.isAssignedOnSomePath else { return }
+        stores.append(Diagnostic(storeError(naming: name, holding: state), at: destination.range))
     }
 
     /// The name of `place`, which an error at a use names.
@@ -203,8 +120,8 @@ private struct FunctionErrors {
             ? .usedPartlyMoved(name: name, field: field) : .usedMaybePartlyMoved(name: name, field: field)
     }
 
-    /// The error for a store to the `let` called `name`, which some path has assigned, and some path may not have.
-    private func storeError(naming name: String, unassignedOnSomePath: Bool) -> ErrorCode {
-        unassignedOnSomePath ? .letMaybeAssignedTwice(name: name) : .letAssignedTwice(name: name)
+    /// The error for a store to the `let` called `name` where it holds `state`, which has it assigned on some path.
+    private func storeError(naming name: String, holding state: PlaceState) -> ErrorCode {
+        state.isUnassignedOnSomePath ? .letMaybeAssignedTwice(name: name) : .letAssignedTwice(name: name)
     }
 }

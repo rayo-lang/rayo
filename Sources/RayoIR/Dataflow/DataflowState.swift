@@ -16,10 +16,6 @@ package protocol DataflowState: Equatable {
     /// Takes the state across `effect`, an effect in `function`, in its direction: from just before the effect to just
     /// after it going forward, and from just after it to just before it going backward.
     mutating func apply(_ effect: Effect, in function: Function)
-
-    /// Takes the state across all of `block` in `function`, whose statements and terminator have `effects`, in its
-    /// direction. A state may work out once what a whole block does to it, and apply that here.
-    mutating func apply(acrossBlock block: BlockID, effects: [[Effect]], in function: Function)
 }
 
 extension DataflowState {
@@ -34,8 +30,10 @@ extension DataflowState {
         }
     }
 
-    /// Takes the state across each statement and the terminator in turn.
-    package mutating func apply(acrossBlock block: BlockID, effects: [[Effect]], in function: Function) {
+    /// Takes the state across a whole block of `function`, whose statements and terminator have `effects`, as
+    /// `BasicBlock.effects` gives them: from its entry to its exit going forward, and from its exit to its entry going
+    /// backward.
+    package mutating func apply(across effects: [[Effect]], in function: Function) {
         let ordered = direction == .forward ? effects : effects.reversed()
         for crossing in ordered {
             apply(crossing, in: function)
