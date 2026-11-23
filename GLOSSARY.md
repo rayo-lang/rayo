@@ -75,13 +75,13 @@ Storage that holds a value: a local, a global, a parameter or a temporary, or a 
 _Avoid_: lvalue
 
 **Position**:
-A part of the code that takes a value, such as an argument, an initializer, a loop's subject or a `return`, where a place writes `&`, `mutable &`, `consume` or `copy` unless it is implicitly copyable ([01](docs/spec/01-values-and-ownership/references.md#places-given-to-a-position)).
+A part of the code that takes a value, such as an argument or a `return`, where a place writes `&`, `mutable &`, `consume` or `copy`, unless it is implicitly copyable or a `&T` is expected, which lends it ([01](docs/spec/01-values-and-ownership/references.md#places-given-to-a-position)).
 
 **Reborrow**:
 A new reference, made by `&r` or `mutable &r` of a place `r` that holds a reference, to what `r` refers to, which keeps `r` borrowed until its last use ([01](docs/spec/01-values-and-ownership/references.md#reborrowing)).
 
 **Reference**:
-A value that refers to a place and borrows it: a **shared reference** `&T`, made by `&p`, or a **mutable reference** `mutable &T`, made by `mutable &p`, which may change it ([01](docs/spec/01-values-and-ownership/references.md#references)).
+A value that borrows a place: a **shared reference** `&T`, made by `&p`, or by a bare `p` where one is expected, or a **mutable reference** `mutable &T`, made by `mutable &p` ([01](docs/spec/01-values-and-ownership/references.md#references)).
 _Avoid_: pointer (a raw, object or reference-counted one)
 
 **Safe code**:
@@ -297,7 +297,7 @@ A value of a function type, which views a closure's storage or names a function;
 _Avoid_: function pointer (a `@c` type)
 
 **Implicit conversion**:
-A conversion the expected type decides, with nothing written, such as `&List<T>` to `&[T]`, `&T` to `&any P` or `Box<T>` to `Box<any P>` ([05](docs/spec/05-protocols-generics-and-closures/implicit-conversions.md#implicit-conversions)).
+A conversion the expected type decides, with nothing written, such as a place lent where a `&T` is expected, `&List<T>` to `&[T]`, or `Box<T>` to `Box<any P>` ([05](docs/spec/05-protocols-generics-and-closures/implicit-conversions.md#implicit-conversions)).
 _Avoid_: coercion
 
 **Marker protocol**:

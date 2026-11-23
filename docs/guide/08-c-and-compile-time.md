@@ -14,7 +14,7 @@ struct Enemy(
 )
 
 game.window = unsafe plat.window_create(1280, 720, "Rayo".cString) // a direct call into C, which you vouch for
-save(&boss.value, into: mutable &file)                            // writes pos, vel and hp, found by reflection
+save(boss.value, into: mutable &file)                             // writes pos, vel and hp, found by reflection
 ```
 
 Rayo calls C directly, with no glue code. Where C can't promise something, you promise it yourself, and Rayo marks that code `unsafe`. You write `save` once for every type, with code the compiler runs while it builds your program: `const`, `static if`, and reflection over a type's fields.
@@ -117,7 +117,7 @@ func log(_ level: Int32, _ text: &Text) {
 }
 ```
 
-**A reference to a run hands C a pointer and a count.** `samples` names the run its caller lends, as in `upload(&levelSamples)`. Its `baseAddress`, the first element's address, is an `unsafe` member, so reading it needs `unsafe` ([10](../spec/10-errors-and-safety/unsafe-code.md#what-needs-unsafe)). With that `unsafe`, you promise, among other things, that C only reads there, at most `count` elements, and none after the call returns.
+**A reference to a run hands C a pointer and a count.** `samples` names the run its caller lends, as in `upload(levelSamples)`. Its `baseAddress`, the first element's address, is an `unsafe` member, so reading it needs `unsafe` ([10](../spec/10-errors-and-safety/unsafe-code.md#what-needs-unsafe)). With that `unsafe`, you promise, among other things, that C only reads there, at most `count` elements, and none after the call returns.
 
 **A string literal passes to C as a C string, at no cost.** The compiler puts a NUL after every literal's bytes, so `"Rayo".cString`, written on the literal itself, is a `*CChar` that C reads as a `const char*` ([04](../spec/04-types/collections.md#strings)). It belongs to the literal, not to its type: a `static &Text` kept in a variable has no `cString`, since a range of one has no NUL after it.
 
@@ -271,7 +271,7 @@ static if !target.hasFlag("sse4") {
 
 func endFrame(_ game: &Game) {
     static if target.hasFlag("editor") {
-        drawGizmos(&game)                // declared only in editor builds, which declare the flag
+        drawGizmos(game)                 // declared only in editor builds, which declare the flag
     }
     static if game.paused { return }     // error: a 'static if' condition must be a const
 }
@@ -300,14 +300,14 @@ func endFrame(_ game: &Game) {
 ```swift
 func save<T>(_ value: &T, into w: mutable &Writer) {
     static if T.conforms(Pod.self) && T.isPaddingFree {
-        w.bytes(of: &value)                             // a Float or a Vec3: its bytes, as they are
+        w.bytes(of: value)                              // a Float or a Vec3: its bytes, as they are
     } else static if T.conforms(Serializable.self) {
         value.serialize(into: mutable &w)               // List, String and Map conform in std
     } else static if T.isConstructible {                // a struct whose fields this code all sees
         w.beginObject(T.name)
         static for field in T.fields where !field.has(Transient.self) {   // skip live links and caches
             w.key(field.name)
-            save(&value[field], into: mutable &w)       // each copy checked with its own field's type
+            save(value[field], into: mutable &w)        // each copy checked with its own field's type
         }
         w.endObject()
     } else {
@@ -322,7 +322,7 @@ func save<T>(_ value: &T, into w: mutable &Writer) {
 
 **`static for` repeats its body once per field, and checks each copy with that field's type.**
 
-**`value[field]` is the field's place, as `value.pos` is, so `&value[field]` lends the field where it lies.** Only an imported bitfield or an under-aligned field goes through a temporary.
+**`value[field]` is the field's place, as `value.pos` is, so `save(value[field], …)` lends the field where it lies.** Only an imported bitfield or an under-aligned field goes through a temporary.
 
 **`T.conforms(P.self)`, `T.isPaddingFree` and `T.isConstructible` are `const` queries**, so `static if` can test them.
 

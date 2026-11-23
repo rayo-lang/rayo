@@ -49,8 +49,10 @@
 **A call's borrows begin together, after its places are worked out** ([01](../../spec/01-values-and-ownership/parameters.md#evaluation-order-and-when-a-calls-borrows-begin)). So every borrow and take of one call is checked against the others, and a value read for an argument is done before the call lends or takes its place:
 
 ```swift
+func f(_ a: mutable &Int, _ b: &Int) { … }
+
 items.append(items.count)     // fine: items.count is read, and done, before append borrows items
-f(mutable &x, &x)             // error: two borrows of x overlap for the whole call
+f(mutable &x, x)              // error: two borrows of x overlap for the whole call
 ```
 
 **An optional chain or `!` reads the optional, so its borrow begins there.** An assignment through an optional chain works out the rest of its place after its right side, whose accesses have then ended.

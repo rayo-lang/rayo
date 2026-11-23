@@ -78,7 +78,7 @@ let inv = level.alloc Inventory()        // 'items' comes from 'level' too
 extension List {
     alloc func filter(_ keep: (&Element) -> Bool) -> List<Element> where Element: Copyable {
         var out = alloc List<Element>()                  // the allocator the call received
-        for x in &self where keep(&x) { out.append(copy x) }
+        for x in &self where keep(x) { out.append(copy x) }
         return consume out
     }
 }
@@ -97,7 +97,7 @@ extension List {
 ```swift
 struct Level(var names: List<String> = alloc List<String>()): Allocating {
     mutating func addName(_ n: &Text) {
-        names.append(alloc String(&n))         // the level's allocator: the string goes where the list is
+        names.append(alloc String(n))          // the level's allocator: the string goes where the list is
     }
     alloc func clone() -> Level {
         alloc Level(names: alloc names.clone())   // the received allocator: each part goes where the copy goes

@@ -7,13 +7,13 @@ Functions state what their calls accept and return. Closures also carry code tog
 A **closure** is a value of a closure literal's concrete type ([below](#closures-by-concrete-type-some-f)). Passed for a function-type parameter, it becomes a view of itself, which may borrow locals and never allocates. The function type says whether the closure only reads what it captures, writes it, or consumes it:
 
 ```swift
-func each(_ xs: &[Enemy], _ body: (&Enemy) -> Void) { for x in &xs { body(&x) } }
-func eachMut(_ xs: &[Enemy], _ body: mutating (&Enemy) -> Void) { for x in &xs { body(&x) } }
+func each(_ xs: &[Enemy], _ body: (&Enemy) -> Void) { for x in &xs { body(x) } }
+func eachMut(_ xs: &[Enemy], _ body: mutating (&Enemy) -> Void) { for x in &xs { body(x) } }
 
 var dead = 0
-each(&enemies) { e in log("hp \(e.hp)") }                // reads only: a plain function type
-eachMut(&enemies) { e in if e.hp <= 0 { dead += 1 } }    // writes 'dead': a mutating function type
-each(&enemies) { e in if e.hp <= 0 { dead += 1 } }       // error: a mutating closure where a non-mutating one is expected
+each(enemies) { e in log("hp \(e.hp)") }                 // reads only: a plain function type
+eachMut(enemies) { e in if e.hp <= 0 { dead += 1 } }     // writes 'dead': a mutating function type
+each(enemies) { e in if e.hp <= 0 { dead += 1 } }        // error: a mutating closure where a non-mutating one is expected
 ```
 
 **Functions may share a name when their argument labels ([01](../01-values-and-ownership/parameters.md#argument-labels)) or parameter types differ.** Whether a method is plain, `mutating` or `consuming` never tells overloads apart, so two methods of a type that differ only in how they take `self` are a compile error ([04](../04-types/collections.md#mutating-and-consuming-methods)). A call picks among such overloads in these steps:
@@ -27,6 +27,17 @@ each(&enemies) { e in if e.hp <= 0 { dead += 1 } }       // error: a mutating cl
 func f(_ x: Int) { … }      // wins for an Int argument: it alone declares no type parameters
 func f<T>(_ x: T) { … }     // needs no conversion either, but declares T
 ```
+
+**A place lent where a `&T` is expected is a conversion, so of two overloads that differ only in whether they take an argument by reference, the one that takes it as written wins** ([Implicit conversions](implicit-conversions.md#places-lent-where-a-reference-is-expected)). A `&Int` converts to no `Int`, so `&a` picks the overload that takes a reference. A bare place of a type that isn't implicitly copyable picks the owning overload the same way, and then writes `consume` or `copy` as an owning parameter needs ([01](../01-values-and-ownership/references.md#places-given-to-a-position)).
+
+```swift
+func g(_ x: Int) { … }      // g(a) calls this one: it takes 'a' as written
+func g(_ x: &Int) { … }     // g(&a) calls this one, since '&a' is a '&Int'
+func h(_ e: Enemy) { … }    // h(boss) calls this one, and is an error: write 'consume boss', 'copy boss' or '&boss'
+func h(_ e: &Enemy) { … }   // h(&boss) calls this one
+```
+
+**A bare argument that every remaining candidate lends counts in step 4 as the `&p` it makes**, since the lending then tells no candidate apart. So only the conversions after it count. A map of `String` keys looks up a `&String` and a `&Text` ([04](../04-types/collections.md#hash-maps-and-sets)), and both lend `name` in `scores[name]`. The `&String` lookup takes the `&name` with no further conversion, so it wins, as it does for `scores[&name]`.
 
 **These steps resolve each call on its own, without backtracking**, so type checking stays local ([11](../11-compilation-model.md#type-checking-is-local)).
 
@@ -51,7 +62,7 @@ func f<T>(_ x: T) { … }     // needs no conversion either, but declares T
 
 **A closure literal's body is a function body of its own.** `return` and `throw` leave the closure, `break` and `continue` target only loops inside it, and `await` can't appear in it, even in a `task func`, since a closure is called, not stepped ([07](../07-concurrency/tasks.md#semantics)).
 
-**A closure's parameter types come from a written parameter clause or the expected type**, never from the body, since inference is local ([11](../11-compilation-model.md#type-checking-is-local)). The grammar gives the syntax of trailing closures, `$0` and `{ x in … }` ([12](../12-grammar/constructs.md#expressions)). **A closure's parameters hold their arguments as a function's do**: a `&T` or `mutable &T` parameter names the caller's place, and a `T` parameter owns its argument ([01](../01-values-and-ownership/parameters.md#parameters)). So `e` above is a `ref let` of each enemy, and `body(&x)` lends it.
+**A closure's parameter types come from a written parameter clause or the expected type**, never from the body, since inference is local ([11](../11-compilation-model.md#type-checking-is-local)). The grammar gives the syntax of trailing closures, `$0` and `{ x in … }` ([12](../12-grammar/constructs.md#expressions)). **A closure's parameters hold their arguments as a function's do**: a `&T` or `mutable &T` parameter names the caller's place, and a `T` parameter owns its argument ([01](../01-values-and-ownership/parameters.md#parameters)). So `e` above is a `ref let` of each enemy, and `body(x)` lends it.
 
 **Only closure literals capture.** These declarations inside a body name none of the body's locals, parameters or `self`:
 
@@ -65,7 +76,7 @@ func f<T>(_ x: T) { … }     // needs no conversion either, but declares T
 
 ```swift
 let lowest = Int.min        // the static property
-let m = x.min(&y)           // Comparable's instance method, for an Int 'x'
+let m = x.min(y)            // Comparable's instance method, for an Int 'x'
 ```
 
 The overload rules above, by labels, parameter types and how a method takes `self`, apply within each namespace.
@@ -108,7 +119,7 @@ extension Int {
 
 **When the first match that can be called is a function, the name gathers candidates across scopes:**
 
-- **Calls.** The candidates are every function of that name in that match's scope and in scopes 3 to 5 together. Those hold the instance members the body sees, the static members of its own type and the enclosing types outward, and the module's scope. The overload rules choose among them ([above](#functions-and-closures)). So `min(a, b)` reaches the free two-argument function, `min(&b)` reaches the member, and `helper()` in a member of `Outer.Inner` reaches a static `Outer.helper`.
+- **Calls.** The candidates are every function of that name in that match's scope and in scopes 3 to 5 together. Those hold the instance members the body sees, the static members of its own type and the enclosing types outward, and the module's scope. The overload rules choose among them ([above](#functions-and-closures)). So `min(a, b)` reaches the free two-argument function, `min(b)` reaches the member, and `helper()` in a member of `Outer.Inner` reaches a static `Outer.helper`.
 - **Function values.** A name used as a function value (below), not called, draws its candidates from the same scopes, and the expected type chooses, as for any overloaded name ([Function-typed values](#function-typed-values)). Instance methods aren't function values, so they are never candidates there.
 - **Ties.** Step 4's tie-breaks apply first, so a free `f(_ x: Int)` beats a generic member `f<T>(_ x: T)`. A tie left after them goes to the candidate from the nearest scope. So a nested `func f(_ x: Int)` shadows a free one, an enclosing type's static function beats a free one, and a member beats a free one.
 
@@ -151,7 +162,7 @@ func use(_ f: (Float, Float) -> Float) { … }
 enemies.popLast()                 // error: the popped enemy is never used
 _ = enemies.popLast()             // fine: dropped on purpose
 alloc scores.sorted()             // error: a sorted copy, never used; 'scores.sort()' sorts in place
-let saved = save(&level)          // error if no code reads 'saved': its error would be lost
+let saved = save(level)           // error if no code reads 'saved': its error would be lost
 ```
 
 **A value whose type isn't `Void` or `Never` must be used, or it is a compile error.** A value nobody uses is usually a bug: an error dropped, or `alloc x.sorted()` written where `x.sort()` was meant. The rule covers every type, so it also catches an error however deeply a value holds it ([10](../10-errors-and-safety/typed-errors.md#keeping-an-error-as-a-value)). `Void` carries nothing, and an expression of type `Never` never finishes, so neither is checked. A call that returns `Void!Never` has type `Void` ([10](../10-errors-and-safety/typed-errors.md#what-a-failure-type-names)), so it is exempt too.
@@ -165,10 +176,10 @@ let saved = save(&level)          // error if no code reads 'saved': its error w
 - assigned to a local, by its declaration or a later assignment, where no path from there reads it before an assignment overwrites it or the local's scope ends.
 
 ```swift
-var r = save(&a)                  // error: the next line overwrites it before any code reads it
-r = save(&b)
-check(&r)
-r = save(&c)                      // error: no code reads it before the scope ends
+var r = save(a)                   // error: the next line overwrites it before any code reads it
+r = save(b)
+check(r)
+r = save(c)                       // error: no code reads it before the scope ends
 ```
 
 **A value that one path reads is used, though another path overwrites it**, since the compiler can't tell which path a run takes. So is a value that a loop's next pass reads, though the last pass leaves it unread.
@@ -176,8 +187,8 @@ r = save(&c)                      // error: no code reads it before the scope en
 **`_ = consume x` drops a value on purpose.** It takes `x`'s value, and destroys it at the end of its statement. `_ = x` of an implicitly copyable value drops a copy, and leaves `x` as it was ([01](../01-values-and-ownership/references.md#places-given-to-a-position)). `let _ = x` is a compile error ([01](../01-values-and-ownership/bindings.md#bindings-with-no-name)).
 
 ```swift
-_ = r.value?.submit(&mesh)        // a Void?: nil if the object was gone and 'submit' never ran
-_ = try? save(&level)             // a Void?: nil if the save failed
+_ = r.value?.submit(mesh)         // a Void?: nil if the object was gone and 'submit' never ran
+_ = try? save(level)              // a Void?: nil if the save failed
 
 let zone = profiler.zone("physics")   // kept only so its deinit records the time
 step(mutable &world, dt: dt)
@@ -296,9 +307,9 @@ func lock<R: ~Scoped>(_ body: consuming (mutable &T) -> R) -> R { … }   // Mut
 A closure keeps nothing that depends on its parameters, whether a parameter is lent its argument or given it:
 
 ```swift
-m.lock { d in kept = &d.items.span }                  // error: 'kept' would depend on 'd', the closure's parameter
+m.lock { d in kept = d.items.span }                   // error: 'kept' would depend on 'd', the closure's parameter
 let names = alloc entries.map { &$0.name }            // fine: the closure returns a reference into its parameter, and keeps none
-for line in src.lines() { collected.append(&line) }   // fine: lines() returns a SharedIterator, whose lines outlive it
+for line in src.lines() { collected.append(line) }    // fine: lines() returns a SharedIterator, whose lines outlive it
 ```
 
 **Nothing a closure stores into its captures may depend on its parameters, or on what they carry.** Rule 5 rejects such a store in a closure body ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-5-the-callee-side)), and a call absorbs nothing from its arguments into the closure, by rule 4 ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-4-absorption)). A closure may still return what depends on a parameter, as the `map` above does. The call's result, and every absorbing argument, by rule 4, still depend on what the closure captures, since the closure is the call's `self`.
@@ -317,7 +328,7 @@ struct Hotkey(var action: Closure<() -> Void>)
 let id = 7
 var ping = Hotkey(action: { [copy id] in log("pressed \(id)") })   // 'id' is copied in, and stays usable here
 var level = alloc Box(alloc Level())
-var load = Hotkey(action: { [move level] in start(&level.value) }) // 'level' is moved in: it can't be used after this
+var load = Hotkey(action: { [move level] in start(level.value) })  // 'level' is moved in: it can't be used after this
 var oops = Hotkey(action: { log("pressed \(id)") })                // error: 'id' isn't listed
 ```
 
@@ -402,7 +413,7 @@ let now: () -> Double = { unsafe { platform_time_seconds() } }   // a Rayo funct
 A function-typed value views its closure's storage, so it can't outlive that storage:
 
 ```swift
-let put: (mutable &List<&Text>) -> Void = { o in o.append(&src) }   // the literal lives as long as 'put'
+let put: (mutable &List<&Text>) -> Void = { o in o.append(src) }    // the literal lives as long as 'put'
 func pick() -> (Int, Int) -> Int { max }                           // fine: a named function views no storage
 func inc() -> (Int) -> Int { return { x in x + 1 } }               // fine: nor does a literal that captures nothing
 func sorted(by less: (Int, Int) -> Bool = { a, b in a < b }) { … } // fine, as a default, for the same reason
@@ -411,7 +422,7 @@ func mk() -> () -> Int { let x = 5; return { [copy x] in x } }     // error: the
 
 **A value of function type is a view of a closure's storage**, where all its captures, owned ones included, live. Converting a closure to a function type makes such a view. A closure here is any value of a closure's concrete type, such as a literal, a local, parameter or field of a literal's anonymous type, or a `some F` parameter. The view depends on the storage and on what the closure carries ([02](../02-views-and-dependencies/dependency-projection-and-results.md#closure-calls)). A non-`mutating` function value is a copyable shared view; a `mutating` or `consuming` one is move-only. None is implicitly copyable, so a place holding one writes a mark wherever it is given ([01](../01-values-and-ownership/moves-copies-destruction.md#implicitly-copyable-types)).
 
-- **A non-`consuming` closure is borrowed as its kind needs** ([Implicit conversions](implicit-conversions.md#function-values-of-closures-in-places)). A non-`mutating` one is borrowed shared, whatever the function type, so the place holding it is lent with `&`, as in `each(&xs, &show)`. A `mutating` one is borrowed exclusively, so the place holding it is lent with `mutable &`, as in `run(mutable &grow)`, and is usable again after the view's last use.
+- **A non-`consuming` closure is borrowed as its kind needs** ([Implicit conversions](implicit-conversions.md#function-values-of-closures-in-places)). A non-`mutating` one is borrowed shared, whatever the function type, so the place holding it is lent with `&`, as in `each(xs, &show)`. A `mutating` one is borrowed exclusively, so the place holding it is lent with `mutable &`, as in `run(mutable &grow)`, and is usable again after the view's last use.
 - **A `consuming` closure is handed over.** The conversion consumes the source place, written `consume f` ([01](../01-values-and-ownership/moving-values-out.md#moving-values-out)), and the value takes over the captures but not their memory, so it still can't outlive that memory. Calling it moves out of the captures and destroys the rest; dropping it uncalled destroys them all.
 - **Converting a function value never adds ownership.** A value accepted where a stronger kind is expected views the same storage the same way: called through a `consuming` type, a borrowed closure runs with the access it was lent, and dropping the value destroys nothing.
 - **Named functions and operators are function values too.** A named function other than `ptr(to:)` ([10](../10-errors-and-safety/unsafe-code.md#taking-an-address)), a static method or an operator, such as `max` or the `+` in `combine: +`, converts to each of these, with parameter types lining up as a witness's do ([01](../01-values-and-ownership/parameters.md#parameters)):

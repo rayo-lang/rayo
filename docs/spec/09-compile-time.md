@@ -29,7 +29,7 @@ func diff<T>(_ old: &T, _ new: &T) -> Delta<T> {
     return consume d
 }
 
-let d = diff(&lastSent, &player)                       // d: Delta<Player>
+let d = diff(lastSent, player)                         // d: Delta<Player>
 if d.hp != nil { send(d.hp) }                          // a generated field, named like a written one
 ```
 

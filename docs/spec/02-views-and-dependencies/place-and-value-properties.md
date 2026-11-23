@@ -63,7 +63,7 @@ if ref var e = mutable &world.enemies[h] { e.hp = 0 }
 ref let pos = &world.enemies[h]!.pos             // the borrow accessor; '!' panics on a stale handle
 ```
 
-**A `borrow` lends a place for reading, and a `mutate` lends it for change.** Each body hands out its place as a `get` body returns a value: as its single expression, or with `return`. So a `borrow` body writes `&` before its place, and a `mutate` body writes `mutable &`, as a `return` of a place writes its mark ([01](../01-values-and-ownership/references.md#places-given-to-a-position)). Nothing is copied or moved, so the caller reaches the place itself.
+**A `borrow` lends a place for reading, and a `mutate` lends it for change.** Each body hands out its place as a `get` body returns a value: as its single expression, or with `return`. So a `borrow` body writes `&` before its place, and a `mutate` body writes `mutable &`. The property's type is the place's own, not a reference, so nothing there expects a `&T` that would lend the place with no mark ([01](../01-values-and-ownership/references.md#places-given-to-a-position)). Nothing is copied or moved, so the caller reaches the place itself.
 
 **A place property with a `borrow` and a `mutate` serves `&` and `mutable &` under one name.** Reading through it, as `x.p.m` does, and `&x.p` use its `borrow`. Changing through it, as `x.p.m = v` or a `mutating` call on `x.p` does, and `mutable &x.p` use its `mutate`. A place property with only a `borrow` lends its place only for reading, so a change through it, or `mutable &` of it, is a compile error, since nothing lends that place for change:
 
@@ -71,7 +71,7 @@ ref let pos = &world.enemies[h]!.pos             // the borrow accessor; '!' pan
 extension Squad {
     var leader: Enemy { borrow { &members[0] } }   // a borrow and no mutate
 }
-show(&squad.leader)                                // fine: the borrow
+show(squad.leader)                                 // fine: the borrow
 squad.leader.hp -= 1                               // error: 'leader' has no 'mutate'
 heal(mutable &squad.leader)                        // error: 'leader' has no 'mutate', so 'mutable &' can't lend it
 ```
@@ -137,7 +137,7 @@ extension Inventory {
 struct Inventory(var items: List<Item>) {
     subscript(i: UInt) -> Item { borrow { &items[i] } mutate { mutable &items[i] } }
 }
-func firstName(_ inv: &Inventory) -> &Text { &inv[0].name }   // fine: the reference depends on 'inv', not on '0'
+func firstName(_ inv: &Inventory) -> &Text { inv[0].name }    // fine: the reference depends on 'inv', not on '0'
 ```
 
 **The kinds are rule 3's**, since the accessor is a call ([Rule 3: Call results](dependency-projection-and-results.md#rule-3-call-results)). The place depends exclusively on each `mutable &` source, and on `self` through a `mutate` when `self` is a source. It depends shared on every other source, and on no argument that isn't one. Each source's set keeps its own kinds. So `cur[graft: mutable &spare]` depends exclusively on `spare` and what it holds, not on `cur`, and a `mutable &` parameter that no item names, such as a log the accessor writes to, stays free.
@@ -150,7 +150,7 @@ struct Pair(var a: Int, var b: Int) {
 }
 func leak() -> &Int {
     let p = Pair(a: 1, b: 2)
-    return &p.first                      // error: the reference depends on local 'p', which is destroyed on return
+    return p.first                       // error: the reference depends on local 'p', which is destroyed on return
 }
 ```
 
@@ -182,13 +182,13 @@ A place property whose declared type is written `T?` is an **optional place prop
 
 ```swift
 let r = &world.enemies[h]                     // error: an optional place is lent only to a condition or pattern that unwraps it
-if ref let e = &world.enemies[h] { show(&e) } // fine: unwrapped at once
+if ref let e = &world.enemies[h] { show(e) }  // fine: unwrapped at once
 ```
 
 **No such `T?` or tuple exists in memory, so none can be:**
 
 - assigned as a whole;
-- lent with `&` or `mutable &`, except to a condition or pattern that unwraps or destructures it at once;
+- lent, shared or for change, except to a condition or pattern that unwraps or destructures it at once;
 - used as a `mutating` or `consuming` receiver, such as `take()`;
 - passed as an argument other than a copy.
 

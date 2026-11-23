@@ -32,7 +32,7 @@ v0.1 adds:
 - a field of a struct type, given by a nested initializer call or by a local, which the call moves, and read through the struct that holds it, as `e.stats.hp`;
 - `copy` of a field of a local or a `&T` parameter, as `copy e.stats` or `copy e.stats.hp`, which leaves the struct whole;
 - assigning and compound-assigning a field of a `var` local, as `e.hp -= 5`, and moving a field out, which leaves the struct unusable until the field is assigned again ([01](docs/spec/01-values-and-ownership/moving-values-out.md#what-can-be-moved-from));
-- `print(Int)`, and `print(Bool)`, which prints `true` or `false` ([04](docs/spec/04-types/collections.md#printing)).
+- `print(Int)` and `print(Bool)`, each given a place or a value with no `&`, the second printing `true` or `false` ([04](docs/spec/04-types/collections.md#printing)).
 
 ## v0.2: `UInt` and inline arrays
 
@@ -41,6 +41,7 @@ An inline array, `[N of T]`, holds `N` values in place, with no heap, and takes 
 v0.2 adds:
 
 - the `UInt` type, with literals typed by context, arithmetic and comparisons under the overflow rule, the conversions `UInt(i)` and `Int(u)`, and `print(UInt)` ([04](docs/spec/04-types/numbers-and-math.md#numbers));
+- a place given to a `&T` parameter with no `&`, lent as `show(boss)` lends `boss`, in place of v0.1's compile error for it ([05](docs/spec/05-protocols-generics-and-closures/implicit-conversions.md#places-lent-where-a-reference-is-expected));
 - `[N of T]` as the type of locals, results, struct fields and array elements, and of the place a `&T` parameter borrows, nested arrays included, made by a literal or by `.init(repeating:)`;
 - reading, copying, assigning and compound-assigning an element as `a[i]`, through fields and nested arrays, with a `UInt` index ([04](docs/spec/04-types/collections.md#inline-array-elements));
 - `a.count`, a `UInt`;
@@ -114,12 +115,13 @@ Statements and control flow:
 Ownership and borrowing:
 
 - `ref var` bindings, as `ref var m = mutable &p`, and the errors for a `ref var` given `&p` and a `ref let` given `mutable &p` ([01](docs/spec/01-values-and-ownership/bindings.md#bindings-that-refer-to-a-place)): v0.2 builds `ref let` alone;
-- `&` and `mutable &` of a temporary, as `show(&makeEnemy())`, and the compile error for a value given to a `&T` parameter ([01](docs/spec/01-values-and-ownership/references.md#making-a-reference)): v0.1 to v0.3 lend only a local or a parameter, or a field or an element of one;
+- `&` and `mutable &` of a temporary, as `heal(mutable &makeEnemy())`, and a value lent to a `&T`, as `show(makeEnemy())` ([01](docs/spec/01-values-and-ownership/references.md#making-a-reference)): v0.1 to v0.3 lend only a local, a parameter, a field or an element of one, or a value given to `print`;
 - `consume` of any other place, such as a parameter that owns its argument, or a temporary ([01](docs/spec/01-values-and-ownership/moving-values-out.md#moving-values-out)): v0.2 builds `consume` of a local or a field of one;
 - `ImplicitlyCopyable`, its conformances declared by a struct or an enum, and the other implicitly copyable types, such as tuples, `Handle` and `T?` ([01](docs/spec/01-values-and-ownership/moves-copies-destruction.md#implicitly-copyable-types)): v0.2 copies `Int`, `UInt` and `Bool` implicitly, and v0.2.5 `Float` and `Double`;
 - implicit copies in the positions v0.2 doesn't build, such as a condition's binding, a `for` or `when` name and a tuple literal's element ([01](docs/spec/01-values-and-ownership/moves-copies-destruction.md#implicit-copies));
 - `copy` of a field of a temporary, as `copy makeEnemy().stats`, and a `let` of one, which owns it ([01](docs/spec/01-values-and-ownership/moves-copies-destruction.md#copies)): v0.1 copies a field of a local or a `&T` parameter, and v0.2 borrows one with a `ref let`;
 - references held as values, as `let best = &enemies[0]` holds a `&Enemy`, and the other views, which are [scoped values](docs/spec/02-views-and-dependencies/scoped-values.md), with the dependencies that check them ([01](docs/spec/01-values-and-ownership/references.md#references), [02](docs/spec/02-views-and-dependencies.md#dependencies)): v0.1 and v0.2 build references only as `&T` parameters and `ref let` bindings;
+- a place lent wherever else a `&T` is expected, as `let top: &Enemy = enemies[0]` lends one, and the conversions of the reference it makes, as to a `&[T]` ([05](docs/spec/05-protocols-generics-and-closures/implicit-conversions.md#places-lent-where-a-reference-is-expected)): v0.2 lends a place given to a `&T` parameter;
 - closures and function values ([05](docs/spec/05-protocols-generics-and-closures/functions-and-closures.md#closure-kinds));
 - handles and objects ([03](docs/spec/03-handles-and-objects.md#03--handles-and-objects)).
 

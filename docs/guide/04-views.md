@@ -18,19 +18,19 @@ func splitLines(_ text: &Text, into out: mutable &List<&Text>) { ... }
 func parse(_ lines: &[&Text]) { ... }
 
 func loadScript(_ path: &Text) -> Void!IoError {
-    var source = try readText(&path)
+    var source = try readText(path)
     var lines = alloc List<&Text>()
-    splitLines(&source, into: mutable &lines)     // 'lines' now borrows 'source'
+    splitLines(source, into: mutable &lines)      // 'lines' now borrows 'source'
     source.append("\n")                           // error: 'source' is borrowed by 'lines' (used below)
-    parse(&lines)
+    parse(lines)
 }
 ```
 
 Change `source` only after the last use of `lines`, and the code compiles:
 
 ```swift
-    splitLines(&source, into: mutable &lines)
-    parse(&lines)                                 // the last use of 'lines'
+    splitLines(source, into: mutable &lines)
+    parse(lines)                                  // the last use of 'lines'
     source.append("\n")                           // fine: nothing borrows 'source' any more
 ```
 
@@ -38,20 +38,20 @@ The compiler never looked inside `splitLines`. Its signature alone tells the cal
 
 ## Views
 
-**A view is a value that borrows memory something else owns** ([02](../spec/02-views-and-dependencies/scoped-values.md#scoped-values)). The references of chapter 3 are views: `&boss` borrows an enemy, and copies nothing. A list's elements are different from one enemy, since how many there are is known only when the program runs, so a reference to them needs a count as well as an address.
+**A view is a value that borrows memory something else owns** ([02](../spec/02-views-and-dependencies/scoped-values.md#scoped-values)). The references of chapter 3 are views: a `&Enemy` borrows an enemy, and copies nothing. A list's elements are different from one enemy, since how many there are is known only when the program runs, so a reference to them needs a count as well as an address.
 
 **Some storage has no size of its own, so you only ever reach it through a reference** ([01](../spec/01-values-and-ownership/references.md#unsized-types)). You'll meet two kinds all the time:
 
 - `[T]`, a run of elements, such as the hits in a list;
 - `Text`, a run of UTF-8 text, such as the characters in a string.
 
-**A reference to either holds an address and a count.** A `&[T]` reads the elements and a `mutable &[T]` can also change them, and a `&Text` reads the text:
+**A reference to either holds an address and a count.** A `&[T]` reads the elements and a `mutable &[T]` can also change them, and a `&Text` reads the text. A `&` type written on a `let` says that it borrows, as a parameter's type does, so the `let` borrows the place it is given with no mark written, while a `let` with no type writes `&`:
 
 ```swift
-let all: &[Int] = &hits                  // the hit list's elements, read-only
+let all: &[Int] = hits                   // the hit list's elements, read-only
 let firstTwo = &hits[0..<2]              // a range of them: also a &[Int]
 var editable = mutable &hits.span        // a mutable &[Int], which can change them
-let text: &Text = &source                // the string's bytes
+let text: &Text = source                 // the string's bytes
 let word = &text[0..<5]                  // a range of bytes: also a &Text
 let name = "grunt"                       // a literal is a static &Text: its bytes last for the whole run
 ```
@@ -59,10 +59,10 @@ let name = "grunt"                       // a literal is a static &Text: its byt
 **A `[Int]` can't sit in a variable on its own.** Its count isn't part of its type, so the compiler can't know how much room it takes. You always hold one through a reference:
 
 ```swift
-let run: [Int] = hits.span               // error: '[Int]' is unsized; write '&hits.span'
+let run: [Int] = hits.span               // error: '[Int]' is unsized; declare 'run' a '&[Int]'
 ```
 
-**A `&String` turns into a `&Text`, and a `&List<T>` into a `&[T]`, where the type asks for one.** Where a function expects a `&Text`, you lend it the `String` itself with `&`, and the reference you get refers to the string's text ([01](../spec/01-values-and-ownership/bindings.md#conversions)). A list turns into a reference to its elements the same way. Nothing is copied, so a function that only reads text takes a `&Text`, and its callers lend whatever they have, as `loadScript` does above.
+**A `&String` turns into a `&Text`, and a `&List<T>` into a `&[T]`, where the type asks for one.** Where a function expects a `&Text`, you give it the `String` itself, which the call lends, and the reference the function gets refers to the string's text ([05](../spec/05-protocols-generics-and-closures/implicit-conversions.md#places-lent-where-a-reference-is-expected)). A list turns into a reference to its elements the same way. Nothing is copied, so a function that only reads text takes a `&Text`, and its callers lend whatever they have, as `loadScript` does above.
 
 **A string is indexed by byte offset.** A range of a string must start and end on Unicode scalar boundaries, or taking it panics. So a `&Text` always refers to whole UTF-8 sequences ([04](../spec/04-types/collections.md#strings)).
 
@@ -124,7 +124,7 @@ Each `keywords[i]` is a `static Token`, which can go anywhere ([02](../spec/02-v
 **Each scoped value has a dependency set: the places it borrows, each shared or exclusive** ([02](../spec/02-views-and-dependencies.md#dependencies)). What a value **carries** is its dependency set.
 
 ```swift
-let text: &Text = &source                 // carries 'source', shared
+let text: &Text = source                  // carries 'source', shared
 let word = &text[0..<5]                   // carries what 'text' carries
 let tok = Token(text: word, line: 1)      // so does the token that holds it
 source.append("!")                        // error: 'source' is borrowed by 'tok' (used below)
@@ -139,7 +139,7 @@ editable[0] = 0
 
 **A reference taken from a place borrows that place**, since the reference reaches only that place's storage and what the place owns.
 
-**A value made from a view carries everything the view carries**: a copy of the reference, a range of what it refers to, and a struct or list that holds it. So `word` carries `source` because it came from `text`, though no `&source` appears in its line.
+**A value made from a view carries everything the view carries**: a copy of the reference, a range of what it refers to, and a struct or list that holds it. So `word` carries `source` because it came from `text`, though `source` doesn't appear in its line.
 
 **A value with a `deinit` of its own keeps its set borrowed until it's destroyed**, since the `deinit` may read what the value borrows. A `List` is an exception: its `deinit` only destroys its elements and frees its buffer, so a `List<&Text>`'s borrows end at its last use ([02](../spec/02-views-and-dependencies/dependency-lifetimes.md#when-destroying-a-value-counts-as-using-it)).
 
@@ -148,14 +148,14 @@ editable[0] = 0
 ```swift
 func longest(_ lines: &[&Text]) -> &Text { ... }
 
-let title = longest(&lines)               // borrows 'lines', and what 'lines' carries: 'source'
+let title = longest(lines)                // borrows 'lines', and what 'lines' carries: 'source'
 source.append("\n")                       // error: 'source' is borrowed by 'title' (used below)
 log("\(title)")
 ```
 
 **A call's result borrows what the call was given** ([02](../spec/02-views-and-dependencies/dependency-projection-and-results.md#rule-3-call-results)). The caller never looks inside the function. From the signature alone, it assumes the result borrows everything the function could reach:
 
-- each argument lent with `&` or `mutable &`, `self` included;
+- each argument it borrows, shared or for change, `self` included;
 - everything those arguments carry;
 - what each argument the function owns carries, but not the argument itself, which the function now owns.
 
@@ -167,18 +167,18 @@ log("\(title)")
 
 ```swift
 var lines = alloc List<&Text>()
-splitLines(&source, into: mutable &lines)     // 'lines' takes on what '&source' carries: 'source'
+splitLines(source, into: mutable &lines)      // 'lines' takes on what the reference to 'source' carries: 'source'
 var names = alloc List<&Text>()
-names.append(&banner)                         // 'self' absorbs too: 'names' takes on 'banner'
+names.append(banner)                          // 'self' absorbs too: 'names' takes on 'banner'
 
 struct Scanner(var text: &Text, var pos: UInt = 0): Scoped {
     mutating func scan(into out: mutable &List<Token>) { ... }
 }
 
-var scanner = Scanner(text: &source)
+var scanner = Scanner(text: source)
 scanner.scan(into: mutable &tokens)           // 'tokens' takes on what 'scanner' carries: 'source'
 scanner.pos = 0                               // fine: 'tokens' doesn't borrow 'scanner' itself
-use(&tokens)
+use(tokens)
 ```
 
 **After a call, each scoped `mutable &` argument takes on what the other arguments borrow.** This is **absorption** ([02](../spec/02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-4-absorption)), and it's how `lines` learns that it borrows `source`.
@@ -189,7 +189,7 @@ use(&tokens)
 
 **Only a scoped argument absorbs.** A `List<Int>` holds no views, so it takes on nothing.
 
-**A shared reference, or a number, lends an absorbing argument only what it carries.** It lends a call's result the same, as `longest` showed above. So `lines` borrows `source`, not the reference that `&source` made.
+**A shared reference, or a number, lends an absorbing argument only what it carries.** It lends a call's result the same, as `longest` showed above. So `lines` borrows `source`, not the reference the call made to it.
 
 **Another `mutable &` argument lends what it carries, not itself.** So `tokens` borrows the text the scanner refers to, and the scanner can move on while `tokens` is in use.
 
@@ -198,12 +198,12 @@ use(&tokens)
 ```swift
 func defaultName() -> &Text {
     let s = alloc "grunt"
-    return &s                             // error: the result borrows local 's', which is destroyed on return
+    return s                              // error: the result borrows local 's', which is destroyed on return
 }
 
 func addDefault(into out: mutable &List<&Text>) {
     let s = alloc "grunt"
-    out.append(&s)                        // error: 'out' would borrow local 's', which is destroyed on return
+    out.append(s)                         // error: 'out' would borrow local 's', which is destroyed on return
     out.append("grunt")                   // fine: a literal is a static reference, which borrows nothing
 }
 ```
@@ -233,7 +233,7 @@ lexer.advance()                           // error: 'lexer' is borrowed by 'syms
 use(syms)
 ```
 
-`tok.text` needs no `&`, because it already holds a `&Text`: the call takes a copy of that reference. The result is a `(&[Symbol])?`, an optional reference, so it reads `nil` when the table has no such key.
+`tok.text` already holds a `&Text`, so the call takes a copy of that reference, rather than lending the field that holds it. The result is a `(&[Symbol])?`, an optional reference, so it reads `nil` when the table has no such key.
 
 **The key is only compared, never kept.** Say so, and the result borrows the table alone:
 
@@ -260,14 +260,14 @@ use(syms)
 ```swift
 func pick(_ a: &Text, _ b: &Text) -> &Text
     where return borrows a {
-    &b                                    // error: by its 'where' clause, the result may borrow only 'a'
+    b                                     // error: by its 'where' clause, the result may borrow only 'a'
 }
 ```
 
 ## Temporaries
 
 ```swift
-let text: &Text = &(try readText("arena.script"))   // error: the String dies with this statement; write 'let source = try readText(…)'
+let text: &Text = try readText("arena.script")      // error: the String dies with this statement; write 'let source = try readText(…)'
 log("\(text)")
 ```
 
@@ -277,7 +277,7 @@ log("\(text)")
 
 ```swift
 let source = try readText("arena.script")       // the binding owns the String
-let text: &Text = &source                        // fine
+let text: &Text = source                         // fine
 log("\(text)")
 ```
 
@@ -285,7 +285,7 @@ log("\(text)")
 
 **A `for` loop keeps the temporaries of its sequence until the loop ends.**
 
-**A reference made for an argument doesn't tie the call's result to the statement.** In `splitLines(&source, into: mutable &lines)`, the `&Text` that `&source` makes lives only for the call, yet `lines` outlives it. A shared reference lends only what it carries, `source` ([above](#what-a-calls-result-borrows)). So a range of it, such as `&text[0..<5]`, borrows `source` too, not the reference it was taken through.
+**A reference made for an argument doesn't tie the call's result to the statement.** In `splitLines(source, into: mutable &lines)`, the `&Text` the call makes from `source` lives only for the call, yet `lines` outlives it. A shared reference lends only what it carries, `source` ([above](#what-a-calls-result-borrows)). So a range of it, such as `&text[0..<5]`, borrows `source` too, not the reference it was taken through.
 
 ## Staying valid after a parameter changes: `outlives`
 
@@ -293,9 +293,9 @@ log("\(text)")
 func copyAll(from src: &List<&Text>, into dst: mutable &List<&Text>)
     where dst outlives src { ... }
 
-copyAll(from: &words, into: mutable &kept)    // 'kept' borrows what 'words' carries: 'source'
+copyAll(from: words, into: mutable &kept)     // 'kept' borrows what 'words' carries: 'source'
 words.append("eof")                           // fine: without the clause, 'kept' would borrow 'words' itself
-use(&kept)
+use(kept)
 ```
 
 **`outlives` says that a subject borrows what a parameter carries, but not the parameter itself** ([02](../spec/02-views-and-dependencies/dependency-lifetimes.md#staying-valid-after-a-parameter-moves-on-outlives)). So the subject stays valid after that parameter changes or is gone.
@@ -308,8 +308,8 @@ use(&kept)
 
 ```swift
 var names = alloc List<&Text>()
-for entry in &table.entries { names.append(&entry.name) }   // 'names' borrows 'table'
-use(&names)                                                 // fine: the loop's iterator is gone
+for entry in &table.entries { names.append(entry.name) }    // 'names' borrows 'table'
+use(names)                                                  // fine: the loop's iterator is gone
 ```
 
 ## When a view must live longer
@@ -337,5 +337,6 @@ use(&names)                                                 // fine: the loop's 
 - [02 Precise dependencies](../spec/02-views-and-dependencies/dependency-lifetimes.md#precise-dependencies-opt-in): every form of `where` item, and naming a field of a parameter or a result.
 - [02 `outlives`](../spec/02-views-and-dependencies/dependency-lifetimes.md#staying-valid-after-a-parameter-moves-on-outlives): when the compiler accepts it, and values moved out of an owner.
 - [04 Collections and strings](../spec/04-types/collections.md#collections-and-strings): the owning collections beside the runs they hold, the two forms of text, and how strings are indexed.
+- [05 Places lent where a reference is expected](../spec/05-protocols-generics-and-closures/implicit-conversions.md#places-lent-where-a-reference-is-expected): how a `String` or a list given to a call reaches a `&Text` or a `&[T]`.
 - [06 Long-lived views](../spec/06-memory-and-allocators/owning-values.md#long-lived-views-into-long-lived-buffers): `Slice<T>` and the buffers it views.
 - [02 Static values](../spec/02-views-and-dependencies/scoped-values.md#static-values): values that refer only to data lasting the whole run, which types take `static`, and which values convert to one.

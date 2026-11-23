@@ -71,12 +71,12 @@ let completedLoads = alloc MpscQueue<(UInt32, LoadState)>(capacity: 256)
 // are never freed, may be passed.
 func requestFile(_ path: static &Text, _ loads: mutable &Loads) -> Handle<LoadState> {
     let h = loads.requests.insert(.pending)
-    while loads.nextTicket == 0 || loads.tickets[&loads.nextTicket] != nil {  // 0 would be a null user pointer
+    while loads.nextTicket == 0 || loads.tickets[loads.nextTicket] != nil {   // 0 would be a null user pointer
         loads.nextTicket &+= 1                                               // skips tickets still in flight after a wrap
     }
     let ticket = loads.nextTicket
     loads.nextTicket &+= 1
-    loads.tickets[&ticket] = h
+    loads.tickets[ticket] = h
     unsafe {
         let chars = &path.cchars
         plat.read_file_async(chars.baseAddress, CSize(chars.count), onFileLoaded, .init(bitPattern: CUIntPtr(ticket)))
@@ -87,7 +87,7 @@ func requestFile(_ path: static &Text, _ loads: mutable &Loads) -> Handle<LoadSt
 /// Called once per frame by main.
 func pumpLoads(_ loads: mutable &Loads) {
     while let (ticket, result) = completedLoads.pop() {   // pop() never blocks; waitPop() would
-        guard let h = loads.tickets.removeValue(forKey: &ticket) else { continue }   // a ticket never issued: ignored
+        guard let h = loads.tickets.removeValue(forKey: ticket) else { continue }    // a ticket never issued: ignored
         if ref var r = mutable &loads.requests[h] { r = consume result }   // skipped if the request was cancelled: 'result' is then dropped
     }
 }

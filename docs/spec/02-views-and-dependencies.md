@@ -13,7 +13,7 @@ func splitLines(_ text: &Text, into out: mutable &List<&Text>) { ... }
 
 var source = alloc "first\nsecond"
 var lines = alloc List<&Text>()
-splitLines(&source, into: mutable &lines)
+splitLines(source, into: mutable &lines)
 source.append("x")                               // error: source is borrowed by 'lines' (used below)
 print("\(lines.count) lines")
 ```
@@ -29,7 +29,7 @@ A view can keep several places borrowed:
 ```swift
 func visible(_ items: mutable &List<Sprite>, in cells: &[Cell]) -> mutable &[Sprite] { ... }
 
-var vis = visible(mutable &sprites, in: &grid.cells)
+var vis = visible(mutable &sprites, in: grid.cells)
 grid.cells.append(Cell())                          // error: grid.cells is borrowed by 'vis' (used below)
 cull(mutable &vis)
 ```

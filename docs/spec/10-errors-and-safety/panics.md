@@ -14,7 +14,7 @@ let share = total / players                      // panics if players is 0, in e
 
 ```swift
 catchPanic {
-    handle(&request)
+    handle(request)
 } recover: { p in
     log("request failed: \(p.message)")      // the server goes on to the next request
 }
@@ -94,10 +94,10 @@ Running out of stack, and an allocation that fails in a plain form, end the prog
 ### Messages
 
 ```swift
-func fatalError(_ message: some Formattable) -> Never
-func precondition(_ cond: Bool, _ message: some Formattable)
+func fatalError(_ message: &some Formattable) -> Never
+func precondition(_ cond: Bool, _ message: &some Formattable)
 func precondition(_ cond: Bool)
-func assert(_ cond: Bool, _ message: some Formattable)
+func assert(_ cond: Bool, _ message: &some Formattable)
 func assert(_ cond: Bool)
 
 fatalError("enemy \(id) has no mesh")      // an interpolated message, formatted only when it panics
@@ -201,7 +201,7 @@ let frame = catchPanic {
     return world.snapshot()
 } recover: { p in
     log("step failed: \(p.message)")
-    world = loadWorld(&level)                 // 'world' may be half-changed: this program rebuilds it
+    world = loadWorld(level)                  // 'world' may be half-changed: this program rebuilds it
     return alloc lastGoodFrame.clone()
 }
 ```
@@ -222,7 +222,7 @@ let frame = catchPanic {
 
 ```swift
 catchPanic {
-    views.append(&name)              // creating this closure makes 'views' depend on 'name'
+    views.append(name)               // creating this closure makes 'views' depend on 'name'
 } recover: { _ in
     name = alloc "b"                 // error: 'views' depends on 'name', and is used below
 }

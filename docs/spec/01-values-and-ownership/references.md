@@ -11,7 +11,7 @@ func show(_ e: &Enemy) { print("hp \(e.hp)") }    // borrows the caller's enemy,
 func heal(_ e: mutable &Enemy) { e.hp = 100 }    // borrows it for change
 
 var boss = Enemy(pos: .zero, hp: 40)
-show(&boss)                       // a shared reference to 'boss'
+show(boss)                        // a shared reference to 'boss', lent because 'show' takes a '&Enemy'
 heal(mutable &boss)               // a mutable reference: heal changes 'boss' in place
 let seen = &boss                  // a '&Enemy' value, which 'seen' holds
 print("hp \(seen.hp)")            // reads boss.hp through the reference
@@ -21,7 +21,7 @@ A **reference** is a value that refers to a place. A **shared reference**, of ty
 
 ## Making a reference
 
-**`&p` of a place `p` of type `T` makes a `&T`, and `mutable &p` makes a `mutable &T`.** The reference borrows `p`, shared or for change, until the reference's last use, and the law of exclusivity checks that borrow as it checks any other ([Exclusivity](exclusivity.md#the-law-of-exclusivity)). `mutable &p` needs `p` to be a [changeable place](bindings.md#changeable-places), so a shared borrow never becomes a write.
+**`&p` of a place `p` of type `T` makes a `&T`, and `mutable &p` makes a `mutable &T`.** The reference borrows `p`, shared or for change, until the reference's last use, and the law of exclusivity checks that borrow as it checks any other ([Exclusivity](exclusivity.md#the-law-of-exclusivity)). `mutable &p` needs `p` to be a [changeable place](bindings.md#changeable-places), so a shared borrow never becomes a write. Where a `&T` is expected, a bare `p` makes the same shared reference, with no `&` written ([below](#places-given-to-a-position)).
 
 - **`&` of a value lends a temporary.** A call's result or a literal is no place, so `&makeEnemy()` lends a temporary that lives to the end of its statement ([02](../02-views-and-dependencies/dependency-projection-and-results.md#temporaries)). So `heal(mutable &makeEnemy())` changes an enemy that the statement then destroys.
 - **A member lends a place as it is declared.** `&x.p` of a place property uses its `borrow`, and `mutable &x.p` its `mutate`. `mutable &` of a member with only a `borrow` is a compile error, since nothing lends that place for change ([02](../02-views-and-dependencies/place-and-value-properties.md#place-properties-borrow-and-mutate)).
@@ -78,11 +78,11 @@ for chunk in data.mutableChunks(64) {
 }
 ```
 
-**Only where the expected type is a reference to a reference does `&r` refer to the place `r` itself**, as a parameter of type `&(&T)` expects:
+**Only where the expected type is a reference to a reference does `&r` refer to the place `r` itself**, as a parameter of type `&(&T)` expects. A bare `r` is lent there the same way ([below](#places-given-to-a-position)):
 
 ```swift
 func peek(_ r: &(&Enemy)) { … }    // refers to a place that holds a reference
-peek(&best)                         // refers to 'best' itself
+peek(best)                          // lends 'best' itself, as '&best' would
 ```
 
 ## Layout
@@ -109,17 +109,17 @@ peek(&best)                         // refers to 'best' itself
 let all = &hits.span                // a '&[Int]': a pointer and a count
 var some = mutable &hits[0..<4]     // a 'mutable &[Int]' of the first four elements
 some[0] = 0                         // writes hits[0]
-let name: &Text = &player.name      // a '&String' converts to a reference to its text
+let name: &Text = player.name       // lends the String, and its '&String' converts to a reference to its text
 let greeting = "hello"              // a string literal is a 'static &Text'
-let d: &any Drawable = &sprite      // an existential reference to 'sprite'
-let run: [Int] = hits.span          // error: '[Int]' is unsized; write '&hits.span'
+let d: &any Drawable = sprite       // an existential reference to 'sprite'
+let run: [Int] = hits.span          // error: '[Int]' is unsized; declare 'run' a '&[Int]'
 ```
 
 **A reference to a sized value converts to one of an unsized type where the expected type says so**, as `&List<T>` does to `&[T]`, `&String` to `&Text`, and `&T` to `&any P` for a `T: P` ([05](../05-protocols-generics-and-closures/implicit-conversions.md#implicit-conversions)).
 
 ## Places given to a position
 
-**Every borrow, move and copy of a place is written where it happens**, so a reader sees from the code alone what happens to the place. A **position** is a part of the code that takes a value:
+**What happens to a place given to a position is written there, or follows from the type the position expects**, so a reader sees from the code alone what happens to the place. A **position** is a part of the code that takes a value:
 
 - an argument to a function or a method;
 - a subscript's index argument;
@@ -130,23 +130,30 @@ let run: [Int] = hits.span          // error: '[Int]' is unsized; write '&hits.s
 - the operand of `return`, `throw`, `await`, `try`, `try?` or `try!`;
 - an element of a tuple, array or dictionary literal.
 
-**A place given to a position writes one of four marks before it:**
+**A place given to a position may write one of four marks before it:**
 
 - `&p` lends it shared ([above](#making-a-reference));
 - `mutable &p` lends it for change;
 - `consume p` moves its value out ([Moving values out](moving-values-out.md#moving-values-out));
 - `copy p` makes a second value ([Copies](moves-copies-destruction.md#copies)).
 
-**A bare place of any type but an implicitly copyable one is a compile error that names the marks that fit**, except in the cases [below](#unmarked-places). A place of an implicitly copyable type is copied with nothing written ([Implicit copies](moves-copies-destruction.md#implicit-copies)). The last expression of an `if` or `when` arm or of an `unsafe` block stands in its position, and writes its mark there, as does each operand of `??` ([Bindings](bindings.md#if-and-when-as-values)).
+**A bare place is taken in one of two ways:**
 
-**The value a position takes has the type it expects, so a mark that doesn't fit is a compile error.** A `&T` parameter takes a shared reference, a `mutable &T` parameter a mutable one, and a `T` parameter a `T` ([Parameters](parameters.md#parameters)). So a value given to a `&T` parameter is a compile error too, and `&makeEnemy()` lends one as a temporary:
+- **Where a `&T` is expected, it is lent shared**, as `&p` would lend it, unless its own type fits ([05](../05-protocols-generics-and-closures/implicit-conversions.md#places-lent-where-a-reference-is-expected)). So a `&T` parameter takes `boss` or `&boss` alike, and a place of an implicitly copyable type is lent there too, not copied.
+- **Anywhere else, a place of an implicitly copyable type is copied** with nothing written, as its own type decides ([Implicit copies](moves-copies-destruction.md#implicit-copies)).
+
+**Any other bare place is a compile error that names the marks that fit**, except in the cases [below](#unmarked-places). Where no `&T` is expected, code writes `&` to lend a place ([05](../05-protocols-generics-and-closures/implicit-conversions.md#places-lent-where-a-reference-is-expected)). The last expression of an `if` or `when` arm or of an `unsafe` block stands in its position, and writes its mark there, as does each operand of `??` ([Bindings](bindings.md#if-and-when-as-values)).
+
+**The value a position takes has the type it expects, so a mark that doesn't fit is a compile error.** A `&T` parameter takes a shared reference, a `mutable &T` parameter a mutable one, and a `T` parameter a `T` ([Parameters](parameters.md#parameters)). So `&boss` given to an owning parameter is a compile error, and so is a bare `boss` given to a `mutable &T` one, since a borrow for change is always written. A value given to a `&T` parameter is lent as a temporary, as `&makeEnemy()` lends one ([above](#making-a-reference)):
 
 ```swift
 func keep(_ e: Enemy) { … }         // owns its argument
 
-show(boss)                          // error: 'show' takes '&Enemy'; write '&boss'
+show(boss)                          // lends 'boss' shared, since 'show' takes '&Enemy'
 keep(boss)                          // error: 'keep' takes 'Enemy'; write 'consume boss' or 'copy boss'
-show(makeEnemy())                   // error: 'show' takes '&Enemy'; write '&makeEnemy()'
+keep(&boss)                         // error: 'keep' takes 'Enemy', not a reference
+heal(boss)                          // error: 'heal' takes 'mutable &Enemy'; write 'mutable &boss'
+show(makeEnemy())                   // lends a temporary enemy, which the statement then destroys
 keep(copy boss)                     // fine: a copy of the enemy
 let hp = boss.hp                    // a Float is implicitly copyable: a copy, with nothing written
 ```

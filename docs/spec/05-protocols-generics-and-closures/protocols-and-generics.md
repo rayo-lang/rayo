@@ -35,8 +35,8 @@ func applyAoE<T: Damageable>(_ targets: mutable &[T], amount: Float) {
 - **Existentials.** Through an existential it is callable only when `P` itself implies the clause, since the existential may hold a conformer that fails it ([below](#any-p-explicit-dynamic-dispatch)).
 
 ```swift
-func lowest<T: Comparable & Copyable>(_ a: &T, _ b: &T) -> T { a.min(&b) }   // fine: T: Copyable implies the clause
-func lowest2<T: Comparable>(_ a: &T, _ b: &T) -> T { a.min(&b) }             // error: T may be move-only
+func lowest<T: Comparable & Copyable>(_ a: &T, _ b: &T) -> T { a.min(b) }    // fine: T: Copyable implies the clause
+func lowest2<T: Comparable>(_ a: &T, _ b: &T) -> T { a.min(b) }              // error: T may be move-only
 ```
 
 A generic conformer can meet such a requirement in a constrained extension. `Pair<T>` is copyable exactly when `T` is, so its conformance's conditions plus `Self: Copyable` imply the extension's `T: Copyable`:
@@ -258,9 +258,9 @@ struct Crate(var hp: Float): HasHp        // the stored field 'hp' is the witnes
 struct Rock(let hp: Float): HasHp         // error: a 'let' field witnesses only get and borrow requirements
 ```
 
-**A reference conforms to three protocols through what it refers to: `Equatable`, `Hashable` and `Formattable`.** A `&T` or `mutable &T` conforms to each when `T` does, and its witnesses are `T`'s, reached by forwarding ([01](../01-values-and-ownership/references.md#forwarding-through-a-reference)). Each of their requirements only reads the value, so the reference meets it with no access of its own. So a `Map<&Text, Int>` hashes and compares the text each key refers to ([Equality and ordering](operators.md#equality-and-ordering)), and `print(&name)` writes what `name` holds ([04](../04-types/collections.md#printing)).
+**A reference conforms to three protocols through what it refers to: `Equatable`, `Hashable` and `Formattable`.** A `&T` or `mutable &T` conforms to each when `T` does, and its witnesses are `T`'s, reached by forwarding ([01](../01-values-and-ownership/references.md#forwarding-through-a-reference)). Each of their requirements only reads the value, so the reference meets it with no access of its own. So a `Map<&Text, Int>` hashes and compares the text each key refers to ([Equality and ordering](operators.md#equality-and-ordering)), and `print("\(r)")`, for an `r` that holds a `&String`, writes the text `r` refers to ([04](../04-types/collections.md#printing)).
 
-**A reference forwards no other conformance.** A shared reference is never `Comparable`, since its `min` and `max` would return a reference, where `a.min(&b)` through forwarding returns a copy of the value, and generic code would then disagree with concrete code. A mutable reference is never `Comparable` either. Any other protocol a reference meets, it meets by a conformance of its own, such as the `Scoped` the language gives every reference, and the `ImplicitlyCopyable` it gives a shared one.
+**A reference forwards no other conformance.** A shared reference is never `Comparable`, since its `min` and `max` would return a reference, where `a.min(b)` through forwarding returns a copy of the value, and generic code would then disagree with concrete code. A mutable reference is never `Comparable` either. Any other protocol a reference meets, it meets by a conformance of its own, such as the `Scoped` the language gives every reference, and the `ImplicitlyCopyable` it gives a shared one.
 
 **These rules say where a conformance is declared, and what it implies:**
 
@@ -317,7 +317,7 @@ for w in mutable &widgets { w.value.update(dt) }        // a mutating requiremen
 | `UniquePointer<any P>`, `WeakPointer<any P>` | Unscoped existentials of objects | An object pointer of the same kind to an unscoped `T: P` |
 | `Shared<any P>`, `LocalShared<any P>`, `WeakShared<any P>` | Unscoped existentials of reference-counted values | A reference-counted pointer or weak link of the same kind to an unscoped `T: P` |
 
-**`&any P` and `mutable &any P` are references like any other**, each an **existential reference**. So they follow the rules for every reference ([01](../01-values-and-ownership/references.md#references)): a shared one is implicitly copyable, a mutable one is move-only, both are scoped, and each is a pointer and a witness table ([01](../01-values-and-ownership/references.md#layout)). `&x` and `mutable &x` of a place holding a `T: P` make one where one is expected, by a conversion ([Implicit conversions](implicit-conversions.md#implicit-conversions)). `&box.value` makes one with no conversion, since `box.value` is a place of type `any P` (below).
+**`&any P` and `mutable &any P` are references like any other**, each an **existential reference**. So they follow the rules for every reference ([01](../01-values-and-ownership/references.md#references)): a shared one is implicitly copyable, a mutable one is move-only, both are scoped, and each is a pointer and a witness table ([01](../01-values-and-ownership/references.md#layout)). `&x` and `mutable &x` of a place holding a `T: P` make one where one is expected, by a conversion, and so does a bare `x` where a `&any P` is expected ([Implicit conversions](implicit-conversions.md#implicit-conversions)). `&box.value` makes one with no conversion, since `box.value` is a place of type `any P` (below).
 
 **An existential hides its value's type, which may not be `Sendable`, so it is `Sendable` only when its protocols say so.** `any P & Sendable` accepts only `Sendable` types, so `&any P & Sendable`, a reference to an `any P & Sendable`, is `Sendable`, and so is a `Box<any P & Sendable>` ([07](../07-concurrency/race-freedom-and-sendable.md#what-may-cross-threads-sendable)).
 

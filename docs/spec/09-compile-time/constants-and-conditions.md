@@ -71,12 +71,12 @@ alloc func makePresets() -> List<Preset> {
     return consume a
 }
 
-func presets() -> &[Preset] { &enemyPresets.span }   // a reference to a const: any function may return it
+func presets() -> &[Preset] { enemyPresets.span }    // a reference to a const: any function may return it
 
 struct World(var presets: static &[Preset], …)
 
 func setUp(_ world: mutable &World) {
-    world.presets = &enemyPresets.span                 // converts to a static reference, since it refers to a const
+    world.presets = enemyPresets.span                  // converts to a static reference, since it refers to a const
     var edited = alloc enemyPresets.clone()            // fine: a run-time copy, from the ambient allocator
     edited.append(Preset(name: alloc "boss", hp: 900))
     enemyPresets.append(Preset(name: alloc "boss", hp: 900))   // error: a const is never mutated
@@ -135,9 +135,9 @@ static if !target.flag("sse4") {
 
 func store<T>(_ value: &T, into w: mutable &Writer) {
     static if T.conforms(Pod.self) && T.isPaddingFree {
-        w.bytes(of: &value)                                     // fast path for plain data: safe, one memcpy
+        w.bytes(of: value)                                      // fast path for plain data: safe, one memcpy
     } else {
-        serialize(&value, into: mutable &w)
+        serialize(value, into: mutable &w)
     }
 }
 ```

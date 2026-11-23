@@ -11,7 +11,7 @@ enum ConfigError: Error {
 func loadConfig(_ path: &Text) -> Config!ConfigError { ... }        // the result type names the error type
 
 do {
-    settings = try loadConfig(&path)      // a missing file is expected: it comes back as a value
+    settings = try loadConfig(path)       // a missing file is expected: it comes back as a value
 } catch .notFound {
     settings = Config()                   // fall back to the defaults
 } catch .badValue(field) {

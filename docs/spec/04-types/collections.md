@@ -70,7 +70,7 @@ grid[i] = 1                  // checked when it runs: panics when 'i' is 64 or m
 var names = alloc List<String>()          // owns its buffer: move-only, allocated through an allocator
 names.append(alloc "grunt")               // a String owns its text, so it is made with 'alloc' too
 names.append(alloc "brute")
-let all: &[String] = &names               // a reference to the list's elements, which borrows 'names'
+let all: &[String] = names                // a reference to the list's elements, which borrows 'names'
 let firstTwo = &names[0..<2]              // a '&[String]' of the first two
 ```
 
@@ -108,7 +108,7 @@ The other rows, such as the owning collections and `Handle`, are std's ([11](../
 ```swift
 let jump: Name = "jump"                     // a literal: interned by the build, so no code runs
 let typed = alloc "jump"
-assert(Name(&typed) == jump)                // interned at run time: finds the literal's entry
+assert(Name(typed) == jump)                 // interned at run time: finds the literal's entry
 if action == jump { player.jump() }         // compares one pointer-sized value, never the text
 log("pressed \(jump.text)")                 // the text, as a static &Text
 ```
@@ -132,7 +132,7 @@ std's `Name` tells the two apart by `hasher.startsFromProcessSeed`, the one prop
 **`Name(existing: s)` looks `s` up and never interns it.** It returns the `Name` that `s`'s text already has, or `nil` for text never interned. So a program matches outside text against the names it defines without growing the interner:
 
 ```swift
-if let key = Name(existing: &line.key), key == jump { … }   // a key read from a file: looked up, never interned
+if let key = Name(existing: line.key), key == jump { … }    // a key read from a file: looked up, never interned
 ```
 
 **Code that must free what it interns keeps its own interner**, an owning value whose storage comes from an allocator or an arena. It holds a `List` of the texts, and a `Map` from each text to an id of the interner's own type, typed as a `Handle<T>` is by its element, so ids from two kinds of interner don't mix. Its ids compare as cheaply as a `Name`, and resolve back to text through the interner that made them. Destroying the interner, or resetting its arena, frees every text at once.
@@ -153,13 +153,13 @@ if let key = Name(existing: &line.key), key == jump { … }   // a key read from
 - a range subscript, such as `list[a..<b]`, `a[..<n]` of an inline array, or `s[a..<b]` of a run itself, which is a `[T]` place with both accessors too;
 - a column of an `SoA`, and a `TrailingArray`'s `elements` ([Data layout](data-layout.md#struct-of-arrays-soat)).
 
-**A `&List<T>` converts to a `&[T]`, and a `mutable &List<T>` to a `mutable &[T]`, where the expected type asks for one** ([01](../01-values-and-ownership/bindings.md#conversions)). So a function that reads elements takes a `&[T]`, and its callers lend what they have:
+**A `&List<T>` converts to a `&[T]`, and a `mutable &List<T>` to a `mutable &[T]`, where the expected type asks for one** ([01](../01-values-and-ownership/bindings.md#conversions)). So a function that reads elements takes a `&[T]`, and its callers give it what they have, which is lent ([05](../05-protocols-generics-and-closures/implicit-conversions.md#places-lent-where-a-reference-is-expected)):
 
 ```swift
 func average(_ xs: &[Float]) -> Float { … }
 
-average(&samples)                   // a List<Float>: lent as a reference to its elements
-average(&samples[0..<64])           // the first 64 of them
+average(samples)                    // a List<Float>: lent as a reference to its elements
+average(samples[0..<64])            // the first 64 of them
 ```
 
 **A run's members read its elements, change them where they lie, or lend parts of it.** A run is iterated through a reference to it ([Iteration](#iteration)):
@@ -173,9 +173,9 @@ average(&samples[0..<64])           // the first 64 of them
 | `split(at: m)` | Shared references to the elements before `m` and from `m` on, as a `(&[T], &[T])` |
 | `mutableSplit(at: m)` | A `mutating` method that lends the two halves as a `(mutable &[T], mutable &[T])`, which depends on the run exclusively |
 | `sort()` | A `mutating` method that reorders the elements, where `T: Comparable` |
-| `copy(from: &source)` | A `mutating` method that copies in the elements of a `&[T]` of the same count, where `T: Copyable`, and panics when the counts differ |
+| `copy(from: source)` | A `mutating` method that copies in the elements of a `&[T]` of the same count, where `T: Copyable`, and panics when the counts differ |
 | `reinterpret(as:)`, `mutableReinterpret(as:)` | The elements as a run of another `Pod` type ([Data layout](data-layout.md#plain-data-pod-and-bit-casts)) |
-| `chunks(n)`, `enumerated()`, `zip(&other)`, and their mutable forms | Sequences that hand out references to parts or elements ([below](#shared-and-mutable-views-of-one-collection)) |
+| `chunks(n)`, `enumerated()`, `zip(other)`, and their mutable forms | Sequences that hand out references to parts or elements ([below](#shared-and-mutable-views-of-one-collection)) |
 
 ```swift
 var some = mutable &hits[0..<4]           // a 'mutable &[Int]' of the first four hits
@@ -234,13 +234,12 @@ A type that conforms to `Hashing` is a **hashing type**. A map or set keeps one 
 
 **The primary initializers of `Map` and `Set` are private.** `Map(hashing:)` and `Set(hashing:)` take a hashing value, which the map owns, so a program can give a map one it configured, and every other initializer makes one with `H()`. A map's `clone()` keeps a copy of its hashing value and copies its table as it is, so the clone hashes as the original does.
 
-**A lookup borrows its key, so it takes a `&K`, and every key in a place is lent with `&`**, an implicitly copyable one too, since the position expects a reference ([01](../01-values-and-ownership/parameters.md#parameters)). A map or set whose keys are `String`s also looks up a `&Text`, since a `String` hashes and compares as its text does. A string literal is a `static &Text` already, so it passes as it is:
+**A lookup borrows its key, so it takes a `&K`, and a key in a place is lent with nothing written**, an implicitly copyable one too, since the position expects a reference ([05](../05-protocols-generics-and-closures/implicit-conversions.md#places-lent-where-a-reference-is-expected)). A map or set whose keys are `String`s also looks up a `&Text`, since a `String` hashes and compares as its text does. A string literal is a `static &Text` already, so it passes as it is:
 
 ```swift
-if let hp = scores[&name] { … }           // lends the String 'name' to the lookup
+if let hp = scores[name] { … }            // lends the String 'name' to the lookup
 if let hp = scores["grunt"] { … }         // a literal is the '&Text' the lookup takes
-if let n = counts[&id] { … }              // an Int key is lent with '&' too
-if let hp = scores[name] { … }            // error: the lookup takes '&String'; write '&name'
+if let n = counts[id] { … }               // an Int key is lent too
 ```
 
 **std provides two hashing types, both implicitly copyable**, since each holds at most a 16-byte seed, and every copy hashes as the first does:
@@ -288,12 +287,12 @@ for g in label.graphemes { … }                    // user-perceived characters
 - **Text that is passed around is a `&Text`**, which borrows the text from whatever owns it ([01](../01-values-and-ownership/references.md#references)).
 - **A `String` owns text that arrives at run time**, such as a name loaded from a file, a player's input or a message off the network. It allocates, so it is made with `alloc` ([06](../06-memory-and-allocators/allocator-basics.md#allocating-with-alloc)).
 
-**A `&String` converts to a `&Text` of its text wherever one is expected** ([01](../01-values-and-ownership/bindings.md#conversions)), so a function that reads text takes a `&Text`, and its callers lend what they have:
+**A `&String` converts to a `&Text` of its text wherever one is expected** ([01](../01-values-and-ownership/bindings.md#conversions)), so a function that reads text takes a `&Text`, and its callers give it what they have, which is lent ([05](../05-protocols-generics-and-closures/implicit-conversions.md#places-lent-where-a-reference-is-expected)):
 
 ```swift
 func greet(_ who: &Text) { log("hello, \(who)") }
 
-greet(&player.name)                       // a String field: lent as a reference to its text
+greet(player.name)                        // a String field: lent as a reference to its text
 greet("stranger")                         // a literal is a reference to its text already
 ```
 
@@ -302,7 +301,7 @@ greet("stranger")                         // a literal is a reference to its tex
 ```swift
 let name = alloc "grunt"                  // owns its text: allocates when it is first written
 let wave = level.alloc "Wave \(n) cleared"   // formats into a new String in 'level'
-let kept = alloc String(&who)             // owns a copy of the text that the '&Text' parameter 'who' names
+let kept = alloc String(who)              // owns a copy of the text that the '&Text' parameter 'who' names
 let plain: String = "grunt"               // error: without 'alloc', a literal is a static &Text
 let bare = String("grunt")                // error: making a 'String' needs 'alloc'
 ```
@@ -343,7 +342,7 @@ protocol Formattable { func format(into sink: mutable &some TextSink) where sink
 ### Printing
 
 ```swift
-func print(_ value: some Formattable)
+func print(_ value: &some Formattable)
 
 let hp = 7
 let name = alloc "grunt"
@@ -351,13 +350,12 @@ print(42)               // 42
 print(hp > 0)           // true
 print("hp \(hp)")       // hp 7
 print(0.1 + 0.2)        // 0.30000000000000004
-print(&name)            // a String place, lent: 'name' stays as it was
-print(name)             // error: 'print' owns its argument; write '&name' or 'consume name'
+print(name)             // grunt: a String place, lent, so 'name' stays as it was
 ```
 
-**`print` writes a value's text, then a newline, to the program's standard output** ([08](../08-c-interop/c-contract-and-embedding.md#what-the-runtime-needs-from-the-platform)). It is a prelude function, and owns its argument, of any `Formattable` type ([11](../11-compilation-model.md#the-prelude)). So `print(hp)` copies an implicitly copyable `hp`, and a place of any other type is lent with `&` or moved in with `consume`.
+**`print` writes a value's text, then a newline, to the program's standard output** ([08](../08-c-interop/c-contract-and-embedding.md#what-the-runtime-needs-from-the-platform)). It is a prelude function, and borrows its argument, of any `Formattable` type, since it only reads it ([11](../11-compilation-model.md#the-prelude)). So a place of any type is lent with nothing written, and a value, such as a literal or a call's result, is lent as a temporary ([05](../05-protocols-generics-and-closures/implicit-conversions.md#places-lent-where-a-reference-is-expected)).
 
-**A reference formats as what it refers to does**, since it takes its `Formattable` conformance from that value ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#conformances)). So `print(&x)` and `print("\(x)")` write the same line, and so does `print(x)` where `x` is implicitly copyable.
+**A reference formats as what it refers to does**, since it takes its `Formattable` conformance from that value ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#conformances)). So `print(x)` and `print("\(x)")` write the same line, whatever `x` holds.
 
 **The language's own types format the same text on every target and in every build**, so a program's printed output can be compared exactly with one recorded on another machine:
 
@@ -420,7 +418,7 @@ let ws: List<_> = [3, 4, 5]               // error: a List literal needs 'alloc'
 
 **A literal becomes the type its position expects, wherever that type conforms**: in an annotation, after `as`, and as an argument, a `return` value or the right side of an assignment. So `spawnAll(alloc [.grunt, .brute])` passes the `List` that the `alloc` builds, as `spawnAll(alloc List([.grunt, .brute]))` would. In an annotation or after `as`, `_` stands for what the literal fills in, as in `Set<_>`. Where a `&Text` is expected, a string literal is a `static &Text`, which converts to it ([02](../02-views-and-dependencies/scoped-values.md#converting-to-and-from-a-static-type)).
 
-**Each element of a literal is a position**, so an element given a place writes its mark, as `pair` above doesn't for `boss` ([01](../01-values-and-ownership/references.md#places-given-to-a-position)).
+**Each element of a literal is a position**, so an element given a place writes its mark, as `pair` above doesn't for `boss` ([01](../01-values-and-ownership/references.md#places-given-to-a-position)). An element whose expected type is a `&T` takes a bare place, which it lends, as an element of a `[&Enemy]` does.
 
 **A literal never allocates by itself.** An array or dictionary literal becomes a type that conforms to `Allocating`, such as a `List`, `Set` or `Map`, only under `alloc`, which passes its initializer the allocator, as it does any `Allocating` initializer's ([06](../06-memory-and-allocators/allocator-basics.md#allocating-with-alloc)). So `[3, 4, 5]` with no context is an inline array, and `alloc [3, 4, 5]` with no context is a `List`. A dictionary literal under `alloc` with no type expected is a compile error, so the code writes the type, as in `let ids: Map<Name, Int> = alloc ["jump": 0]`. An array or dictionary literal that would become an `Allocating` type without `alloc`, such as `ws` above, is a compile error.
 
@@ -510,10 +508,10 @@ for e in &enemies { total += e.hp }                        // 'e' is a 'ref let'
 for e in mutable &enemies { e.hp -= 1 }                    // 'e' is a 'ref var' of each element
 for job in consume jobs { run(consume job) }               // takes the list: 'job' owns each job
 for (i, e) in items.mutableEnumerated() { e.order = i }    // 'i' is a UInt, and 'e' a 'mutable &Item'
-for (v, f) in vels.mutableZip(&forces) { v += f * dt }     // two sequences in lockstep
+for (v, f) in vels.mutableZip(forces) { v += f * dt }      // two sequences in lockstep
 ```
 
-**A subject is written as an argument is, and what each name is follows from it** ([01](../01-values-and-ownership/bindings.md#for-and-when-names)). So iterating a place never copies it: `&s` and `mutable &s` lend it to the loop, and `consume s` moves it in.
+**A subject writes its mark, or is a value, and what each name is follows from it** ([01](../01-values-and-ownership/bindings.md#for-and-when-names)). So iterating a place never copies it: `&s` and `mutable &s` lend it to the loop, and `consume s` moves it in.
 
 ```swift
 protocol Sequence { associatedtype Iterator: IteratorProtocol; func makeIterator() -> Iterator }
@@ -585,13 +583,13 @@ for (i, e) in makeEnemies().mutableEnumerated() { … }   // the new list is a h
 ```swift
 func scale(_ s: mutable &[Float]) { for x in mutable &s { x *= 2 } }
 var names = alloc List<&Text>()
-for s in &table.entries { names.append(&s.name) }               // fine: each element depends on 'table', not the iterator
+for s in &table.entries { names.append(s.name) }                // fine: each element depends on 'table', not the iterator
 for chunk in data.mutableChunks(64) { scale(mutable &chunk) }   // one 'mutable &[Float]' at a time: 'chunk' owns it, and lends 'scale' a reborrow
 ```
 
 **An iterator that hands out mutable references lends.** Its `mutating` `next()` makes each element depend exclusively on the iterator until the next call, so two are never live at once. Keeping a chunk past its iteration, or holding two, is a compile error. `mutableSplit(at:)` gives two at once ([Runs of elements](#runs-of-elements)).
 
-**`zip` is a method of every collection.** `a.zip(&b)` reads both, and `a.mutableZip(&b)` changes the receiver's elements and reads the argument's. Each hands out tuples, and stops at the shorter, so every element is in bounds. Three or more nest: `a.zip(&b).zip(&c)` hands out `((x, y), z)`, and `a.mutableZip(&b.zip(&c))` changes `a`'s elements beside the other two's.
+**`zip` is a method of every collection.** `a.zip(b)` reads both, and `a.mutableZip(b)` changes the receiver's elements and reads the argument's. Each hands out tuples, and stops at the shorter, so every element is in bounds. Three or more nest: `a.zip(b).zip(c)` hands out `((x, y), z)`, and `a.mutableZip(b.zip(c))` changes `a`'s elements beside the other two's.
 
 **A `mutableZip` is a move-only value whose only iteration is the consuming one.** So a loop over a place holding one consumes it explicitly, and no two iterators hand out its mutable references:
 
@@ -623,7 +621,7 @@ func lives(_ p: mutable &SoA<Particle>) -> mutable &[Float] { mutable &p.life } 
 | --- | --- |
 | `data.chunks(64)` | `data.mutableChunks(64)` |
 | `items.enumerated()` | `items.mutableEnumerated()` |
-| `vels.zip(&forces)` | `vels.mutableZip(&forces)` |
+| `vels.zip(forces)` | `vels.mutableZip(forces)` |
 | `s.split(at: m)` | `s.mutableSplit(at: m)` |
 | `bytes.reinterpret(as: U.self)` | `bytes.mutableReinterpret(as: U.self)` |
 

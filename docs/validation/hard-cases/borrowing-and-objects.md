@@ -19,9 +19,9 @@
 ```swift
 func splitLines(_ text: &Text, into out: mutable &List<&Text>) { ... }
 
-splitLines(&source, into: mutable &lines)                    // the helper appends to the caller's list
-for entry in &table.entries { names.append(&entry.name) }   // a loop over a collection
-for line in src.lines() { collected.append(&line) }         // a SharedIterator over the text's lines
+splitLines(source, into: mutable &lines)                     // the helper appends to the caller's list
+for entry in &table.entries { names.append(entry.name) }    // a loop over a collection
+for line in src.lines() { collected.append(line) }          // a SharedIterator over the text's lines
 print(lines.count)
 print(names.count)
 print(collected.count)
@@ -38,8 +38,8 @@ lexer.lex(into: mutable &tokens)               // appends tokens that view the l
 fill(mutable &keys, mutable &values)           // fills two lists of references
 let texts = alloc t.map { $0.text }            // 't' is a '&[Token]'
 let labels = alloc entries.map { &$0.name }    // a reference to each entry's name
-for row in &rows { runs.append(&row[..<4]) }   // 'rows' is a List<[4 of Float]>
-copyAll(from: &src, into: mutable &dst)        // copies the references that 'src' holds into 'dst'
+for row in &rows { runs.append(row[..<4]) }    // 'rows' is a List<[4 of Float]>
+copyAll(from: src, into: mutable &dst)         // copies the references that 'src' holds into 'dst'
 ```
 
 - **Must accept** the helper, the loop and the iterator in the first block, and a user-defined sequence, such as a lexer used as a `for` sequence, whose elements are collected the same way, with no fallback to index loops.
@@ -66,7 +66,7 @@ The difficulty is that, by default, a call's result depends on everything the ca
 
 - **Must accept** this sequence, possibly with a small annotation on `find` that the compiler checks. If the spec's answer is "restructure", count it as Solved with cost, and state how common the pattern is in parsers and lookups.
 - **Must accept** a struct holding a view of a request and a view of a table, passed to a lookup whose result depends only on the table, then the request replaced while the result is used.
-- **Must accept** ordinary helpers with no annotation, such as `xs.min(by: …)`, `longer(&a, &b)` or `grid.row(y + 1)`, whose results depend only on what they view, never on a scalar argument such as `y + 1`, and `labelOf` above, whose result is used after its statement.
+- **Must accept** ordinary helpers with no annotation, such as `xs.min(by: …)`, `longer(a, b)` or `grid.row(y + 1)`, whose results depend only on what they view, never on a scalar argument such as `y + 1`, and `labelOf` above, whose result is used after its statement.
 
 ### A5 · Long-lived views into a long-lived buffer
 
@@ -116,7 +116,7 @@ _ = node.next.take()                                         // takes the value 
 pool[a]?.hp = pool[b]!.hp                                    // one element's field, assigned from another's
 world.enemies[h]?.hp -= reinforce(mutable &world.enemies)    // the right side lends the whole pool for change
 let hp = target?.hp                                          // a copy through an optional chain
-if ref let c = &h?.cell { use(&c.tag.span) }                 // a reference through an optional chain
+if ref let c = &h?.cell { use(c.tag.span) }                  // a reference through an optional chain
 ```
 
 - State whether this compiles. If it doesn't, give the idiom and its cost. Rust has the same limitation, so "same as Rust, and here is the workaround" is an acceptable answer.
@@ -221,7 +221,7 @@ The criteria below use these function values:
 let put: (mutable &List<&Text>) -> Void = { … }                      // a local function value made from a literal
 let h = Handler(onClick: { … })                                      // a literal passed to a struct's initializer
 let r = wrap({ [move s] in s.count })                                // a closure kept by its concrete type in a generic struct
-each(&enemies.span) { e in if e.hp < 10 { low.append(&tag) } }      // a closure passed for a 'some F' parameter
+each(enemies.span) { e in if e.hp < 10 { low.append(tag) } }        // a closure passed for a 'some F' parameter
 ```
 
 - **Must accept** a safe idiom, spelled out, such as a handle plus an event queue, or a context passed at fire time.

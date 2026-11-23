@@ -36,15 +36,15 @@ let shown: DoorState = if open {
 **A `{` right after a trailing closure's `}` is a compile error**, though `postfix*` would read it as a call of the first call's result. So an unlabeled closure never follows a trailing closure, and a later one carries its label, as in `} recover: {` ([05](../05-protocols-generics-and-closures/functions-and-closures.md#trailing-closures)). To call a call's result with a closure, parenthesize the call, or bind the result first:
 
 ```swift
-makeHandler { copy cfg } { event in log(&event) }       // error: a trailing closure after the first carries a label
-(makeHandler { copy cfg })({ event in log(&event) })    // calls the handler that makeHandler returns
+makeHandler { copy cfg } { event in log(event) }        // error: a trailing closure after the first carries a label
+(makeHandler { copy cfg })({ event in log(event) })     // calls the handler that makeHandler returns
 ```
 
 **In any expression that a statement's block follows, a `{` always starts the block, never a trailing closure.** To pass a closure there, parenthesize the call:
 
 ```swift
-for x in alloc items.filter { $0.alive } { use(&x) }     // error: '{ $0.alive }' is read as the loop's body
-for x in alloc items.filter({ $0.alive }) { use(&x) }   // the closure is inside the call's parentheses
+for x in alloc items.filter { $0.alive } { use(x) }      // error: '{ $0.alive }' is read as the loop's body
+for x in alloc items.filter({ $0.alive }) { use(x) }    // the closure is inside the call's parentheses
 ```
 
 **These are the expressions that a block follows:**
@@ -69,8 +69,8 @@ unsafe { platform_set_audio_callback(onAudioEvent, nil) }   // a statement: an o
 **`try`, `try?` and `try!` take the whole postfix chain after them**, as every prefix operator does. So `try f().x` takes the `x` of `f()`'s `Result`, and a member of the success value is written `(try f()).x` ([10](../10-errors-and-safety/typed-errors.md#propagating-errors-with-try)):
 
 ```swift
-let size = (try readText(&path)).count   // the count of the String that readText succeeds with
-let bad = try readText(&path).count      // error: '.count' applies to the Result, which has no 'count'
+let size = (try readText(path)).count    // the count of the String that readText succeeds with
+let bad = try readText(path).count       // error: '.count' applies to the Result, which has no 'count'
 ```
 
 **`alloc` takes the whole postfix chain after it, and `a.alloc` the postfix chain before it.** So `alloc x.clone()` allocates the clone, and `level.alloc xs.filter { … }` the filtered list from `level`. A `.alloc` after a postfix expression always begins an allocation, never a member access, since `alloc` is a keyword. The prefix operators come before it, so `try alloc Box(v)` is the fallible form of `alloc Box(v)`, and `try?` and `try!` apply to it as `try` does ([06](../06-memory-and-allocators/allocation-lifecycle.md#allocation-failure)).
@@ -161,7 +161,7 @@ let p = Pair.construct { … }          // any other such type is named through 
 
 ```swift
 let picked: (&Enemy)? = nil               // an optional reference
-let slot: &Enemy? = &world.enemies[h]     // a reference to an optional element
+let slot: &Enemy? = spare                 // a reference to an optional: 'spare' is a local Enemy?
 let name: (static &Text)? = nil           // an optional static reference to text
 ```
 

@@ -251,9 +251,9 @@ try tx.send(consume r)    // fine in a function that fails with Disconnected<Req
 ```swift
 let (promise, lightmap) = Future<Lightmap>.make()                // promise: a Promise<Lightmap>, lightmap: a Future<Lightmap>
 _ = Thread.start(name: "bake") { [move promise, move level] in   // '_ =' detaches the thread
-    _ = promise.fulfill(bakeLightmap(&level))                    // '_ =': if nobody waits any more, the lightmap is destroyed
+    _ = promise.fulfill(bakeLightmap(level))                     // '_ =': if nobody waits any more, the lightmap is destroyed
 }
-if let map = lightmap.wait() { apply(&map) }                     // parks until the bake is done; nil if its Promise went unfulfilled
+if let map = lightmap.wait() { apply(map) }                      // parks until the bake is done; nil if its Promise went unfulfilled
 ```
 
 **The ends are move-only, unscoped values that point to shared heap state, so `T` must be `~Scoped`.** Each is `Sendable` when `T` is, so the producer's thread can own the `Promise`. Neither is `Synchronized`: each has one owner, and fulfilling or waiting consumes the end, so a future has one producer and one waiter.
@@ -277,7 +277,7 @@ It is `true` once the future is fulfilled or disconnected, and then a `wait()` o
 
 ```swift
 while !lightmap.isReady { drawLoadingScreen() }   // never parks: checks once a frame
-if let map = lightmap.wait() { apply(&map) }      // returns at once: the bake is done, or its Promise is gone
+if let map = lightmap.wait() { apply(map) }       // returns at once: the bake is done, or its Promise is gone
 ```
 
 **A future is disconnected as a channel is, once the end on one side is gone** ([above](#disconnected-channels)):
