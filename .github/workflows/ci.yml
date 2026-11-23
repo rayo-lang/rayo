@@ -64,10 +64,11 @@ jobs:
           # The test paths are the changed paths that can change what a test does, which `select_tests.py` names,
           # so CI and a local run of the tests agree on them. The code jobs also run the scripts that pick the tests
           # and check the imports, which no test reads. The docs check reads every Markdown file, its own scripts
-          # and every file a link names, so a deleted file of any kind can break a link.
+          # and every file a link names, so a deleted file of any kind can break a link. The docs job also tests the
+          # benchmark script, since the benchmark job doesn't block a merge.
           test_paths=$(python3 scripts/select_tests.py <<< "$changed")
           script_paths='^scripts/(select_tests|run_affected_tests|check_imports)\.py$'
-          docs_paths='\.md$|^scripts/|^\.github/workflows/ci\.yml$'
+          docs_paths='\.md$|^scripts/|^Benchmarks/|^\.github/workflows/ci\.yml$'
           if [ "$test_paths" != '[]' ] || grep -q -E "$script_paths" <<< "$changed"; then
             code=true
           else
@@ -75,8 +76,9 @@ jobs:
           fi
           if grep -q -E "$docs_paths" <<< "$changed" || [ -n "$deleted" ]; then docs=true; else docs=false; fi
           # The benchmarks measure the rayoc that the compiler's sources and manifest build, with a script of their
-          # own.
-          benchmark_paths='^(Sources|Benchmarks)/|^Package\.swift$'
+          # own, in a job that the workflow and the macOS toolchain's action set up.
+          benchmark_paths='^(Sources|Benchmarks)/|^Package\.swift$|^\.github/'
+          benchmark_paths+='(workflows/ci\.yml$|actions/macos-toolchain/)'
           if grep -q -E "$benchmark_paths" <<< "$changed"; then benchmarks=true; else benchmarks=false; fi
           echo "code=$code" >> "$GITHUB_OUTPUT"
           echo "docs=$docs" >> "$GITHUB_OUTPUT"
@@ -312,11 +314,12 @@ jobs:
   # The benchmarks build a pull request's rayoc and the rayoc of its base, in one job on one machine, and run each on
   # the same programs, so a rise in instructions or peak memory past the threshold fails the job. They report
   # wall-clock time and never compare it. The CI check leaves the job out, since a change may cost more on purpose:
-  # its pull request says why.
+  # its pull request says why. A push to main only builds its release rayoc, which it saves for pull requests to
+  # start from.
   benchmarks:
     name: Benchmark on macOS
     needs: changes
-    if: github.event_name == 'pull_request' && needs.changes.outputs.benchmarks == 'true'
+    if: needs.changes.outputs.benchmarks == 'true'
     runs-on: xcode-27
     timeout-minutes: 60
     env:
@@ -329,26 +332,19 @@ jobs:
       - uses: ./.github/actions/macos-toolchain
         id: toolchain
 
-      # The pull request's script measures both sides, so a base older than the script is measured too. It runs
-      # from a copy, since the checkout moves to the base and back.
-      - name: Test the benchmark script
-        working-directory: Benchmarks
-        run: python3 -m unittest discover -s .
-      - name: Copy the benchmark script
-        run: cp -R Benchmarks "$RUNNER_TEMP/benchmarks"
-
-      # A build is reused only by the same Swift compiler and LLVM, as the test jobs' are. The build of a base is
-      # saved under its commit, so each push to the pull request builds that base again only where it changed.
+      # A build is reused only by the same Swift compiler and LLVM, as the test jobs' are. Only a push to main saves
+      # one, under its commit, so a pull request whose base is that commit starts from its build, and any other
+      # starts from the latest build main saved.
       - name: Name the build's cache
         id: name
         env:
           LLVM_VERSION: ${{ steps.toolchain.outputs.llvm-version }}
-          BASE: ${{ github.event.pull_request.base.sha }}
+          COMMIT: ${{ github.event.pull_request.base.sha || github.sha }}
         run: |
           toolchain=$( (swift --version 2>&1; echo "$LLVM_VERSION") | git hash-object --stdin | cut -c 1-16)
           prefix="benchmark-build-macos-$RUNNER_ARCH-$toolchain-"
           echo "prefix=$prefix" >> "$GITHUB_OUTPUT"
-          echo "key=$prefix$BASE" >> "$GITHUB_OUTPUT"
+          echo "key=$prefix$COMMIT" >> "$GITHUB_OUTPUT"
       - name: Restore the build
         id: build
         uses: actions/cache/restore@v6
@@ -356,10 +352,26 @@ jobs:
           path: .build
           key: ${{ steps.name.outputs.key }}
           restore-keys: ${{ steps.name.outputs.prefix }}
+      - name: Build release rayoc
+        if: github.event_name == 'push'
+        run: swift build -c release --product rayoc
+      - name: Save the build
+        if: github.event_name == 'push' && steps.build.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: .build
+          key: ${{ steps.name.outputs.key }}
+
+      # The pull request's script measures both sides, so a base older than the script is measured too. It runs
+      # from a copy, since the checkout moves to the base and back.
+      - name: Copy the benchmark script
+        if: github.event_name == 'pull_request'
+        run: cp -R Benchmarks "$RUNNER_TEMP/benchmarks"
 
       # Only the base is fetched. The pull request is then built in the same place, so its build compiles only what
       # it changed. A base that can't be fetched or built leaves the pull request measured alone.
       - name: Measure the base
+        if: github.event_name == 'pull_request'
         id: base
         env:
           BASE: ${{ github.event.pull_request.base.sha }}
@@ -377,13 +389,8 @@ jobs:
             exit 0
           fi
           echo "commit=$(git rev-parse --short=8 HEAD)" >> "$GITHUB_OUTPUT"
-      - name: Save the build
-        if: steps.base.outputs.commit != '' && steps.build.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v6
-        with:
-          path: .build
-          key: ${{ steps.name.outputs.key }}
       - name: Measure the pull request and compare it with the base
+        if: github.event_name == 'pull_request'
         env:
           HEAD_COMMIT: ${{ steps.base.outputs.head }}
           BASE_COMMIT: ${{ steps.base.outputs.commit }}
@@ -402,6 +409,8 @@ jobs:
       - uses: actions/checkout@v7
       - name: Test the checker
         run: python3 -m unittest discover -s scripts
+      - name: Test the benchmark script
+        run: python3 -m unittest discover -s Benchmarks
       - name: Check links, layout and readability
         run: python3 scripts/check_docs.py
 
