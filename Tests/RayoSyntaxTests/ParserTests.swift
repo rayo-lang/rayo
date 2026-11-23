@@ -14,11 +14,35 @@ struct ParserErrorTests {
         ])
     }
 
-    @Test("a declaration whose header fails is skipped, and the parser goes on at the next declaration")
+    @Test("a function whose header fails still has its body parsed, and the parser goes on at the next declaration")
     func declarationRecovery() {
-        #expect(errors("func f(x) {\n    print(1)\n}\nfunc g() { copy }") == [
-            .missingParameterType(found: .token(")")), .missingCopiedName(found: .token("}")),
+        #expect(errors("func f(x) {\n    copy\n}\nfunc g() { copy }") == [
+            .missingParameterType(found: .token(")")), .missingCopiedName(found: .newline),
+            .missingCopiedName(found: .token("}")),
         ])
+    }
+
+    @Test(arguments: [
+        ("func f(x, y: Int = ) {}", [
+            ErrorCode.missingParameterType(found: .token(",")), .missingExpression(found: .token(")")),
+        ]),
+        ("struct S(a: Int, var 1: Bool)", [
+            .missingFieldKind(found: .token("a")), .missingFieldName(found: .token("1")),
+        ]),
+        ("func (x: Int) {\n    copy\n}", [
+            .missingFunctionName(found: .token("(")), .missingCopiedName(found: .newline),
+        ]),
+        ("func f(x {\n    copy\n}", [
+            .missingParameterType(found: .token("{")), .missingCopiedName(found: .newline),
+        ]),
+        ("struct 1 {\n    func f() { copy }\n}", [
+            .missingStructName(found: .token("1")), .missingCopiedName(found: .token("}")),
+        ]),
+    ])
+    func `an error in a declaration's header leaves the parser reporting the errors after it`(
+        source: String, expected: [ErrorCode],
+    ) {
+        #expect(errors(source) == expected)
     }
 
     @Test("declarations are separated by newlines or ';'")

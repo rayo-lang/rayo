@@ -1,8 +1,8 @@
 package import RayoDiagnostics
 internal import RayoSource
 
-/// A recursive-descent parser. It reports what it can't parse and recovers at the next statement, so one
-/// run lists every syntax error, after the lexer's.
+/// A recursive-descent parser. It reports what it can't parse and recovers at the next statement, parameter or field,
+/// so one run lists every syntax error, after the lexer's.
 package struct Parser: ~Copyable {
     /// The `ErrorCode` case of a syntax error, which takes what the parser found where it expected something
     /// else.

@@ -7,6 +7,22 @@ private func covered(by declaration: FailedDecl, in source: String) -> String {
     return String(decoding: bytes[declaration.range.start.offset..<declaration.range.end.offset], as: UTF8.self)
 }
 
+/// The name of a parameter in a failed declaration's header, or `failed` where the parameter failed.
+private func summary(of parameter: FailedDecl.HeaderItem<Param>) -> String {
+    switch parameter {
+    case .parsed(let parameter): parameter.name
+    case .failed: "failed"
+    }
+}
+
+/// The name of a field in a failed declaration's header, or `failed` where the field failed.
+private func summary(of field: FailedDecl.HeaderItem<FieldDecl>) -> String {
+    switch field {
+    case .parsed(let field): field.name
+    case .failed: "failed"
+    }
+}
+
 struct FailedSyntaxTests {
     @Test(arguments: [
         ("func f(x) {\n    print(1)\n}", FailedDecl.Kind.function, "f" as String?, "func f(x) {\n    print(1)\n}"),
@@ -32,6 +48,36 @@ struct FailedSyntaxTests {
             return
         }
         #expect(function.name == "g")
+    }
+
+    @Test func `a function whose header fails keeps its parameters and its body in the tree`() throws {
+        let file = Parser.parse("func f(a: Int, b, c: Bool) -> Int {\n    print(1)\n    copy\n}").file
+        guard case .failed(let failed)? = file.declarations.first,
+              case .function(let parameters, let result, let body) = failed.parts
+        else {
+            Issue.record("expected a failed function, found \(file.declarations)")
+            return
+        }
+        #expect(parameters.map(summary(of:)) == ["a", "failed", "c"])
+        #expect(result?.spelling == "Int")
+        let statements = try #require(body).statements
+        try #require(statements.count == 2)
+        guard case .error = statements[1].kind else {
+            Issue.record("expected an error statement, found \(statements[1].kind)")
+            return
+        }
+    }
+
+    @Test func `a struct with a field that fails keeps its other fields and its members in the tree`() {
+        let file = Parser.parse("struct S(var a: Int, b: Bool, let c: Int) {\n    func f() {}\n}").file
+        guard case .failed(let failed)? = file.declarations.first,
+              case .structure(let fields, let members) = failed.parts
+        else {
+            Issue.record("expected a failed struct, found \(file.declarations)")
+            return
+        }
+        #expect(fields.map(summary(of:)) == ["a", "failed", "c"])
+        #expect(members.map(\.name) == ["f"])
     }
 
     @Test func `text that begins no declaration leaves nothing in the tree`() {
