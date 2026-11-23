@@ -194,7 +194,7 @@ struct BorrowedPlaceTests {
     }
 
     // `mutable` of a `&` is wrong wherever it stands, and a declaration whose value fails reports nothing more.
-    @Test func `a 'ref var' given 'mutable' of a '&' reports the '&'`() {
+    @Test func `a 'ref var' given 'mutable &a' reports the 'mutable', naming 'mutable a'`() {
         #expect(messages(of: "ref var x = mutable &a\n    print(x)") == [
             "17: error[E0290]: 'mutable' takes a place, not a reference; write 'mutable a'",
         ])

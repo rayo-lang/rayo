@@ -108,17 +108,14 @@ struct ExpressionChecker {
     /// `mutable lent`, written at `range`, waiting for its position. A `&` as `lent` is reported, since the reference
     /// it makes is a temporary.
     private func mutablyLentValue(of lent: Expr, in range: SourceRange) -> CheckedValue? {
-        guard case .reference(let shared) = lent.kind else {
-            return place(lent, under: self).map {
+        switch lent.kind {
+        case .reference(let operand):
+            mutableOfReference(operand, referenceRange: lent.range, in: range)
+        default:
+            place(lent, under: self).map {
                 .waiting(MutablyLentPlace(place: $0.place, placeType: $0.type, range: range))
             }
         }
-
-        // A place that failed was reported.
-        guard let referred = place(shared, under: self) else { return nil }
-        let reference = LentPlace(place: referred.place, placeType: referred.type, range: lent.range)
-        reportMutableOfReference(reference, in: range)
-        return nil
     }
 
     /// Settles `value` toward `type`, where it waits for one. A typed value is given back as it is.
