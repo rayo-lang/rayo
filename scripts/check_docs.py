@@ -15,6 +15,7 @@ import sys
 
 LINK = re.compile(r'\]\(([^)\s]+)\)')
 CODE_SPAN = re.compile(r'`[^`]*`')
+FENCE = re.compile(r'(?P<indent> *)(?P<backticks>`{3,})(?P<info>.*)')
 SENTENCE_LIMIT = 40
 PARAGRAPH_LIMIT = 120
 BASELINE = 'scripts/readability-baseline.json'
@@ -33,12 +34,30 @@ def markdown_files(root):
                 yield os.path.relpath(os.path.join(directory, name), root)
 
 
+def lines_marked_as_code(lines):
+    # Pairs each line with whether it is code: a fence line, or a line between an opening fence and its close.
+    opener = None
+    for line in lines:
+        fence = FENCE.fullmatch(line)
+        if opener is None:
+            opener = fence
+            yield line, fence is not None
+        else:
+            if closes(fence, opener):
+                opener = None
+            yield line, True
+
+
+def closes(fence, opener):
+    # As in CommonMark: no info string, at least the opener's backticks, and at most three spaces more indented.
+    return (fence is not None and not fence['info'].strip()
+            and len(fence['backticks']) >= len(opener['backticks'])
+            and len(fence['indent']) <= len(opener['indent']) + 3)
+
+
 def prose_lines(text):
-    fenced = False
-    for number, line in enumerate(text.splitlines(), 1):
-        if line.startswith('```'):
-            fenced = not fenced
-        elif not fenced:
+    for number, (line, is_code) in enumerate(lines_marked_as_code(text.splitlines()), 1):
+        if not is_code:
             yield number, line
 
 
@@ -78,12 +97,9 @@ def dash_findings(path, text):
 
 def layout_findings(path, text):
     lines = text.splitlines()
-    fenced = False
-    for number, line in enumerate(lines, 1):
+    for number, (line, is_code) in enumerate(lines_marked_as_code(lines), 1):
         previous = lines[number - 2] if number > 1 else ''
-        if line.startswith('```'):
-            fenced = not fenced
-        elif fenced:
+        if is_code:
             continue
         elif not line and not previous and number > 1:
             yield f'{path}:{number}: two blank lines in a row'
@@ -100,15 +116,15 @@ def layout_findings(path, text):
 def prose_blocks(text):
     # Paragraphs and list items, outside code blocks, headings and tables.
     block = []
-    fenced = False
-    for line in text.splitlines() + ['']:
-        starts_item = re.match(r' *(- |\d+\. )', line)
-        if line.startswith('```'):
-            fenced = not fenced
-        if fenced or line.startswith(('```', '#', '|')) or not line.strip() or starts_item:
+    for line, is_code in lines_marked_as_code(text.splitlines() + ['']):
+        if is_code or line.startswith(('#', '|')) or not line.strip():
             if block:
                 yield ' '.join(block)
-            block = [line[starts_item.end():]] if starts_item and not fenced else []
+            block = []
+        elif starts_item := re.match(r' *(- |\d+\. )', line):
+            if block:
+                yield ' '.join(block)
+            block = [line[starts_item.end():]]
         else:
             block.append(line.strip())
 

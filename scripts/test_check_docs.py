@@ -32,6 +32,27 @@ class CheckDocsTests(unittest.TestCase):
 
         self.assertEqual(findings(self.root), [])
 
+    def test_links_and_dashes_in_a_code_block_indented_in_a_list_item_are_not_checked(self):
+        self.write('README.md', '- An example:\n\n    ```md\n    [gone](gone.md) — a dash\n    ```\n')
+
+        self.assertEqual(findings(self.root), [])
+
+    def test_an_indented_fence_inside_a_code_block_does_not_close_it(self):
+        example = '- An example:\n\n    ```swift\n    let a = 1 — a dash\n    ```\n'
+        self.write('README.md', f'```md\n{example}```\n\nAfter — a dash.\n')
+
+        self.assertEqual(findings(self.root), ['README.md:9: dash: use a colon, a comma or a new sentence'])
+
+    def test_a_fence_shorter_than_its_opener_does_not_close_a_code_block(self):
+        self.write('README.md', '````md\n```swift\nlet a = 1 — a dash\n```\n````\n\nAfter — a dash.\n')
+
+        self.assertEqual(findings(self.root), ['README.md:7: dash: use a colon, a comma or a new sentence'])
+
+    def test_a_fence_with_an_info_string_does_not_close_a_code_block(self):
+        self.write('README.md', '```\nlet a = 1\n```swift\nlet b = 2 — a dash\n```\n\nAfter — a dash.\n')
+
+        self.assertEqual(findings(self.root), ['README.md:7: dash: use a colon, a comma or a new sentence'])
+
     def test_links_in_code_spans_are_not_followed(self):
         self.write('README.md', 'Links read `([06](06-memory.md#anchor))` across chapters.\n')
 
@@ -59,6 +80,11 @@ class CheckDocsTests(unittest.TestCase):
 
         self.assertEqual(findings(self.root), ['README.md:3: two blank lines in a row'])
 
+    def test_blank_lines_in_a_code_block_indented_in_a_list_item_are_not_checked(self):
+        self.write('README.md', '- An example:\n\n    ```swift\n    let a = 1\n\n\n    let b = 2\n    ```\n')
+
+        self.assertEqual(findings(self.root), [])
+
     def test_a_list_with_no_blank_line_before_it_is_reported(self):
         self.write('README.md', 'These move:\n- an assignment;\n    - nested\n- a return.\n')
 
@@ -84,6 +110,13 @@ class CheckDocsTests(unittest.TestCase):
     def test_a_bold_label_ends_its_own_sentence(self):
         thirty = 'Start ' + ' '.join(['word'] * 28) + ' end.'
         self.write('README.md', f'- **A projection access {" ".join(["word"] * 20)}.** {thirty}\n')
+
+        self.assertEqual(findings(self.root), [])
+
+    def test_a_code_block_indented_in_a_list_item_is_not_measured_as_prose(self):
+        # Read as prose, the words after the lone backtick would fall outside any code span and count.
+        code = 'let quote: Character = "`"\n    ' + ' '.join(['word'] * 50)
+        self.write('README.md', f'- An example:\n\n    ```swift\n    {code}\n    ```\n')
 
         self.assertEqual(findings(self.root), [])
 
