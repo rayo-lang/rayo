@@ -148,7 +148,7 @@ let hp = hpOf(&makeEnemy())                   // an error if 'hp' is used later:
 
 **A value that holds an inline array, such as a matrix of four `Vec4` columns, can lend its elements.** So a result keeps depending on the argument place, as every result of an unsealed type does.
 
-**A function value that its parameter owns is no absorbing argument**, since nothing a call of it stores into its captures may depend on its arguments ([Rule 4: Absorption](dependency-absorption-and-accesses.md#rule-4-absorption)).
+An owned function value is no absorbing argument ([Rule 4: Absorption](dependency-absorption-and-accesses.md#rule-4-absorption)), so the shallow rule never applies to it.
 
 **In generic code, a type is shallow only if it is for every type argument its constraints allow**, since generic code is checked once for every type it may stand for. `&[T]` is. `T`, `T?`, `(T, Int)`, an associated type, and a struct whose fields a `static if` or `static for` generates aren't.
 

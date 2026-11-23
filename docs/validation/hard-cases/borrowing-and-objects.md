@@ -22,7 +22,7 @@ func splitLines(_ text: &Text, into out: mutable &List<&Text>) { ... }
 splitLines(&source, into: mutable &lines)                    // the helper appends to the caller's list
 for entry in &table.entries { names.append(&entry.name) }   // a loop over a collection
 for line in src.lines() { collected.append(&line) }         // a SharedIterator over the text's lines
-print(lines.count)
+print(collected.count)
 ```
 
 The caller has to know which text the list views. Changing that text, as `source.append` would, may move it to a larger buffer and free the old one, which the list still views ([safety argument](../safety-argument.md)).
