@@ -25,6 +25,19 @@ struct PersistentArrayTests {
         #expect(PersistentArray(Array(0..<999)) != original)
     }
 
+    @Test func `a copy shares every node but those on the path to an element it changes`() {
+        let original = PersistentArray(Array(0..<1000))
+        var rewritten = original
+        rewritten[500] = 500
+        var changed = original
+        changed[500] = -1
+
+        // A write of the element already there changes nothing, so it copies no node.
+        #expect(rewritten.unsharedSlots(comparedWith: original) == 0)
+        // The root holds 32 leaves, and the changed leaf 32 elements.
+        #expect(changed.unsharedSlots(comparedWith: original) == 64)
+    }
+
     @Test(arguments: [0, 1, 31, 32, 33, 1023, 1025, 40_000])
     func `an array of any count holds the elements it is made of, whatever part of a node it fills`(count: Int) {
         var array = PersistentArray(Array(0..<count))

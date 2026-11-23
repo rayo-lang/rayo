@@ -323,28 +323,84 @@ struct AccessExtentTests {
             """))
     }
 
-    @Test func `checking sixteen times as many loops in a row takes under thirty-two times as long`() throws {
-        let short = try program(of: [loopingFunction(loops: 50)] + callees, from: .lowering)
-        let long = try program(of: [loopingFunction(loops: 800)] + callees, from: .lowering)
+    @Test("solving the access states over eight times as many loops in a row reads under twenty-eight times as much")
+    func accessStatesGrowWithTheBody() throws {
+        let short = try mergeReads(solving: loopingFunction(loops: 50))
+        let long = try mergeReads(solving: loopingFunction(loops: 400))
 
-        // This check takes about seventeen times as long. One that carries every access through every block takes
-        // over eighty.
-        let times = try fastestTimes(over: short, long, runs: 3, measuring: timeToCheckExclusivity)
-        #expect(times.long < times.short * 32)
+        // Merges read about twelve times as much: eight times as many, each a little wider as the arrays' nodes fill.
+        // States that hold an entry for every access read about sixty-three times as much.
+        #expect(long < short * 28)
     }
 }
 
-/// How long the exclusivity check takes over the first function of `program`, given what code after each of its points
-/// uses. It requires that the check finds no conflict, so the time is that of a body the stage accepts.
-private func timeToCheckExclusivity(_ program: IRProgram) throws -> Duration {
+/// How much of the dependence and unbegun-access states the solver's merges read, solving them through `function`.
+private func mergeReads(solving function: (name: String, text: String)) throws -> Int {
+    let program = try program(of: [function] + callees, from: .lowering)
     let body = try #require(program.bodies[FunctionID(index: 0)])
-    let places = PlaceTypes(body: body, types: program.types)
-    let uses = DataflowSolver.solve(from: AccessUseState(), through: body, knowing: places)
-    let clock = ContinuousClock()
-    let start = clock.now
-    let errors = ExclusivityChecker.check(places, uses: uses).errors
-    let elapsed = clock.now - start
+    let (dependencies, unbegun) = entryStates(of: body)
 
-    try #require(errors.isEmpty)
-    return elapsed
+    let reads = ReadCount()
+    _ = DataflowSolver.solve(from: CountingReads(dependencies, into: reads), through: body, knowing: ())
+    _ = DataflowSolver.solve(from: CountingReads(unbegun, into: reads), through: body, knowing: ())
+    return reads.count
+}
+
+/// The dependence and unbegun-access states on entry to `body`, as the exclusivity check starts them.
+private func entryStates(of body: IRBody) -> (DependencyState, UnbegunAccessState) {
+    let accessCount = body.begunAccesses.keys.max().map { $0.index + 1 } ?? 0
+    return (DependencyState(entering: body, accessCount: accessCount), UnbegunAccessState(accessCount: accessCount))
+}
+
+/// A count of what merges read; a class, since every copy of a state adds to one count.
+private final class ReadCount {
+    var count = 0
+}
+
+/// A state that carries `inner`, and adds to `reads` how much of the two states each merge reads.
+private struct CountingReads<Inner: DataflowState>: DataflowState where Inner.Function == Void {
+    var inner: Inner
+    let reads: ReadCount
+
+    init(_ inner: Inner, into reads: ReadCount) {
+        self.inner = inner
+        self.reads = reads
+    }
+
+    var direction: DataflowDirection { inner.direction }
+
+    func merged(with other: CountingReads) -> CountingReads {
+        reads.count += unsharedStorage(of: inner, and: other.inner)
+        return CountingReads(inner.merged(with: other.inner), into: reads)
+    }
+
+    mutating func apply(_ effect: Effect, in function: Void) {
+        inner.apply(effect, in: ())
+    }
+
+    static func == (first: CountingReads, second: CountingReads) -> Bool {
+        first.inner == second.inner
+    }
+}
+
+/// How much of the storage of `first` and `second`, two states of one type, a merge of them reads, summed over the
+/// collections the states hold.
+private func unsharedStorage<State>(of first: State, and second: State) -> Int {
+    let fields = zip(Mirror(reflecting: first).children, Mirror(reflecting: second).children)
+    return fields.reduce(0) { storage, pair in storage + unsharedStorage(of: pair.0.value, and: pair.1.value) }
+}
+
+/// How much of `first` and `second`, one field of two states, a merge reads: the slots of the persistent-array nodes
+/// the two don't share, or the entries of the larger dictionary or set.
+private func unsharedStorage(of first: Any, and second: Any) -> Int {
+    switch (first, second) {
+    case let (first as PersistentArray<Set<AccessID>>, second as PersistentArray<Set<AccessID>>):
+        first.unsharedSlots(comparedWith: second)
+    case let (first as PersistentArray<Bool>, second as PersistentArray<Bool>):
+        first.unsharedSlots(comparedWith: second)
+    case let (first as any Collection, second as any Collection):
+        max(first.count, second.count)
+    default:
+        0
+    }
 }

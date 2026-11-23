@@ -120,6 +120,13 @@ package struct PersistentArray<Element: Equatable>: Equatable {
         first.count == second.count && equal(first.root, second.root)
     }
 
+    /// The slots of the nodes this array doesn't share with `other`, an array of the same count, which a merge or a
+    /// comparison of the two reads. Tests count them to see how a state's cost grows.
+    func unsharedSlots(comparedWith other: Self) -> Int {
+        precondition(count == other.count, "compared arrays have one count")
+        return Self.unsharedSlots(root, other.root)
+    }
+
     /// Sets the element at `index` under `branch`, whose children hold an index shifted right by `shift`.
     private static func replace(at index: Int, with element: Element, in branch: inout Branch, shift: Int) {
         // A node another copy shares is copied first, so the change reaches this copy alone.
@@ -218,6 +225,24 @@ package struct PersistentArray<Element: Equatable>: Equatable {
                 slotsMatch(firstElements, secondElements, count: first.count, by: ==)
             }
         }
+    }
+
+    /// The slots of `first`, and of the nodes under it, that `second` doesn't share, a branch at the same place in an
+    /// array of one count.
+    private static func unsharedSlots(_ first: Branch, _ second: Branch) -> Int {
+        if first === second { return 0 }
+        var slots = first.count
+        for slot in 0..<first.count {
+            switch (first.children.values[slot]!, second.children.values[slot]!) {
+            case (.leaf(let firstLeaf), .leaf(let secondLeaf)):
+                slots += firstLeaf === secondLeaf ? 0 : firstLeaf.count
+            case (.branch(let firstBranch), .branch(let secondBranch)):
+                slots += unsharedSlots(firstBranch, secondBranch)
+            default:
+                preconditionFailure("arrays of one count have nodes of one shape")
+            }
+        }
+        return slots
     }
 }
 
