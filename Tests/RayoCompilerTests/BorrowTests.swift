@@ -143,8 +143,7 @@ struct BorrowTests {
         ])
     }
 
-    // A place given to a `&T` parameter without a `&` is lent as `&` lends it: the call reads the place itself, so
-    // the place must hold a value, and keeps it after the call.
+    // A bare place given to a `&T` parameter is lent, so it must hold a value, and keeps it after the call.
     @Test(arguments: [
         ("\(enemy)\n    show(e)\n    show(e)\n    e.stats.hp = 5\n    show(e)", []),
         ("\(enemy)\n    let t = consume e\n    show(e)\n    show(t)", [

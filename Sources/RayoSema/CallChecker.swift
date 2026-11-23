@@ -9,8 +9,7 @@ struct CallChecker {
     /// A function that a call reaches, and the call's arguments, checked against its parameters.
     private typealias Match = (signature: Signature, arguments: [CheckedExpr])
 
-    /// An argument's label, the type of its value, and whether the source writes it as a `&` of a place, as an error
-    /// that names the call's arguments spells it.
+    /// An argument as an error that names the call's arguments spells it.
     private typealias TypedArgument = (label: String?, type: RayoType, isReference: Bool)
 
     let expressions: ExpressionChecker
@@ -259,8 +258,7 @@ struct CallChecker {
             reportNoMatch(of: name, labels: labels, values: values, in: range)
             return nil
         }
-        // Several fit by type, and each owns an argument written with a `&`. A candidate that failed was reported
-        // where it is declared, and is left to `chosen` to pass over.
+        // Several fit, each owning a `&` argument. A failed candidate was reported, so `chosen` passes over it.
         if !takeWrittenReferences, remaining.count > 1, !remaining.contains(where: \.hasFailed) {
             reportMiswritten(values, among: remaining, named: name, labels: labels, in: range)
             return nil
@@ -311,8 +309,7 @@ struct CallChecker {
         return nil
     }
 
-    /// The candidates that a call passing arguments with `labels` and `values`, in order, can reach, and whether they
-    /// take each argument that the source writes as a `&` of a place.
+    /// The candidates that a call passing `labels` and `values` can reach, and whether they take its `&` arguments.
     private func remaining(of candidates: [Signature], passing labels: [String?],
                            _ values: [CheckedValue]) -> (candidates: [Signature], takeWrittenReferences: Bool) {
         // Keep the candidates whose labels the arguments match, in order.
@@ -323,20 +320,18 @@ struct CallChecker {
         // Each untyped argument takes each remaining candidate's parameter type, and a candidate it doesn't fit drops
         // out.
         let typesFit = typedFit.filter { $0.takes(values, in: declarations, where: { $0.type == nil }) }
-        // A candidate that owns an argument written with a `&` takes no reference there, so it drops out. Where every
-        // candidate does, those the types fit stay, so the one the call reaches reports how to write its arguments.
+        // Where every candidate owns a `&` argument, all stay, so the one reached reports how to write it.
         let takingReferences = typesFit.filter { $0.takesReferences(in: values) }
         guard !takingReferences.isEmpty else { return (typesFit, false) }
 
-        // Where some candidates take each argument with no conversion, the others, which lend a bare place, drop out.
+        // A candidate that needs a bare place lent drops out where another needs no conversion.
         let areReferences = countedAsReferences(values, by: takingReferences)
         let unconverted = takingReferences.filter { $0.takesUnconverted(areReferences) }
         return (unconverted.isEmpty ? takingReferences : unconverted, true)
     }
 
-    /// Whether each of `values`, in turn, counts as a shared reference among `candidates`: a `&` of a place, a place
-    /// whose own type is a shared reference already, and a bare place that every candidate borrows, since lending it
-    /// then tells none of them apart.
+    /// Whether each value counts as a shared reference when choosing among candidates. A bare place every candidate
+    /// borrows counts, since lending it tells none apart.
     private func countedAsReferences(_ values: [CheckedValue], by candidates: [Signature]) -> [Bool] {
         values.indices.map { index in
             values[index].lendsPlace || holdsSharedReference(values[index])
@@ -344,9 +339,7 @@ struct CallChecker {
         }
     }
 
-    /// Whether `value`'s own type is a shared reference, `&T`, where `T` is the type of what it refers to: it names,
-    /// with no step into it, a local that holds one, such as a `ref let` or a parameter that borrows its argument, or
-    /// it is an `if` whose every branch that runs to its end ends in such a value, as an `if` of `&` places lends one.
+    /// Whether `value` is a local that holds a shared reference, or an `if` of them.
     private func holdsSharedReference(_ value: CheckedValue) -> Bool {
         switch value {
         case .typed(let typed): namesSharedReference(typed)
@@ -355,21 +348,19 @@ struct CallChecker {
         }
     }
 
-    /// Whether `value` names, with no step into it, a local that holds a shared reference.
+    /// Whether `value` is a bare local that holds a shared reference.
     private func namesSharedReference(_ value: CheckedExpr) -> Bool {
         guard case .place(let place) = value.kind, place.steps.isEmpty, let local = place.local else { return false }
         return expressions.names[local].kind.holdsSharedReference
     }
 
-    /// Whether every branch of `ifValue` that runs to its end ends in a value whose own type is a shared reference.
+    /// Whether every branch of `ifValue` that runs to its end ends in a shared reference.
     private func endsInSharedReferences(_ ifValue: IfValue) -> Bool {
         let reached = ifValue.ends.filter(\.isReached)
         return !reached.isEmpty && reached.allSatisfy { $0.value.map(holdsSharedReference) ?? false }
     }
 
-    /// Reports `values`, which several of `candidates`, the functions the call names as `name`, fit by type, though
-    /// each owns an argument that the source writes with a `&`. Where every candidate takes each argument the same
-    /// way, each argument reports what any of them would report of it; otherwise the call fits none of them.
+    /// Reports `values`, which several of `candidates` fit by type though each owns a `&` argument.
     private func reportMiswritten(_ values: [CheckedValue], among candidates: [Signature], named name: String,
                                   labels: [String?], in range: SourceRange) {
         let conventions = candidates[0].parameters.map(\.convention)
@@ -404,9 +395,8 @@ struct CallChecker {
         errors.report(.noMatchingFunction(name: name, arguments: spelling(of: typed)), at: range)
     }
 
-    /// The type of `value` that an error naming the call's arguments spells it by, or nil where it fails to settle,
-    /// which is reported. A `&` of a place takes the place's type, since no parameter takes the reference that would
-    /// settle it, and any other value the type it settles to where its position gives none.
+    /// The type an error naming the call's arguments spells `value` by, or nil where it fails to settle, which is
+    /// reported. A `&` takes its place's type, since no parameter settles it.
     private func spelledType(of value: CheckedValue) -> RayoType? {
         if value.lendsPlace, let type = value.type { return type }
         return expressions.settled(value, toward: nil)?.type
@@ -419,7 +409,7 @@ struct CallChecker {
         }
     }
 
-    /// The arguments as an error writes them, such as `Int, by: &Bool`.
+    /// The arguments as an error writes them.
     private func spelling(of arguments: [TypedArgument]) -> String {
         let written = arguments.map { argument in
             let label = argument.label.map { "\($0): " } ?? ""

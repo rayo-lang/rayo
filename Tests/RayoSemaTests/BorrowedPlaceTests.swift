@@ -141,7 +141,7 @@ struct BorrowedPlaceTests {
     }
 
     // `&` of an array's count, or of a call's result or a part of it, lends a temporary that holds the value, which
-    // rayoc lends only to a built-in, given with no `&`, and never to a `ref let`.
+    // Only a built-in is lent a temporary, and only one written bare.
     @Test(arguments: [
         ("ref let x = &e.slots.count", 17), ("ref let x = if c { &i } else { &e.slots.count }", 36),
         ("ref let x = &makeEnemy()", 17), ("ref let x = &makeEnemy().stats.hp", 17),

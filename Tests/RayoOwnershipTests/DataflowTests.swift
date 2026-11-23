@@ -118,7 +118,7 @@ struct DataflowTests {
 }
 
 /// Blocks that branch from the first to the second or the third, both of which go on to the fourth, which returns `x`.
-/// Each block reads `x`, at the column of line 2 that is its number, and the return reads it at column 5.
+/// Block N reads `x` at column N of line 2, and the return at column 5.
 private let diamond = """
     bb0:
       \(reading(1))
@@ -134,7 +134,7 @@ private let diamond = """
       return read %0 @2:5-2:5
     """
 
-/// Reads `x`, which the source names at `column` of line 2, and drops its value.
+/// Reads `x` at `column` of line 2, and drops its value.
 private func reading(_ column: Int) -> String {
     "_ = operand read %0 @2:\(column)-2:\(column) @1:1-1:1"
 }

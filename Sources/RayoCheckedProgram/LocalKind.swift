@@ -20,9 +20,7 @@ public enum LocalKind: Equatable, Sendable {
         }
     }
 
-    /// Whether the local holds a shared reference to a place, not a value of its own: a `ref let`, or a parameter that
-    /// borrows its argument. The local's own type is then `&T`, where `T` is the type of what it refers to. A parameter
-    /// that borrows its argument for change holds a `mutable &T`, which is no shared reference.
+    /// Whether the local holds a shared reference: a `ref let` or a borrowing parameter.
     package var holdsSharedReference: Bool {
         switch self {
         case .refLet, .parameter(.borrowed): true

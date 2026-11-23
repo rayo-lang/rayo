@@ -35,7 +35,7 @@ struct IllTypedIRTests {
         #expect(IRVerifier.verify(program, from: .lowering) == nil)
     }
 
-    // A constant lies in no place, so a call passes it to a borrowed parameter as it is.
+    // A constant has no place to begin an access to.
     @Test func `a constant passed to a borrowed parameter has no violation`() throws {
         let program = try IRParser.program(from: passing("", "1", to: "&Int"))
         #expect(IRVerifier.verify(program, from: .lowering) == nil)

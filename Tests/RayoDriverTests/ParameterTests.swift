@@ -28,10 +28,7 @@ struct ParameterTests {
         #expect(run(source) == CommandResult(exitCode: 0, output: "11\n21\n", errors: ""))
     }
 
-    // A `ref let` and a parameter that borrows its argument each hold a reference, which the function that borrows
-    // takes as it is, as it takes an `if` whose every branch ends in such a place, while a place that holds a value
-    // reaches the function that owns it. An `if` with a branch written with `&` gives a reference there, which the
-    // function that owns its argument can't take, so it reaches the function that borrows it.
+    // An `if` that ends in a shared reference, or has a branch written `&`, reaches it too; a bare value doesn't.
     @Test func `a place that holds a reference, given bare, reaches the function that borrows it`() {
         let source = """
             func main() {

@@ -58,13 +58,8 @@ struct ParameterTests {
         ])
     }
 
-    // An argument written with a `&` reaches the function that borrows it, and one written without reaches the one
-    // that owns it. A bare argument that only a function that borrows it takes is lent, and one that every function
-    // its type fits borrows counts as written with a `&`, so it tells none of them apart. Where several still fit,
-    // each lending a different argument or the same one, the call is ambiguous. A place that holds a reference, such
-    // as a `ref let`, is of a reference type already, and an owning parameter takes its value. Where none takes a `&`
-    // written for an argument, the one its type fits reports how to write it, and where they take the arguments in
-    // different ways, the call fits none of them, which spells each `&` it writes.
+    // A `&` argument picks the borrowing overload, and a bare one the owning one. A bare argument that every
+    // candidate borrows counts as a `&`, since lending it tells none apart.
     @Test(arguments: [
         ("f(&a)", [ErrorCode]()), ("f(a)", []), ("f(1)", []), ("g(a)", []), ("k(a, a)", []), ("k(a, &a)", []),
         ("ref let r = &a\n    h(r)", []), ("f(if a > 0 { a } else { &a })", []),
@@ -96,8 +91,7 @@ struct ParameterTests {
         #expect(errors("func main() {\n    \(locals)\n    \(call)\n}\n\(declarations)") == expected)
     }
 
-    // A `mutable &T` parameter holds a reference too, but a bare one given to a `&T` parameter reborrows through it,
-    // as `&r` does, so only a shared reference fits a `&T` with no conversion.
+    // A bare `mutable &T` given to a `&T` reborrows, as `&r` does, so it isn't a shared reference.
     @Test(arguments: [
         (LocalKind.refLet, true), (.parameter(.borrowed), true), (.parameter(.mutable), false),
         (.parameter(.owned), false), (.let, false), (.var, false),

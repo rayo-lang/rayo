@@ -32,7 +32,7 @@ enum CheckedValue {
         }
     }
 
-    /// Whether the source writes the value as a `&` of a place. A typed value is written without one.
+    /// Whether the source writes the value as a `&` of a place.
     var lendsPlace: Bool {
         switch self {
         case .typed: false
@@ -40,7 +40,7 @@ enum CheckedValue {
         }
     }
 
-    /// Whether the source writes the value, or any branch of it that runs to its end, as a `&` of a place.
+    /// Whether the value, or any branch of it that runs to its end, is written as a `&` of a place.
     var mayLendPlace: Bool {
         switch self {
         case .typed: false

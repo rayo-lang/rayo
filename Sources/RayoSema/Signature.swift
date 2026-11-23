@@ -30,18 +30,15 @@ struct Signature: CustomStringConvertible {
         }
     }
 
-    /// Whether a parameter that borrows its argument takes each of `arguments` that the source writes as a `&` of a
-    /// place. A parameter that owns its argument takes no reference, though the place's type may fit it.
+    /// Whether a borrowing parameter takes each argument written as a `&`, or with a branch written so.
     func takesReferences(in arguments: [CheckedValue]) -> Bool {
         parameters.count == arguments.count && zip(parameters, arguments).allSatisfy { parameter, argument in
             parameter.convention == .borrowed || !argument.mayLendPlace
         }
     }
 
-    /// Whether the function takes each argument with no conversion, where `areReferences` says of each in turn whether
-    /// it counts as a reference, as a `&` of a place or a place that holds a reference does: one that does goes to a
-    /// parameter that borrows it, and one that doesn't to a parameter that owns it, since lending a bare place that
-    /// holds a value to a parameter that borrows it is a conversion.
+    /// Whether each argument, given whether it counts as a reference, goes to a parameter that takes it so with no
+    /// conversion: a reference to a borrowing one, and any other value to an owning one.
     func takesUnconverted(_ areReferences: [Bool]) -> Bool {
         parameters.count == areReferences.count && zip(parameters, areReferences).allSatisfy { parameter, isReference in
             (parameter.convention == .borrowed) == isReference
@@ -78,9 +75,8 @@ struct Signature: CustomStringConvertible {
 }
 
 extension Signature {
-    /// The signature of a built-in function, under the name a call writes to reach it. A built-in that borrows its
-    /// argument is lent any value written with no `&`, as `print` is, so a call's result or a literal is lent as a
-    /// temporary.
+    /// The signature of a built-in function, under the name a call writes to reach it. A borrowing built-in is lent
+    /// temporaries.
     init(of builtin: Builtin) {
         let parameters = builtin.parameters.map { Parameter($0, borrowsTemporaries: true) }
         self.init(name: builtin.name.spelling, target: .callee(.builtin(builtin)), parameters: parameters,

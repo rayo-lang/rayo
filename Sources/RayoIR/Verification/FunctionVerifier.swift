@@ -228,15 +228,13 @@ struct FunctionVerifier {
         return callee.result(in: functions)
     }
 
-    /// Throws where `argument` isn't passed as a parameter of `convention` of the function `name` takes it: a constant
-    /// or a read access where the parameter borrows, a value where it owns, and a modify access where it is mutable.
-    /// A borrowed argument that lies in a place reaches it through an access, which the ownership stage checks as it
-    /// checks any other; only a constant, which lies in no place, passes as it is.
+    /// Throws where `argument` isn't passed as a parameter of `convention` of the function `name` takes it.
     private func verify(
         _ argument: CallArgument, passedTo convention: ParameterConvention, of name: String,
     ) throws(IRViolation) {
         let passed = try passing(of: argument)
         let accepted: [ArgumentPassing] = switch convention {
+        // A borrowed place goes through an access, so the ownership stage checks the borrow; a constant has no place.
         case .borrowed: [.constant, .access(.read)]
         case .owned: [.constant, .value]
         case .mutable: [.access(.modify)]
@@ -247,7 +245,7 @@ struct FunctionVerifier {
         throw violation("the IR passes '\(name)' \(passed.description), where it takes \(takes)")
     }
 
-    /// How a call passes `argument`. Throws where no statement of the body begins its access.
+    /// How a call passes `argument`. Throws where nothing begins its access.
     private func passing(of argument: CallArgument) throws(IRViolation) -> ArgumentPassing {
         switch argument {
         case .operand(.constant): .constant
@@ -290,16 +288,14 @@ struct FunctionVerifier {
     }
 }
 
-/// How a call passes one of its arguments, which a parameter's convention accepts or not.
+/// How a call passes an argument: a constant, a value, or an access.
 private enum ArgumentPassing: Equatable {
-    /// A constant, which lies in no place.
     case constant
-    /// The value read or moved out of a place, through no access.
+    /// A value read or moved out of a place, through no access.
     case value
-    /// An access of the kind to the place that holds the argument.
     case access(AccessKind)
 
-    /// The passing as a violation names it, such as `a read access`.
+    /// The passing as a violation names it.
     var description: String {
         switch self {
         case .constant: "a constant"

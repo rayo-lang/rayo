@@ -14,9 +14,7 @@ extension ExpressionChecker {
         }
     }
 
-    /// Reports `value`, which the source writes without a `&`, where `recipient` can't take it so: a parameter that
-    /// borrows its argument, given a value the call can't lend it, or a `ref let`, which takes only a `&`. A value of
-    /// any other recipient is written as it should be.
+    /// Reports `value`, written without a `&`, where `recipient` borrows it and can't take it so.
     func reportUnlent(_ value: CheckedExpr, to recipient: Recipient?) {
         switch recipient {
         case .parameter(let parameter)? where parameter.convention == .borrowed:
@@ -28,10 +26,7 @@ extension ExpressionChecker {
         }
     }
 
-    /// Reports `value`, given to `parameter`, which borrows its argument, where the call can't lend it. A place rooted
-    /// in a local is lent with nothing written, as `&` lends it, even where its type is implicitly copyable, since
-    /// the parameter takes the place, not a copy. Any other value, such as a call's result or a copy, is lent as a
-    /// temporary where the parameter borrows one, and is reported as unsupported elsewhere.
+    /// Reports a temporary given to a borrowing parameter that takes none.
     private func reportUnlendable(_ value: CheckedExpr, to parameter: ArgumentParameter) {
         // A value that stands here is no `if`, since each branch of an `if` stands in its place on its own.
         guard value.handedPlaces.isEmpty, !parameter.borrowsTemporaries else { return }
@@ -103,9 +98,8 @@ extension ExpressionChecker {
         }
     }
 
-    /// The place that `lent` lends, as a value of the type `expected` names, where a local holds it. A place in a
-    /// temporary, such as the one that holds `e.slots.count`, is reported as unsupported, since rayoc lends a value
-    /// that no local holds only to a built-in, and only where the source writes it with no `&`.
+    /// The place that `lent` lends, as a value of the type `expected` names, where a local holds it. A `&` of a
+    /// temporary is reported as unsupported.
     private func heldPlace(of lent: LentPlace, fitting expected: Expectation) -> CheckedExpr? {
         guard lent.place.local != nil else { return refused(.unsupportedLentValue, at: lent.range) }
         return typeFitted(lent.placeExpression, to: expected)

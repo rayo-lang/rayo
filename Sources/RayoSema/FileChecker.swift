@@ -172,7 +172,7 @@ final class FileChecker {
         if let resolved = type, !declarations.fitsOnStack(resolved, at: parameter.type.range, reporting: errors) {
             type = nil
         }
-        // rayoc lends a function the program declares only a place that a local holds.
+        // Only a built-in is lent a temporary.
         return Parameter(label: parameter.label, convention: convention, type: type,
                          spelledType: parameter.spelledType, borrowsTemporaries: false)
     }

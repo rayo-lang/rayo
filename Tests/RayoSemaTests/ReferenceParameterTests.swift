@@ -74,8 +74,7 @@ struct ReferenceParameterTests {
         #expect(messages(of: statement) == [])
     }
 
-    // `print` borrows its argument, and is lent any value written with no `&`, as a temporary that lives to the end
-    // of its statement. A `&` of such a value is unsupported, as it is for any `&T` parameter.
+    // `print` is lent any bare value as a temporary, but a `&` of a temporary is unsupported.
     @Test(arguments: [
         "print(a)", "print(&a)", "print(e.stats.hp)", "print(&g[i].slots[0])", "print(i)", "print(c)", "print(1)",
         "print(a + 1)", "print(copy a)", "print(makeEnemy().stats.hp)", "print(e.slots.count)",

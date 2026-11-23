@@ -133,7 +133,7 @@ struct LocalRetirementTests {
     }
 
     @Test func `a local that no declaration starts never retires`() throws {
-        // `x` holds a value from the start of the function, as a parameter does, so the print's access alone ends.
+        // `x` holds a value from the start, as a parameter does, so only the print's access ends.
         let blocks = """
             bb0:
               %0 @1:1-1:1 = operand 1 @1:1-1:1
