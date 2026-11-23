@@ -6,7 +6,7 @@
 
 A job system is a Rayo library whose safe API takes function values that borrow the caller's data, and runs them on its threads as **lent work**. The library finishes the work before those borrows can end ([below](#the-librarys-promise)):
 
-```swift
+```rayo
 particles.forEachInParallel { p in                          // @sendable (mutable &Particle) -> Void: not mutating, so any thread
     p.vel += gravity * dt
     p.pos += p.vel * dt
@@ -25,7 +25,7 @@ particles.forEachInParallel { p in                          // @sendable (mutabl
 
 **Writing a shared place from a parallel loop's body is a type error:**
 
-```swift
+```rayo
 particles.forEachInParallel { p in
     grid[cell(p.pos)] += p.mass     // error: writes 'grid', so the closure is 'mutating', but the loop runs it on many threads at once
 }
@@ -33,7 +33,7 @@ particles.forEachInParallel { p in
 
 **With `grid` an `AtomicArray<Float>`, the body compiles**, since each write is an atomic add through a shared borrow ([Atomics and locks](synchronization.md#atomics-and-locks)):
 
-```swift
+```rayo
 particles.forEachInParallel { p in
     grid.add(cell(p.pos), p.mass, .relaxed)     // fine: an atomic add through a shared borrow of 'grid'
 }
@@ -43,7 +43,7 @@ particles.forEachInParallel { p in
 
 **`ThreadScope.run`, at the top of this chapter, returns only when every thread its block spawned has finished, its teardown included.** So its threads may borrow the caller's locals, as the spawned closure there borrows `world.bodies`. It is declared as:
 
-```swift
+```rayo
 static func run<R: ~Scoped>(_ body: consuming (mutable &ThreadScope) -> R) -> R { … }   // ThreadScope's: runs the block once
 ```
 
@@ -51,7 +51,7 @@ The block takes the scope as a `mutable &ThreadScope`, so a helper can take the 
 
 **`spawn` takes the closure by its concrete type and moves it into the scope** ([05](../05-protocols-generics-and-closures/functions-and-closures.md#closures-by-concrete-type-some-f)):
 
-```swift
+```rayo
 mutating func spawn(_ body: some consuming @sendable () -> Void) { … }   // ThreadScope's: the literal itself, not a view of it
 ```
 
@@ -59,7 +59,7 @@ A parameter of function type would get only a view of the literal, which dies at
 
 **The scope `s` absorbs what each spawned closure borrows and carries, with the same kinds, until the block returns.** This follows from rule 4, absorption ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-4-absorption)), since the scope's type is unsealed and scoped, as the library's promise requires ([below](#the-librarys-promise)). So nothing a spawned closure captures by reference can change or die before the block returns. A second `spawn` that writes `world.bodies`, or the block touching it after the first `spawn`, conflicts as two arguments of one call do:
 
-```swift
+```rayo
 ThreadScope.run { s in
     s.spawn { integrate(mutable world.bodies, dt: dt) }
     print(world.bodies.count)                               // error: 's' borrows 'world.bodies' exclusively until the block returns
@@ -70,7 +70,7 @@ ThreadScope.run { s in
 
 **A panic in a spawned thread stops at that thread, and `ThreadScope.run` resumes it once every thread has finished:**
 
-```swift
+```rayo
 ThreadScope.run { s in
     s.spawn { integrate(mutable world.bodies, dt: dt) }     // if this panics, its panic waits for the join
     mix(mutable world.audio)                                // and this still runs
@@ -115,7 +115,7 @@ The panic unwinds the spawned closure's frames on its own thread, and destroys t
 
 **A panic wakes no parked thread, except through what its unwind destroys**, such as the last `Sender` of a channel another thread receives from, or the `Promise` of a future another thread waits on ([Panics in producers and consumers](synchronization.md#panics-in-producers-and-consumers)). So when a piece waits for something that only the code that panicked would have done, the piece waits for ever, and so does the lending call, or a `join()`. Code that other threads wait on signals them in a `defer`, which runs on every way out, the unwind included:
 
-```swift
+```rayo
 let ready = Event()
 ThreadScope.run { s in
     s.spawn { ready.wait(); process(mutable output) }    // parks until 'ready' is signalled
@@ -130,7 +130,7 @@ ThreadScope.run { s in
 
 **During startup, std's lending calls run their work inline, on the startup thread, before they return.** That covers `ThreadScope.spawn`, the job system's `join` and parallel loops. Startup is single-threaded, so `Runtime.startThread` only queues a thread then, and a queued thread starts once startup ends ([Initialization at startup](global-state.md#initialization-at-startup)). By then the lending call has returned or unwound, and the borrows it lent may have ended. Running the work inline keeps every borrow in the frame that lent it, as the library's promise requires ([above](#the-librarys-promise)):
 
-```swift
+```rayo
 let table = catchPanic {                          // a global's initializer, run during startup
     var buf = alloc List<Int>()
     ThreadScope.run { s in
@@ -154,7 +154,7 @@ let table = catchPanic {                          // a global's initializer, run
 
 ## Work that outlives the caller: threads
 
-```swift
+```rayo
 func startRenderer() -> (Thread<Void>, Sender<Shared<Snapshot>>) {           // called from main, after startup
     let (tx, rx) = alloc Channel<Shared<Snapshot>>.make(capacity: 3)
     let render: Thread<Void> = Thread.start(name: "render") { [move rx] in   // the thread owns the receiver
@@ -187,7 +187,7 @@ func startRendererOnGlobal() -> Thread<Void> {
 
 **`Thread.start` starts a thread that may outlive the function that started it**, as the render thread outlives `startRenderer`. It runs its body once on the new thread, and returns a `Thread<R>`, where `R` is the body's result type ([below](#joining-a-thread)):
 
-```swift
+```rayo
 struct Thread<R: Sendable & ~Scoped>(…): ~Copyable    // R: the body's result type
 static func start(name: static &Text = "", _ body: Closure<consuming @sendable () -> R>) -> Thread<R> { … }
                                                       // Thread<R>'s: the body, handed over; a call infers R from it
@@ -205,7 +205,7 @@ static func start(name: static &Text = "", _ body: Closure<consuming @sendable (
 
 **A closure that another thread may run after the call it was passed to returns is unscoped and `Sendable`**, such as a `@sendable` `Closure`. It is unscoped since it outlives that call, and `Sendable` since another thread runs it. A thread's body is one such closure. Being unscoped, it can't capture borrows. It owns its captures, which must be `Sendable`, and lists them ([05](../05-protocols-generics-and-closures/functions-and-closures.md#unscoped-closures-closuref)):
 
-```swift
+```rayo
 var level = loadLevel()                                      // move-only: owns its lists
 let bounces = 3
 _ = Thread.start(name: "bake") {
@@ -218,7 +218,7 @@ _ = Thread.start(name: "bake") { [move level, copy bounces] in   // fine: owns '
 
 ### Joining a thread
 
-```swift
+```rayo
 let checksum = Thread.start(name: "checksum") { [move path] in   // a Thread<UInt32!IoError>
     let bytes = try readFile(path)
     return crc32(bytes)
@@ -229,7 +229,7 @@ let sum = try checksum.join()                                   // waits for the
 
 **`join()` waits until the thread has ended, consumes its `Thread`, and returns what the body returned:**
 
-```swift
+```rayo
 consuming func join() -> R        // Thread<R>'s: returns once the thread has ended
 ```
 
@@ -241,14 +241,14 @@ The thread has ended once its body has returned, or a panic has ended it, and it
 
 **The unused-value rule applies to `join()`'s result as to any call's** ([05](../05-protocols-generics-and-closures/functions-and-closures.md#unused-values)). So a joiner that waits for a `Thread<R>` but has no use for its result drops the result on purpose. Each of these lines stands in place of the `join()` above, since a thread is joined once:
 
-```swift
+```rayo
 checksum.join()                   // error: the UInt32!IoError is never used
 _ = checksum.join()               // fine: waits for the thread, and drops its result
 ```
 
 **A panic in a thread's body ends the thread, and `join()` resumes it in the joiner.** The panic was reported when it happened, and unwinds the body's frames, destroying what the body owns, its captures included ([10](../10-errors-and-safety/panics.md#what-a-panic-does)). Then the thread's teardown runs as when the body returns. `Thread.start` runs the body under a recovery point of its own, which keeps the panic for `join()`. `join()` resumes it on the joining thread with `resumePanic`, as `ThreadScope.run` resumes a spawned thread's panic ([above](#scoped-threads)). A joiner that handles the panic itself wraps the call in `catchPanic` ([10](../10-errors-and-safety/panics.md#catching-a-panic-catchpanic)), again in place of the first `join()`:
 
-```swift
+```rayo
 let sum: UInt32? = catchPanic {
     try? checksum.join()                                  // nil if the body failed with an error
 } recover: { p in
@@ -274,7 +274,7 @@ So no Rayo code of the thread runs after its teardown.
 
 **`Runtime.startThread` is the runtime's one primitive for starting a thread:**
 
-```swift
+```rayo
 static func startThread(_ body: Closure<consuming @sendable () -> Void>,   // Runtime's: the body, handed over
                         ended: Shared<Event>?) -> ThreadStart { … }          // 'ended': signalled after the thread's teardown
 

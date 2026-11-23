@@ -22,7 +22,7 @@ An allocator has two sides: the values that use it must recognize whether their 
 
 ## Allocators over other allocators
 
-```swift
+```rayo
 let levelArena = Allocator.register(Arena(size: 256.mb))
 let propBudget = Allocator.register(Budgeted(inner: levelArena, limit: 16.mb, name: "Props"))   // a wrapper over levelArena
 
@@ -57,7 +57,7 @@ levelArena.reset()                           // 'props' goes stale with the aren
 
 The runtime carries out every reset, so no implementation writes one ([What a reset does](arena-safety.md#what-a-reset-does)).
 
-```swift
+```rayo
 unsafe protocol AllocatorImpl: Synchronized {          // must be callable from any thread
     var backing: Allocator? { get }                    // the one allocator this draws its memory from, or nil
     unsafe func allocate(bytes: Int, align: Int, site: CallSite) -> Allocation?   // address, plus the arena block it lies in, if any

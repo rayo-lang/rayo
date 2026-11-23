@@ -13,7 +13,7 @@
 
 **An initializer given a place writes `&`, `mutable`, `consume` or `copy` before it**, as every position does, unless the place's type is implicitly copyable, or the binding is annotated with a `&T`, which lends it ([References](references.md#places-given-to-a-position)). So each binding shows what it does to the place it is given:
 
-```swift
+```rayo
 var enemies = loadEnemies()
 
 ref let seen = &enemies[0]           // names the enemy, read-only: nothing copied
@@ -68,7 +68,7 @@ let all = consume enemies            // a move: 'enemies' can't be used until it
 
 **`ref var t = mutable r`, where `r` is a changeable place holding a `mutable &T`, reborrows through `r`** ([References](references.md#reborrowing)). `t` names what `r` refers to, and `r` stays borrowed exclusively while `t` is used, so it isn't moved. A `ref let` reborrows through a place that holds a reference as [References](references.md#unmarked-places) says.
 
-```swift
+```rayo
 ref var lead = mutable enemies[0]
 lead = makeEnemy()                   // writes the new enemy into enemies[0]; 'lead' still names it
 ref let hp = &makeEnemy().hp         // error: the enemy dies with the statement; write 'let hp = makeEnemy().hp'
@@ -91,7 +91,7 @@ ref let peek = pick                  // error: write '&pick'
 
 **Assigning to a `var` that holds a reference points it elsewhere.** `best = e` makes `best` refer to `e`, and the place it referred to is free once nothing else depends on it. What the `var` depends on from then on follows the dependency rules ([02](../02-views-and-dependencies.md#dependencies)):
 
-```swift
+```rayo
 var best = &enemies[0]
 for e in &enemies { if e.hp > best.hp { best = e } }    // points 'best' at the enemy with the most hp
 print("best hp \(best.hp)")
@@ -109,7 +109,7 @@ print("best hp \(best.hp)")
 
 So a binding that fits one form is a compile error under the other. A `let` of a stored field takes `copy`, `consume` or `&`, and `&` of a value property refers to a temporary that dies with its statement. A `let` of an implicitly copyable field fits both, since it copies the stored field and owns what the `get` returns:
 
-```swift
+```rayo
 extension Enemy { var isDead: Bool { hp <= 0 } }   // computed
 
 func hit(_ e: mutable &Enemy, _ d: Float) {
@@ -136,7 +136,7 @@ func hit(_ e: mutable &Enemy, _ d: Float) {
 
 **A local or a parameter can't take a name that a local or a parameter in scope already has.** That holds whether the other one was declared in the same block or in an enclosing one, and the compiler rejects the second declaration. So each name stands for one binding wherever the body uses it. A reader finds the declaration a use reaches by its name alone. What the compiler says about a name, that it was moved, is borrowed or is narrowed, is about the one binding declared with it.
 
-```swift
+```rayo
 func total(_ prices: &[Int], discount: Int) -> Int {
     let discount = min(discount, 50)         // error: 'discount' is already declared, as a parameter
     var sum = 0
@@ -152,7 +152,7 @@ func total(_ prices: &[Int], discount: Int) -> Int {
 
 **A local is in scope from the end of its declaration to the end of the block that declares it.** So a declaration's initializer never sees its own name. It reads an outer one, such as a global's, and the declaration is an error only where that outer one is a local or a parameter:
 
-```swift
+```rayo
 let limit = 10                               // a global
 
 func clamp(_ n: Int) -> Int {
@@ -179,7 +179,7 @@ func clamp(_ n: Int) -> Int {
 - **Nested functions and local types.** Their bodies see none of the enclosing body's locals or parameters ([05](../05-protocols-generics-and-closures/functions-and-closures.md#functions-and-closures)), and neither does a member of a local extension. So they may reuse those names, since nothing they would shadow is in scope there.
 - **Names declared outside the body.** The rule covers only locals and parameters. A local may share the name of a function, a field or a global, and lookup decides which one each use reaches ([05](../05-protocols-generics-and-closures/functions-and-closures.md#static-and-instance-members)).
 
-```swift
+```rayo
 func pair(_ a: Int, _ a: Bool) { … }                              // error: 'a' is already declared, as a parameter
 ref let (lo, lo) = &bounds                                        // error: 'lo' is already declared, in this pattern
 
@@ -207,7 +207,7 @@ func report(_ count: UInt) {
 
 **A condition of an `if`, a `while` or a `guard` holds only what can fail: a `Bool` test, or an optional binding.** An **optional binding** binds its names to the value inside an optional, and only when the optional holds one. Its word says what the names are:
 
-```swift
+```rayo
 if let job = queue.pop() { done.append(consume job) }      // owns the job that pop moved out
 if var job = queue.pop() { job.priority += 1 }             // owns it, and may change it
 if ref let e = &world.enemies[h] { print("hp \(e.hp)") }   // names the enemy where it lies in the pool
@@ -223,7 +223,7 @@ guard ref let e = &world.enemies[h] else { return }        // names the enemy to
 - **A `guard` binds as an `if` does**, and its names stay in scope after it, to the end of the enclosing block ([Names in scope](#names-in-scope)).
 - **The pattern binds at least one name** ([below](#bindings-with-no-name)). A tuple pattern binds the parts of an optional tuple, such as two elements of one pool ([Two elements of one collection](exclusivity.md#two-elements-of-one-collection)).
 
-```swift
+```rayo
 if let e = copy world.enemies[h] {
     world.enemies.remove(h)                       // fine: 'e' is a copy, so nothing borrows the pool
     spawnCorpse(consume e)
@@ -236,7 +236,7 @@ if ref let e = &enemies[0] { … }                  // error: 'enemies[0]' isn't
 
 **A condition list's subjects are held together, under the law of exclusivity, as one call's arguments are** ([Evaluation order](parameters.md#evaluation-order-and-when-a-calls-borrows-begin)). Each binding's borrow or take is checked against every other one's in the list. So two bindings can't borrow overlapping places when either lends its place for change:
 
-```swift
+```rayo
 if ref var a = mutable world.enemies[h1], ref var b = mutable world.enemies[h2] { … }     // error: both lend 'world.enemies' for change; write 'ref var (a, b) = mutable world.enemies[h1, h2]'
 ```
 
@@ -244,7 +244,7 @@ if ref var a = mutable world.enemies[h1], ref var b = mutable world.enemies[h2] 
 
 **A condition holds no case or comparison pattern, so it tests a case with `==`, and a `when` binds a payload** ([04](../04-types/enums.md#matching-with-when-and-choosing-with-if)). Every enum compares with one of its cases that carries no payload, as in `state == .idle` ([05](../05-protocols-generics-and-closures/operators.md#equality-and-ordering)). A case with a payload is matched by a `when` arm, which binds the payload's names for the arm's block:
 
-```swift
+```rayo
 if state == .idle { wander() }
 when &state {
     .chase(t) { track(t) }                        // 't' names the payload of 'state', a handle, read-only
@@ -276,7 +276,7 @@ when &state {
 - **In a type's own `deinit`, that type's `deinit` keeps nothing whole**, since it is already running. So `when consume self` takes an enum `self`'s payload apart there ([What can be moved from](moving-values-out.md#what-can-be-moved-from)).
 - **A subject in a temporary's own storage that can't be moved out is kept whole the same way**, with the whole temporary in that hidden local, as `connect().state` is where `Conn` declares a `deinit`.
 
-```swift
+```rayo
 when mutable shape {
     .circle(r) { r *= 2 }                  // a 'ref var' of the radius: doubles it inside 'shape'
     else {}
@@ -303,7 +303,7 @@ for i in 0..<n { i += 1 }                  // error: a loop name is never assign
 
 A `_` is fine inside a pattern that binds another name, as in `ref let (a, _) = &pair`. A `for` name and a `when` payload name write no word for a missing name to leave unexplained, so a `_` in their place is fine.
 
-```swift
+```rayo
 ref let (a, _) = &pair                    // fine: binds 'a'
 let _ = save(level)                       // error: binds no name
 let lo = 0, _ = f()                       // error: the second binding binds no name
@@ -323,7 +323,7 @@ for _ in 0..<3 { spawn(.grunt) }          // fine: a loop's name writes no word
 
 **Narrowing unwraps an optional under its own name, and a binding unwraps it under a new one.** Checking `x != nil` narrows a local, a parameter or a stored field of one in place, with no binding at all ([04](../04-types/enums.md#narrowing)). Anything else that holds an optional, such as an element, a global or a place reached through an object, binds its payload to a new name. That name can't be one that a local or a parameter in scope has ([Names in scope](#names-in-scope)):
 
-```swift
+```rayo
 var reply: Message? = conn.receive()
 if reply != nil { print("got \(reply.kind)") }    // narrows 'reply' to the Message inside it
 if ref let t = &window.value.target { … }         // a place reached through an object, under a name of its own
@@ -337,7 +337,7 @@ if ref let reply = &reply { … }                   // error: 'reply' is already
 
 So narrowing fits code that goes on treating the place as an optional, such as code that clears it once done with it. A binding fits code that needs only the payload. For a place that doesn't narrow, such as a global or a thread-local, a binding is the only checked way to name the payload, since `x!` panics on `nil`, and `x?.` and `??` check again at each use. A `ref let` or `ref var` binding holds the place's borrow until its last use, and a thread-local's access with it ([How long a borrow lasts](#how-long-a-borrow-lasts)):
 
-```swift
+```rayo
 @threadlocal var session: Session? = nil
 
 func report() {
@@ -350,7 +350,7 @@ func report() {
 
 **An `if` or `when` expression hands its position to the arm that runs.** Whatever the position does with a value, it does with the arm's last expression, as if that expression stood there: borrows it, moves it or returns it. So each arm writes its own mark. An `unsafe` block used as an expression hands its position to its last expression the same way ([10](../10-errors-and-safety/unsafe-code.md#unsafe-code)).
 
-```swift
+```rayo
 ref let e = if first { &enemies[0] } else { &enemies[1] }          // names one of the two
 var t = if left { mutable a } else { mutable b }                   // holds a mutable reference to one
 let v = if c { consume p } else { consume q }                      // moves from the one chosen
@@ -361,7 +361,7 @@ What depends on `e` depends on both places ([02](../02-views-and-dependencies.md
 
 **When some arms give a `ref let` or `ref var` references to places and others give references to temporaries, each temporary is kept in a hidden local:**
 
-```swift
+```rayo
 ref let e = if c { &enemies[0] } else { &makeEnemy() }      // the new enemy is kept in a hidden local
 ```
 
@@ -379,7 +379,7 @@ The hidden local is declared where the binding is, and destroyed with it if its 
     - moving a closure into a `Closure`.
 - **A reference converts to a reference of an unsized type**, as `&List<T>` does to `&[T]`, `&String` to `&Text`, and `&T` to `&any P`. The new reference refers to the same storage, and borrows it as the first one did ([References](references.md#unsized-types)).
 
-```swift
+```rayo
 let total: Int = n                          // 'n' is an Int32: the widened Int is a new value 'total' owns
 let all: &[Enemy] = enemies                 // refers to the List's elements, and borrows 'enemies'
 var spare: Enemy? = copy boss               // wrapping a copy of the enemy
@@ -405,7 +405,7 @@ var d: &any Drawable = sprite               // refers to 'sprite', and may later
 
 **Everything else is read-only, and so is whatever is reached through it**: a `let`, a `ref let`, a `&T` parameter, `self` in a plain method, a `let` field, a `const`, a global `let` and a temporary ([below](#temporaries-are-read-only)). So is a `for` or `when` name whose subject is a shared reference, or that holds a copy, and the place any shared reference refers to. So is the place a `let` reaches through a reference it holds ([References](references.md#forwarding-through-a-reference)).
 
-```swift
+```rayo
 let x = makeEnemy()
 ref var y = mutable x              // error: a let is read-only, even one that owns its value
 heal(mutable x)                    // error: the same
@@ -418,7 +418,7 @@ heal(mutable x)                    // error: the same
 - **A `Synchronized` value**, whose non-`mutating` methods change it through its own synchronization ([07](../07-concurrency/synchronization.md#the-synchronized-contract)).
 - **`unsafe` code**, which may change a bare global `var` or an imported C variable ([07](../07-concurrency/global-state.md#global-state)), and the memory a raw pointer points at, whatever holds the pointer ([10](../10-errors-and-safety/unsafe-code.md#raw-accesses)). It promises to keep exclusivity itself ([10](../10-errors-and-safety/unsafe-code.md#what-unsafe-code-upholds)).
 
-```swift
+```rayo
 let r = renderer.weak()
 _ = r.value?.submit(mesh)          // fine: an object's value is changeable through a let of a weak pointer
 ```
@@ -439,7 +439,7 @@ Lending a temporary for change, assigning into it or a part of it, calling a `mu
 
 **A temporary may still be lent shared, or consumed**, as an owning parameter or a `consuming` method takes it:
 
-```swift
+```rayo
 heal(mutable makeEnemy())          // error: changing 'makeEnemy()' does nothing, since it's dropped right after; store it in a 'var' first
 makeEnemy().hp = 0                 // error: the same
 makeIterator().next()              // error: 'next' changes the position the iterator owns; store it in a 'var' first

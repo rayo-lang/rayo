@@ -11,7 +11,7 @@ Source files use the `.rayo` extension.
 
 ## A first look
 
-```swift
+```rayo
 struct Enemy(var pos: Vec3, var hp: Float)
 func show(_ e: &Enemy) { print("hp \(e.hp)") }
 func heal(_ e: mutable &Enemy) { e.hp = 100 }

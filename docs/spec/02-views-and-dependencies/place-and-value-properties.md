@@ -4,7 +4,7 @@
 
 A computed property or subscript gives part of a value a name of the type's choosing. Some of those names stand for storage the value already has, as an enemy's `hp` stands for a field inside its `stats`. Others stand for something that lies nowhere in memory, as an angle's degrees are worked out from its radians:
 
-```swift
+```rayo
 struct Enemy(var stats: Stats) {
     var hp: Int {                       // a place property: hands out its own storage
         borrow { &stats.hp }
@@ -50,7 +50,7 @@ A body with no accessor keyword returns a value, as a `get` does.
 
 ## Place properties: `borrow` and `mutate`
 
-```swift
+```rayo
 struct Pool<T>(…) {
     subscript(h: Handle<T>) -> T? {                              // hands out part of the pool, never of 'h' (below)
         borrow { if valid(h) { &dense[slots[h.index].denseIndex] } else { nil } }
@@ -67,7 +67,7 @@ ref let pos = &world.enemies[h]!.pos             // the borrow accessor; '!' pan
 
 **A place property with a `borrow` and a `mutate` serves `&` and `mutable` under one name.** Reading through it, as `x.p.m` does, and `&x.p` use its `borrow`. Changing through it, as `x.p.m = v` or a `mutating` call on `x.p` does, and `mutable x.p` use its `mutate`. A place property with only a `borrow` lends its place only for reading, so a change through it, or `mutable` of it, is a compile error, since nothing lends that place for change:
 
-```swift
+```rayo
 extension Squad {
     var leader: Enemy { borrow { &members[0] } }   // a borrow and no mutate
 }
@@ -88,7 +88,7 @@ heal(mutable squad.leader)                         // error: 'leader' has no 'mu
 
 Several items name several sources, and then `self` is a source only when an item names it:
 
-```swift
+```rayo
 extension Node {
     subscript(graft g: mutable &Node) -> Node where return borrows g {   // hands out part of 'g', not of self
         borrow { &g } mutate { mutable g }
@@ -100,7 +100,7 @@ extension Node {
 
 **The compiler verifies that every place a body hands out lies in its sources.** It checks the place as rule 5 checks a result, restricted to the sources, whatever the place's type ([Rule 5: The callee side](dependency-absorption-and-accesses.md#rule-5-the-callee-side)). So the place must be reached from a source through stored fields, elements, references and other place properties. This is an error, since `other` is no source:
 
-```swift
+```rayo
 extension Inventory {
     subscript(from other: &Inventory) -> Item { borrow { &other.items[0] } }   // error: 'other' isn't a source
 }
@@ -117,7 +117,7 @@ extension Inventory {
 
 **From where the body names its place, the place is lent to the caller**: shared from a `borrow`, and exclusively from a `mutate`. So code that runs as the body exits, such as a `defer` block or a local's destruction, follows the law of exclusivity with it ([01](../01-values-and-ownership/exclusivity.md#the-law-of-exclusivity)):
 
-```swift
+```rayo
 extension Inventory {
     var all: List<Item> {
         borrow { &items }
@@ -133,7 +133,7 @@ extension Inventory {
 
 **A place property's place depends on its sources, as a stored field depends on the value that holds it.** It depends on each source place that a `borrows` item names, or `self` by default, and on what each source borrows. A view taken from the place depends on the same:
 
-```swift
+```rayo
 struct Inventory(var items: List<Item>) {
     subscript(i: UInt) -> Item { borrow { &items[i] } mutate { mutable items[i] } }
 }
@@ -144,7 +144,7 @@ func firstName(_ inv: &Inventory) -> &Text { inv[0].name }    // fine: the refer
 
 **The place depends on a source place whatever the place's type.** The shallow and sealed exemptions spare a value a call returns, which can't reach a shallow argument's own bytes ([Shallow values](dependency-projection-and-results.md#shallow-values)). A place lies inside its source, so they never apply to it:
 
-```swift
+```rayo
 struct Pair(var a: Int, var b: Int) {
     var first: Int { borrow { &a } mutate { mutable a } }
 }
@@ -158,7 +158,7 @@ func leak() -> &Int {
 
 **What the source is reached through decides what a view of the place depends on**, as rule 1 says of any place ([Rule 1: Projection](dependency-projection-and-results.md#rule-1-projection)). So a view of an element reached through a chunk the loop owns keeps the chunk borrowed:
 
-```swift
+```rayo
 for chunk in data.mutableChunks(64) {
     let head = &chunk[0]                 // depends on 'chunk', and through it on 'data'
     chunk[0] = 0                         // error: 'chunk' is borrowed by 'head' (used below)
@@ -180,7 +180,7 @@ A place property whose declared type is written `T?` is an **optional place prop
 
 **`&` or `mutable` of an optional place makes a reference to an optional, which exists only to be unwrapped at once**, so `&world.enemies[h]` is a `&Enemy?` ([01](../01-values-and-ownership/references.md#making-a-reference)). A `ref` binding of a condition unwraps it to its payload, as `if ref var e = mutable world.enemies[h]` does above, and binds nothing when the place is `nil` ([01](../01-values-and-ownership/bindings.md#conditions)). No `Enemy?` lies in memory for the reference to keep referring to, so holding it is a compile error:
 
-```swift
+```rayo
 let r = &world.enemies[h]                     // error: an optional place is lent only to a condition or pattern that unwraps it
 if ref let e = &world.enemies[h] { show(e) }  // fine: unwrapped at once
 ```
@@ -202,7 +202,7 @@ if ref let e = &world.enemies[h] { show(e) }  // fine: unwrapped at once
 
 ## Value properties: `get` and `set`
 
-```swift
+```rayo
 var a = Angle(radians: 0)
 a.degrees = 90                               // calls set
 a.degrees += 45                              // calls get, then set with the sum
@@ -237,7 +237,7 @@ struct Flags(var bits: UInt32) {
 
 **Through an under-aligned field, a panic follows 04's rule for its temporary instead** ([04](../04-types/structs.md#packed-structs-and-under-aligned-places)).
 
-```swift
+```rayo
 func drain(_ hp: mutable &Int) { hp -= 10; precondition(hp > 0) }
 func turn(_ deg: mutable &Float) { deg += 90; precondition(deg < 360) }
 
@@ -249,7 +249,7 @@ turn(mutable angle.degrees)       // on a panic, set never runs, so angle.radian
 
 **A protocol requires either a place property or a value property**, and a witness hands out what the requirement promises:
 
-```swift
+```rayo
 protocol Moving { var pos: Vec3 { borrow mutate } }     // a place: generic code may keep a view of it
 protocol Aiming { var heading: Float { get set } }      // a value: a copy out, a write-back through set
 ```
@@ -270,7 +270,7 @@ protocol Aiming { var heading: Float { get set } }      // a value: a copy out, 
 
 **A protocol that refines another may add a `mutate` to a place requirement it inherits.** It restates the requirement with the same name, type and `where` clause, and `borrow mutate` for its accessors. That is the inherited requirement with a `mutate` added, not a second declaration of its name. Generic code over the refining protocol may then lend the place with `mutable`, and a conformer to it meets the requirement with both accessors:
 
-```swift
+```rayo
 protocol Collection: Sequence where Iterator: SharedIterator {
     subscript(i: UInt) -> Element { borrow }              // generic code reads an element where it lies
 }
@@ -290,7 +290,7 @@ A witness with both accessors also meets `{ borrow }` (above), so every conforme
 
 **`span` is a place property of type `[T]`, with a `borrow` and a `mutate`, that hands out a contiguous collection's elements in place.** A range subscript and an `SoA` column are place properties of type `[T]` too, each of a run of the elements. So `&` and `mutable` lend each as a `&[T]` or a `mutable &[T]` ([01](../01-values-and-ownership/references.md#unsized-types)):
 
-```swift
+```rayo
 var span: [T] { borrow { … } mutate { … } }      // in List<T>
 let all = &hits.span                              // a '&[Int]' of every hit
 var some = mutable hits[0..<4]                    // a 'mutable &[Int]' of the first four

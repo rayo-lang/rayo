@@ -38,18 +38,18 @@ class CheckDocsTests(unittest.TestCase):
         self.assertEqual(findings(self.root), [])
 
     def test_an_indented_fence_inside_a_code_block_does_not_close_it(self):
-        example = '- An example:\n\n    ```swift\n    let a = 1 — a dash\n    ```\n'
+        example = '- An example:\n\n    ```rayo\n    let a = 1 — a dash\n    ```\n'
         self.write('README.md', f'```md\n{example}```\n\nAfter — a dash.\n')
 
         self.assertEqual(findings(self.root), ['README.md:9: dash: use a colon, a comma or a new sentence'])
 
     def test_a_fence_shorter_than_its_opener_does_not_close_a_code_block(self):
-        self.write('README.md', '````md\n```swift\nlet a = 1 — a dash\n```\n````\n\nAfter — a dash.\n')
+        self.write('README.md', '````md\n```rayo\nlet a = 1 — a dash\n```\n````\n\nAfter — a dash.\n')
 
         self.assertEqual(findings(self.root), ['README.md:7: dash: use a colon, a comma or a new sentence'])
 
     def test_a_fence_with_an_info_string_does_not_close_a_code_block(self):
-        self.write('README.md', '```\nlet a = 1\n```swift\nlet b = 2 — a dash\n```\n\nAfter — a dash.\n')
+        self.write('README.md', '```rayo\nlet a = 1\n```rayo\nlet b = 2 — a dash\n```\n\nAfter — a dash.\n')
 
         self.assertEqual(findings(self.root), ['README.md:7: dash: use a colon, a comma or a new sentence'])
 
@@ -65,8 +65,33 @@ class CheckDocsTests(unittest.TestCase):
 
         self.assertEqual(findings(self.root), ['docs/spec/01-values.md:1: dash: use a colon, a comma or a new sentence'])
 
+    def test_a_code_block_fenced_swift_is_reported_in_the_docs_but_not_in_the_agent_docs(self):
+        moves = '```rayo\nlet a = b\n```\n\n- A move:\n\n    ```swift\n    let c = d\n    ```\n'
+        self.write('docs/spec/01-values.md', moves)
+        self.write('docs/agents/code-style.md', '```swift\nstruct Parser {}\n```\n')
+
+        self.assertEqual(findings(self.root), ['docs/spec/01-values.md:7: swift fence: fence Rayo code as rayo'])
+
+    def test_a_code_block_fenced_swift_in_any_case_is_reported(self):
+        self.write('README.md', '```Swift title\nlet a = b\n```\n')
+
+        self.assertEqual(findings(self.root), ['README.md:1: swift fence: fence Rayo code as rayo'])
+
+    def test_a_code_block_with_no_language_is_reported_in_the_docs_but_not_in_the_agent_docs(self):
+        self.write('README.md', 'A move:\n\n```\nlet a = b\n```\n')
+        self.write('docs/agents/domain.md', '```\n/\n├── GLOSSARY.md\n```\n')
+
+        self.assertEqual(findings(self.root), [
+            "README.md:3: fence with no language: name the block's language, such as rayo",
+        ])
+
+    def test_a_swift_fence_shown_inside_a_code_block_is_not_reported(self):
+        self.write('README.md', '````md\n```swift\nlet a = 1\n```\n````\n\n```rayo\nlet b = 2\n```swift\n```\n')
+
+        self.assertEqual(findings(self.root), [])
+
     def test_a_heading_with_no_blank_line_before_it_is_reported(self):
-        self.write('README.md', '# Rayo\n\nIntro.\n## Key ideas\n\n```swift\nvar x = 1\n# not a heading\n```\n')
+        self.write('README.md', '# Rayo\n\nIntro.\n## Key ideas\n\n```rayo\nvar x = 1\n# not a heading\n```\n')
 
         self.assertEqual(findings(self.root), ['README.md:4: no blank line before this heading'])
 
@@ -81,7 +106,7 @@ class CheckDocsTests(unittest.TestCase):
         self.assertEqual(findings(self.root), ['README.md:3: two blank lines in a row'])
 
     def test_blank_lines_in_a_code_block_indented_in_a_list_item_are_not_checked(self):
-        self.write('README.md', '- An example:\n\n    ```swift\n    let a = 1\n\n\n    let b = 2\n    ```\n')
+        self.write('README.md', '- An example:\n\n    ```rayo\n    let a = 1\n\n\n    let b = 2\n    ```\n')
 
         self.assertEqual(findings(self.root), [])
 
@@ -116,7 +141,7 @@ class CheckDocsTests(unittest.TestCase):
     def test_a_code_block_indented_in_a_list_item_is_not_measured_as_prose(self):
         # Read as prose, the words after the lone backtick would fall outside any code span and count.
         code = 'let quote: Character = "`"\n    ' + ' '.join(['word'] * 50)
-        self.write('README.md', f'- An example:\n\n    ```swift\n    {code}\n    ```\n')
+        self.write('README.md', f'- An example:\n\n    ```rayo\n    {code}\n    ```\n')
 
         self.assertEqual(findings(self.root), [])
 

@@ -6,7 +6,7 @@ Functions state what their calls accept and return. Closures also carry code tog
 
 A **closure** is a value of a closure literal's concrete type ([below](#closures-by-concrete-type-some-f)). Passed for a function-type parameter, it becomes a view of itself, which may borrow locals and never allocates. The function type says whether the closure only reads what it captures, writes it, or consumes it:
 
-```swift
+```rayo
 func each(_ xs: &[Enemy], _ body: (&Enemy) -> Void) { for x in &xs { body(x) } }
 func eachMut(_ xs: &[Enemy], _ body: mutating (&Enemy) -> Void) { for x in &xs { body(x) } }
 
@@ -23,14 +23,14 @@ each(enemies) { e in if e.hp <= 0 { dead += 1 } }        // error: a mutating cl
 3. Each argument that needs context takes each remaining candidate's parameter type, and a candidate it doesn't fit drops out. Such an argument is a literal, a closure literal, a `.member`, a call whose type a default type argument would complete, as `alloc Map()`'s would ([Operators](operators.md#operators)), or a bare name whose match is a generic or overloaded function. The expected type resolves such a name as it resolves any overloaded name ([Function-typed values](#function-typed-values)).
 4. If exactly one candidate needs no conversion, it wins. Among several candidates that need no conversion, the one that alone declares no type parameters of its own wins, as below. Otherwise exactly one candidate must remain, or the call is ambiguous.
 
-```swift
+```rayo
 func f(_ x: Int) { … }      // wins for an Int argument: it alone declares no type parameters
 func f<T>(_ x: T) { … }     // needs no conversion either, but declares T
 ```
 
 **A place lent where a `&T` is expected is a conversion, so of two overloads that differ only in whether they take an argument by reference, the one that takes it as written wins** ([Implicit conversions](implicit-conversions.md#places-lent-where-a-reference-is-expected)). A `&Int` converts to no `Int`, so `&a` picks the overload that takes a reference. A bare place of a type that isn't implicitly copyable picks the owning overload the same way, and then writes `consume` or `copy` as an owning parameter needs ([01](../01-values-and-ownership/references.md#places-given-to-a-position)).
 
-```swift
+```rayo
 func g(_ x: Int) { … }      // g(a) calls this one: it takes 'a' as written
 func g(_ x: &Int) { … }     // g(&a) calls this one, since '&a' is a '&Int'
 func h(_ e: Enemy) { … }    // h(boss) calls this one, and is an error: write 'consume boss', 'copy boss' or '&boss'
@@ -74,7 +74,7 @@ func h(_ e: &Enemy) { … }   // h(&boss) calls this one
 
 **A type's static members and its instance members are separate namespaces**, so a static member and an instance member may share a name whatever their kinds and parameters. Qualified code reaches a static member through its type, and an instance member through a value:
 
-```swift
+```rayo
 let lowest = Int.min        // the static property
 let m = x.min(y)            // Comparable's instance method, for an Int 'x'
 ```
@@ -100,7 +100,7 @@ The overload rules above, by labels, parameter types and how a method takes `sel
 
 Each member is in one scope, instance members in 3 and static ones in 4, so no member is found twice:
 
-```swift
+```rayo
 struct Ring<let N: UInt> {
     func cap() -> UInt { N }                  // scope 4: Ring's own value parameter
 }
@@ -136,7 +136,7 @@ Anywhere else, such as an argument to a callee left with several candidates, the
 
 **So neither a member nor a name that can't be called hides a free function that the call's arguments fit better:**
 
-```swift
+```rayo
 extension Comparable where Self: Copyable {
     func clamped(_ lo: Self, _ hi: Self) -> Self {
         max(consume lo, min(copy self, consume hi))    // fine: two arguments fit only the free min and max, not self.min(_:)
@@ -158,7 +158,7 @@ func use(_ f: (Float, Float) -> Float) { … }
 
 ## Unused values
 
-```swift
+```rayo
 enemies.popLast()                 // error: the popped enemy is never used
 _ = enemies.popLast()             // fine: dropped on purpose
 alloc scores.sorted()             // error: a sorted copy, never used; 'scores.sort()' sorts in place
@@ -175,7 +175,7 @@ let saved = save(level)           // error if no code reads 'saved': its error w
 - held in a parameter that owns its argument, which no code reads;
 - assigned to a local, by its declaration or a later assignment, where no path from there reads it before an assignment overwrites it or the local's scope ends.
 
-```swift
+```rayo
 var r = save(a)                   // error: the next line overwrites it before any code reads it
 r = save(b)
 check(r)
@@ -186,7 +186,7 @@ r = save(c)                       // error: no code reads it before the scope en
 
 **`_ = consume x` drops a value on purpose.** It takes `x`'s value, and destroys it at the end of its statement. `_ = x` of an implicitly copyable value drops a copy, and leaves `x` as it was ([01](../01-values-and-ownership/references.md#places-given-to-a-position)). `let _ = x` is a compile error ([01](../01-values-and-ownership/bindings.md#bindings-with-no-name)).
 
-```swift
+```rayo
 _ = r.value?.submit(mesh)         // a Void?: nil if the object was gone and 'submit' never ran
 _ = try? save(level)              // a Void?: nil if the save failed
 
@@ -224,7 +224,7 @@ func adopt(_ item: Item) {
 
 So `catchPanic { … } recover: { p in … }` passes its body, then its `recover` closure ([10](../10-errors-and-safety/panics.md#catching-a-panic-catchpanic)), and `s.spawn { … }` passes its closure for a `some F` parameter. A second unlabeled closure is a compile error ([12](../12-grammar/notes.md#blocks-and-closure-literals)):
 
-```swift
+```rayo
 func f(_ a: () -> Void, onCancel: (() -> Void)? = nil, done: () -> Void) { … }
 f { start() } done: { finish() }     // the first closure goes to 'a', and 'onCancel' takes its default
 f { start() } { finish() }           // error: a trailing closure after the first carries a label
@@ -281,7 +281,7 @@ A closure's type says what it does with its captures, and the compiler infers th
 
 **A closure that writes a capture is `mutating`, so a parallel loop rejects it:**
 
-```swift
+```rayo
 var n = 0
 particles.forEachInParallel { _ in n += 1 }   // error: writes 'n', so it is mutating, but the loop runs it on many threads
 var lives = mutable particles.life
@@ -296,7 +296,7 @@ lives[0] = 0                                  // fine: the literal's last use is
 
 **`Mutex`'s `lock` is one such function**: its parameter owns the function value, which it calls once:
 
-```swift
+```rayo
 func lock<R: ~Scoped>(_ body: consuming (mutable &T) -> R) -> R { … }   // Mutex<T>'s: 'body' owns its function value
 ```
 
@@ -306,7 +306,7 @@ func lock<R: ~Scoped>(_ body: consuming (mutable &T) -> R) -> R { … }   // Mut
 
 A closure keeps nothing that depends on its parameters, whether a parameter is lent its argument or given it:
 
-```swift
+```rayo
 m.lock { d in kept = d.items.span }                   // error: 'kept' would depend on 'd', the closure's parameter
 let names = alloc entries.map { &$0.name }            // fine: the closure returns a reference into its parameter, and keeps none
 for line in src.lines() { collected.append(line) }    // fine: lines() returns a SharedIterator, whose lines outlive it
@@ -322,7 +322,7 @@ for line in src.lines() { collected.append(line) }    // fine: lines() returns a
 
 A callback stored in a struct, or a thread's body, outlives the call that made it, so it owns its captures instead of borrowing:
 
-```swift
+```rayo
 struct Hotkey(var action: Closure<() -> Void>)
 
 let id = 7
@@ -345,7 +345,7 @@ var oops = Hotkey(action: { log("pressed \(id)") })                // error: 'id
 
 A closure can also be held by its own concrete type, which never allocates:
 
-```swift
+```rayo
 func times(_ n: UInt, _ body: some mutating () -> Void) { … }   // monomorphized for each literal: never boxed
 
 var hits = 0
@@ -364,7 +364,7 @@ var onMiss: mutating () -> Void = { misses += 1 }   // annotated: the function t
 
 ## C function pointers
 
-```swift
+```rayo
 @c func half(_ x: Int32) -> Int32 { x / 2 }
 let f: @c (Int32) -> Int32 = half               // a named @c func converts
 let g: @c (Int32) -> Int32 = { x in x + 1 }     // so does a literal that captures nothing
@@ -378,7 +378,7 @@ unsafe { print(f(4)) }                          // calling one is unsafe
 
 **Inside `unsafe`, a function also converts to a `@c` type whose types differ but have the same C representations** ([08](../08-c-interop/calling-rayo-from-c.md#c-representations)). So a `WeakPointer<Body>` parameter meets a `UInt64` one. A `mutable &T` parameter also meets a `*T` or `*T?` one there, since both cross as `T*`:
 
-```swift
+```rayo
 enum PadButton: Int32 { case start, back }      // crosses as its raw type, Int32
 @c func onButton(_ b: PadButton) { … }          // converts to @c (Int32) -> Void
 @c func onUpdate(_ s: mutable &State) { … }     // converts to @c (*State) -> Void: both cross as State*
@@ -404,7 +404,7 @@ enum PadButton: Int32 { case start, back }      // crosses as its raw type, Int3
 
 **C code stays behind `@c` types.** An imported or `extern c` function is an `unsafe func` too ([08](../08-c-interop/imports-and-inline-c.md#what-imports-as-what)), but converts only to `@c` types, which carry its stack need ([08](../08-c-interop/imports-and-inline-c.md#the-stack-a-c-call-needs)). A `@c` value converts only to another `@c` type, or its optional, as above. Neither converts to a Rayo function type, a `Closure` or an `unsafe` form, whose calls wouldn't check that need. A literal that calls C inside an `unsafe` block is an ordinary Rayo function:
 
-```swift
+```rayo
 let now: () -> Double = { unsafe { platform_time_seconds() } }   // a Rayo function type, though its body calls C
 ```
 
@@ -412,7 +412,7 @@ let now: () -> Double = { unsafe { platform_time_seconds() } }   // a Rayo funct
 
 A function-typed value views its closure's storage, so it can't outlive that storage:
 
-```swift
+```rayo
 let put: (mutable &List<&Text>) -> Void = { o in o.append(src) }    // the literal lives as long as 'put'
 func pick() -> (Int, Int) -> Int { max }                           // fine: a named function views no storage
 func inc() -> (Int) -> Int { return { x in x + 1 } }               // fine: nor does a literal that captures nothing
@@ -448,7 +448,7 @@ Within either, the literal may be anywhere outside nested closure bodies:
 
 **The hidden local belongs to the local's scope** ([01](../01-values-and-ownership/moves-copies-destruction.md#destruction)). So `put` above stays usable for its whole scope, and so does `h` here:
 
-```swift
+```rayo
 let h = Handler(onClick: { … })   // the literal is an argument in a local's initializer: kept in a hidden local
 ```
 

@@ -16,7 +16,7 @@
 
 **Code collects views of a text into a list it owns, and uses the list afterwards.** It does so through a helper, a loop and an iterator:
 
-```swift
+```rayo
 func splitLines(_ text: &Text, into out: mutable &List<&Text>) { ... }
 
 splitLines(source, into: mutable lines)                      // the helper appends to the caller's list
@@ -31,7 +31,7 @@ The caller has to know which text the list views. Changing that text, as `source
 
 The criteria below also use these patterns:
 
-```swift
+```rayo
 work.append(mutable data[0..<n])               // a quicksort's worklist: the first pending range, as a 'mutable &[Int]'
 while var s = work.popLast() { … }             // each pass pops the next pending range
 lexer.lex(into: mutable tokens)                // appends tokens that view the lexer's source
@@ -53,7 +53,7 @@ copyAll(from: src, into: mutable dst)          // copies the references that 'sr
 
 **A lookup takes a key that views one buffer and returns a view into another**, and the code then changes the first buffer while it still uses the result. A parser does this when it looks a token's text up in a symbol table, then advances the lexer:
 
-```swift
+```rayo
 let tok = lexer.peek()                         // view into lexer's buffer
 let entry = symbols.find(tok.text)             // view into symbols; key only used for lookup
 lexer.advance()                                // mutates lexer
@@ -79,7 +79,7 @@ The difficulty is that, by default, a call's result depends on everything the ca
 
 **A walk down a tree keeps one mutable cursor, and re-targets it to a child at each step.** The walk starts at the root, follows a path chosen at run time, then inserts a child at the end of the path. Each node owns its children:
 
-```swift
+```rayo
 struct Node(var value: Int, var children: List<Box<Node>>)   // a value, and the boxes that own its children
 ```
 
@@ -100,7 +100,7 @@ A `ref var` cursor names one place for good, so `=` writes the node it names. A 
 
 **Code needs two *computed* places of one value mutably at once**: place properties with a `mutate`, not stored fields ([02](../../spec/02-views-and-dependencies/place-and-value-properties.md#place-properties-borrow-and-mutate)).
 
-```swift
+```rayo
 ref var p = mutable world.physics      // a place property's mutate
 ref var r = mutable world.render       // another one, on the same world
 step(mutable p, mutable r)
@@ -108,7 +108,7 @@ step(mutable p, mutable r)
 
 The criteria below also use these patterns:
 
-```swift
+```rayo
 var lives = mutable particles.life                           // an SoA column, taken as a 'mutable &[Float]'
 
 node.next = nil                                              // through a place property that hands out a stored optional field
@@ -179,7 +179,7 @@ Two mutable chunks from one iterator, live at once, would alias ([02](../../spec
 
 Separately, the closure form of the lock returns a value computed from the protected data. The criteria below use it, and guards moved into closures:
 
-```swift
+```rayo
 let count = mutex.lock { data in … }                              // the closure form, returning what it computes
 let h = Handler(onClick: { [move g] in print(g.value.count) })    // a guard 'g', moved into a stored closure
 let n = total({ [move g] in g.value.count })                      // another guard 'g', moved into a closure argument
@@ -217,7 +217,7 @@ std::sort(targets.begin(), targets.end(), [&](Handle a, Handle b) {
 
 The criteria below use these function values:
 
-```swift
+```rayo
 let put: (mutable &List<&Text>) -> Void = { … }                      // a local function value made from a literal
 let h = Handler(onClick: { … })                                      // a literal passed to a struct's initializer
 let r = wrap({ [move s] in s.count })                                // a closure kept by its concrete type in a generic struct
@@ -245,7 +245,7 @@ each(enemies.span) { e in if e.hp < 10 { low.append(tag) } }        // a closure
 
 **A job system's parallel loop hands its body each element of a collection together with the element's index.** A sequential loop does the same:
 
-```swift
+```rayo
 grid.cells.forEachIndexedInParallel { i, cell in cell.value = f(i) }   // each call gets an element and its index
 for (i, e) in items.mutableEnumerated() { … }                        // sequential, changing the elements of a 'var'
 for (i, e) in makeItems().mutableEnumerated() { … }                  // error: a temporary can't be changed; store it in a 'var' first
@@ -296,7 +296,7 @@ The law of exclusivity lets nothing else reach a place while it is mutably borro
 
 **A coroutine waits on a condition about an object, and meanwhile another part of the program destroys the object and a new one reuses its slot.** The coroutine is a `task`, which its runner steps each time it is woken ([07](../../spec/07-concurrency/tasks.md#running-tasks)). This one waits for an enemy to be gone:
 
-```swift
+```rayo
 await until { [copy target] g in g.enemies[target] == nil }   // the condition, polled at each step with the game
 ```
 
@@ -316,7 +316,7 @@ await until { [copy target] g in g.enemies[target] == nil }   // the condition, 
 
 The criteria below use these declarations and statements:
 
-```swift
+```rayo
 consuming func close() -> Void!IoError               // on a file whose deinit closes it
 consuming func intoItems() -> List<T>                // on a wrapper, moving its field out
 

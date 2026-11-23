@@ -6,7 +6,7 @@
 
 Reflection gives a field's name and type, but not that the field is a cache a serializer should skip, what range and tooltip an editor's slider shows, or whether replication sends it. The type's author states such facts as attributes:
 
-```swift
+```rayo
 struct Bounds(let min: Float, let max: Float): Attribute {
     init(_ min: Float, _ max: Float) { self.init(min: min, max: max) }   // each Float is implicitly copyable: a copy goes in
 }
@@ -23,7 +23,7 @@ struct Enemy(
 
 **An attribute is any struct that conforms to `Attribute`, and its arguments must be `const`.** Its value must be freezable, since `typeInfo` puts it in read-only data ([below](#runtime-type-info)) the way a `const` that reaches run time is frozen ([Consts that reach run time](constants-and-conditions.md#consts-that-reach-run-time)). Reflection reads an attribute on a field, a type or an enum case ([What reflection can read](reflection.md#what-reflection-can-read)). An editor's inspector, for example:
 
-```swift
+```rayo
 func inspect<T>(_ value: mutable &T, in ui: mutable &Inspector) {
     static for f in T.fields where f.has(Bounds.self) {
         const b = f.attribute(Bounds.self)!                // this field's @Bounds, known at compile time
@@ -40,7 +40,7 @@ func inspect<T>(_ value: mutable &T, in ui: mutable &Inspector) {
 
 For code that walks types **at run time**, `typeInfo(T.self)` returns a `TypeInfo`, a record in read-only data. The record is built from the same reflection and attributes, as a module other than `T`'s sees them ([Reflection and access control](reflection.md#reflection-and-access-control)), so a type has one record wherever it is made:
 
-```swift
+```rayo
 public struct TypeInfo private init(    // Frozen, derived: every field is Frozen
     public let id: UInt64,
     public let name: static &Text,

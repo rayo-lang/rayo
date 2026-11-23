@@ -6,7 +6,7 @@ Most operators are calls written with punctuation instead of a function name; sh
 
 **Operators are `static func`s declared on a type or in an extension of it, named by the operator:**
 
-```swift
+```rayo
 extension Vec3 {                                                // in std.math
     @inline public static func * (lhs: Vec3, rhs: Float) -> Vec3 { ... }
     @inline public static func * (lhs: Float, rhs: Vec3) -> Vec3 { ... }   // declared on Vec3; found via rhs
@@ -18,7 +18,7 @@ pos += vel * dt                                                 // pos = pos + v
 
 **Operators borrow their operands, so an operand takes no mark and never moves** ([01](../01-values-and-ownership/references.md#unmarked-places)). So an operator declares each parameter `&T`, or `T` where `T` is implicitly copyable, as `Vec3` and `Float` are above. An operand given to a `&T` parameter is lent shared, as `&a` would lend it, and one given to a `T` parameter is copied. A parameter of any other type, a `mutable &T` or a `T` that isn't implicitly copyable, is a compile error, since the operand writes no mark that could lend it for change, move it or copy it:
 
-```swift
+```rayo
 static func == (lhs: &Ranked, rhs: &Ranked) -> Bool { … }    // fine: each operand is borrowed
 static func + (lhs: Inventory, rhs: Inventory) -> Inventory   // error: an Inventory isn't implicitly copyable; take '&Inventory'
 ```
@@ -43,7 +43,7 @@ static func + (lhs: Inventory, rhs: Inventory) -> Inventory   // error: an Inven
 
 **Operators apply one at a time**, each step typed from the one before:
 
-```swift
+```rayo
 let angle = Float(i) / 1024 * 2 * .pi   // Float(i) / 1024 is a Float, so 2 and .pi are Floats too
 ```
 
@@ -64,7 +64,7 @@ let angle = Float(i) / 1024 * 2 * .pi   // Float(i) / 1024 is a Float, so 2 and 
 - **Overloads that differ only in that part make the call ambiguous**, since the argument fits each of them ([Functions and closures](functions-and-closures.md#functions-and-closures)).
 - **A closure literal's body is typed before the callee's unbound type parameters are known**, since step 3 binds them from its result type. The parts of that result type that the parameter's type fixes still reach the body first. Only a part that depends on an unbound type parameter takes its default in the body. So in `run { alloc Map(dictionaryLiteral: copy pairs) }` below, `R` becomes `Map<Name, Int, SeededHashing>`, while `f`'s parameter type fixes `FixedHashing` for its body's map.
 
-```swift
+```rayo
 func takesFixed(_ m: Map<Name, Int, FixedHashing>) { … }
 func merge<K, H>(_ into: mutable &Map<K, Int, H>, _ from: Map<K, Int, H>) { … }
 func g<K, H>(_ m: Map<K, Int, H>) { … }
@@ -92,20 +92,20 @@ f { alloc Map(dictionaryLiteral: copy pairs) }             // FixedHashing, fixe
 - **A pair `R!E`** in the parameter's type binds from those two types by the pair rule there. So a literal that can't fail binds `E` to `Never`.
 - **An untyped literal it returns**, such as `1`, binds nothing. It counts as a literal argument, which leaves the type parameter to step 4.
 
-```swift
+```rayo
 let half = catchPanic { 1 } recover: { _ in 2.5 }    // both results are literals, so step 4 makes R a Double
 ```
 
 **An expected type that isn't a `Result` binds only the success type of a result type `R!E`.** The match binds `R` from it, and leaves `E` to the arguments, as `try` leaves an expected failure type open ([10](../10-errors-and-safety/typed-errors.md#propagating-errors-with-try)). Where `E` then binds to `Never`, the call is an `R` ([10](../10-errors-and-safety/typed-errors.md#what-a-failure-type-names)), which fits. Otherwise the call is a `Result`, which doesn't, and the error says to write `try`:
 
-```swift
+```rayo
 let caught: Panic? = catchPanic { piece(); return nil } recover: { p in copy p }         // R is Panic?; neither closure fails, so EB and ER are Never
 let level: Level = catchPanic { try loadLevel(path) } recover: { _ in alloc Level() }    // error: the call is a Level!(IoError | ParseError); write 'try'
 ```
 
 **Each untyped argument then takes its parameter's type.** The first four calls below bind `T` or `C` in the first, second and fourth of those ways. The third then gives its untyped `.seconds(0.5)` the type `Duration`, and the last call gives its untyped `0` the type `Float`:
 
-```swift
+```rayo
 let m = max(f, d)                      // f: Float, d: Double: T is Double, which f widens to
 let b: Float = max(0, 1)               // from the expected type: a Float call
 let s: Elapsed<Game> = elapsed(.seconds(0.5))   // from the expected type: C is Game
@@ -115,7 +115,7 @@ hp = max(0, hp - amount)               // T is Float, from 'hp - amount', so 0 i
 
 ## Equality and ordering
 
-```swift
+```rayo
 struct Tile(let x: Int32, let y: Int32): Hashable      // == and hash(into:) derived from the fields
 
 struct Version(let major: Int, let minor: Int): Comparable {    // == derived; < written
@@ -129,19 +129,19 @@ struct Version(let major: Int, let minor: Int): Comparable {    // == derived; <
 
 - **`Equatable`** requires `==` and `!=`, and gives `!=` a default.
 
-    ```swift
+    ```rayo
     static func == (lhs: &Self, rhs: &Self) -> Bool
     static func != (lhs: &Self, rhs: &Self) -> Bool
     ```
 - **`Comparable: Equatable`** requires `<`, `<=`, `>`, `>=`, and, of a copyable type, the methods `min(_:)` and `max(_:)`, and gives each but `<` a default. The methods borrow both values and return a copy of the lesser or the greater, as `..<` copies its operands in (above):
 
-    ```swift
+    ```rayo
     func min(_ other: &Self) -> Self where Self: Copyable
     func max(_ other: &Self) -> Self where Self: Copyable
     ```
 - **`Hashable: Equatable`** requires `hash(into:)`, which feeds std's hash state, a `Hasher`, whose seed the map or set doing the hashing chooses ([04](../04-types/collections.md#hash-maps-and-sets)). It must give equal hashes for values that `==` calls equal.
 
-    ```swift
+    ```rayo
     protocol Hashable: Equatable {
         func hash(into hasher: mutable &Hasher)   // borrows self, feeds 'hasher', and returns nothing
     }
@@ -149,7 +149,7 @@ struct Version(let major: Int, let minor: Int): Comparable {    // == derived; <
 
 **The defaults are these, written in terms of `==` and `<`.** So a type with unordered values, such as `Float` with NaN, gets `>`, `<=` and `>=` right from `<` and `==` alone:
 
-```swift
+```rayo
 a != b     // default: !(a == b)
 a > b      // default: b < a
 a <= b     // default: a < b || a == b
@@ -160,7 +160,7 @@ a.max(b)   // default: a copy of a when b < a, else of b
 
 **Every witness of `min` returns `self`, and every witness of `max` returns `other`, when neither operand is less than the other in the order they use**, as the defaults do. That order is `<` for every type but `Half`, `Float` and `Double`, whose witnesses put `-0` below `+0` ([04](../04-types/numbers-and-math.md#floating-point)). A NaN operand is never a tie: the float witnesses give NaN for it. Values that tie can still differ, so the rule fixes which one a call returns:
 
-```swift
+```rayo
 struct Ranked(let rank: Int, let id: UInt32): Comparable {       // compares on its rank alone
     static func == (lhs: &Ranked, rhs: &Ranked) -> Bool { lhs.rank == rhs.rank }
     static func < (lhs: &Ranked, rhs: &Ranked) -> Bool { lhs.rank < rhs.rank }
@@ -176,7 +176,7 @@ let hi = a.max(b)     // a copy of b, with id 9: max returns other
 
 **The free functions `min(a, b)` and `max(a, b)` call `a.min(b)` and `a.max(b)`**, as `max(0, 1)` and `max(f, d)` above do. So generic code over `Comparable & Copyable` gives the same result as concrete code, bit for bit, for every type it is instantiated with. They own their arguments, so an implicitly copyable argument is copied with nothing written, and any other takes `copy` or `consume`, as `max(copy v1, copy v2)` does for two `Version`s:
 
-```swift
+```rayo
 func min<T: Comparable & Copyable>(_ a: T, _ b: T) -> T { a.min(b) }
 func max<T: Comparable & Copyable>(_ a: T, _ b: T) -> T { a.max(b) }
 ```

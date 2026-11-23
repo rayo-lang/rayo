@@ -6,7 +6,7 @@ A move can hand a value to a new owner without making a second one. A copy does 
 
 ## Moves
 
-```swift
+```rayo
 var cmds = CommandList()
 cmds.draw(mesh)
 submit(consume cmds)              // submit keeps the list: it moves out of 'cmds'
@@ -28,7 +28,7 @@ cmds = queued                     // error: write 'consume queued'
 
 ## Copies
 
-```swift
+```rayo
 var spare = copy enemies[0]                // Enemy is copyable: copy duplicates its bytes
 spare.hp = 50                              // enemies[0] is unchanged
 var spawn = e.pos                          // Vec3 is implicitly copyable: copied with nothing written
@@ -58,7 +58,7 @@ So a copyable type owns no heap memory, and `copy` never allocates. Every other 
 
 The compiler derives the marker protocol **`Copyable`** for each copyable type. A type may list it, to have the compiler confirm it, or list **`~Copyable`** to opt out even though its fields could be copied:
 
-```swift
+```rayo
 struct Handle<T>(…): Copyable                         // the compiler confirms that Handle is copyable
 struct Ticket(let seat: UInt32): ~Copyable           // each ticket admits once, so a copy would admit twice
 ```
@@ -89,7 +89,7 @@ Generic code treats an unconstrained type parameter as possibly move-only, so co
 
 **A struct or enum conforms only by listing the protocol**, never by derivation, since only its author knows whether its copies stay cheap as it changes. A generic type lists it in a constrained extension, for the type arguments that make every field conform. Whether a type conforms is part of its module's interface ([11](../11-compilation-model.md#type-checking-is-local)).
 
-```swift
+```rayo
 struct EntityId(let index: UInt32, let generation: UInt32): ImplicitlyCopyable   // fine: both fields conform
 struct Enemy(var pos: Vec3, var hp: Float)                    // copyable, but a copy of it is written
 struct Tag(var id: EntityId, var name: String): ImplicitlyCopyable   // error: 'String' is not copyable
@@ -110,7 +110,7 @@ extension Optional: ImplicitlyCopyable where T: ImplicitlyCopyable {}   // as th
 
 **A value of an implicitly copyable type taken from a place is copied, and the place stays usable.** Such a copy is an **implicit copy**. It happens wherever the place is given to a position with no mark written ([References](references.md#places-given-to-a-position)). Such positions include an initializer, the right side of an assignment, an argument to a parameter that owns it, a loop's subject and a `return`. A `consuming` method's receiver copies it too ([Moving values out](moving-values-out.md#moving-values-out)).
 
-```swift
+```rayo
 var hp = 100
 var best = hp                      // a copy: Int is implicitly copyable, so 'hp' stays usable
 hp -= 10                           // 'best' is still 100

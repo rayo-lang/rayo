@@ -1,5 +1,6 @@
 """Checks the repository's Markdown: every relative link and heading anchor resolves, and the docs follow the
-spec's style guide in their layout, their punctuation and the length of their sentences and paragraphs.
+spec's style guide in their layout, their punctuation, the fences of their Rayo code and the length of their
+sentences and paragraphs.
 
     python3 scripts/check_docs.py                     # prints each finding, and fails if there is any
     python3 scripts/check_docs.py --update-baseline   # records each file's long sentences and paragraphs
@@ -34,18 +35,30 @@ def markdown_files(root):
                 yield os.path.relpath(os.path.join(directory, name), root)
 
 
-def lines_marked_as_code(lines):
-    # Pairs each line with whether it is code: a fence line, or a line between an opening fence and its close.
+def lines_and_opening_fences(lines):
+    # Pairs each line with whether it is code (a fence line, or a line between an opening fence and its close) and with
+    # the fence it opens, if it opens a code block.
     opener = None
     for line in lines:
         fence = FENCE.fullmatch(line)
         if opener is None:
             opener = fence
-            yield line, fence is not None
+            yield line, fence is not None, fence
         else:
             if closes(fence, opener):
                 opener = None
-            yield line, True
+            yield line, True, None
+
+
+def lines_marked_as_code(lines):
+    for line, is_code, _ in lines_and_opening_fences(lines):
+        yield line, is_code
+
+
+def opening_fences(text):
+    for number, (_, _, opener) in enumerate(lines_and_opening_fences(text.splitlines()), 1):
+        if opener:
+            yield number, opener
 
 
 def closes(fence, opener):
@@ -93,6 +106,17 @@ def dash_findings(path, text):
     for number, line in prose_lines(text):
         if '—' in line:
             yield f'{path}:{number}: dash: use a colon, a comma or a new sentence'
+
+
+def fence_findings(path, text):
+    # Swift, the compiler's language, appears only in the skills, so a swift block here is Rayo code; each block names
+    # its language, so Rayo code is never left unmarked.
+    for number, opener in opening_fences(text):
+        language = opener['info'].lower().split()[:1]
+        if language == ['swift']:
+            yield f'{path}:{number}: swift fence: fence Rayo code as rayo'
+        elif not language:
+            yield f"{path}:{number}: fence with no language: name the block's language, such as rayo"
 
 
 def layout_findings(path, text):
@@ -218,6 +242,7 @@ def findings(root):
         found += link_findings(texts, path, text)
         if path in styled:
             found += dash_findings(path, text)
+            found += fence_findings(path, text)
             found += layout_findings(path, text)
             found += readability_findings(baseline, path, text)
     for path in baseline:

@@ -12,7 +12,7 @@ parse(lines);                     // reads freed memory
 
 In Rayo you write the same code, with no annotations, and the compiler catches the bug. Reading a file can fail, so `readText` returns a `String!IoError`: the `String` it read, or the `IoError` that stopped it. The value comes first and the error after the `!`, which here has nothing to do with Swift's implicitly unwrapped optionals. `try` takes the `String` out, or returns the error to the caller ([10](../spec/10-errors-and-safety/typed-errors.md#results)):
 
-```swift
+```rayo
 func readText(_ path: &Text) -> String!IoError { ... }
 func splitLines(_ text: &Text, into out: mutable &List<&Text>) { ... }
 func parse(_ lines: &[&Text]) { ... }
@@ -28,7 +28,7 @@ func loadScript(_ path: &Text) -> Void!IoError {
 
 Change `source` only after the last use of `lines`, and the code compiles:
 
-```swift
+```rayo
     splitLines(source, into: mutable lines)
     parse(lines)                                  // the last use of 'lines'
     source.append("\n")                           // fine: nothing borrows 'source' any more
@@ -47,7 +47,7 @@ The compiler never looked inside `splitLines`. Its signature alone tells the cal
 
 **A reference to either holds an address and a count.** A `&[T]` reads the elements and a `mutable &[T]` can also change them, and a `&Text` reads the text. A `&` type written on a `let` says that it borrows, as a parameter's type does, so the `let` borrows the place it is given with no mark written, while a `let` with no type writes `&`:
 
-```swift
+```rayo
 let all: &[Int] = hits                   // the hit list's elements, read-only
 let firstTwo = &hits[0..<2]              // a range of them: also a &[Int]
 var editable = mutable hits.span         // a mutable &[Int], which can change them
@@ -58,7 +58,7 @@ let name = "grunt"                       // a literal is a static &Text: its byt
 
 **A `[Int]` can't sit in a variable on its own.** Its count isn't part of its type, so the compiler can't know how much room it takes. You always hold one through a reference:
 
-```swift
+```rayo
 let run: [Int] = hits.span               // error: '[Int]' is unsized; declare 'run' a '&[Int]'
 ```
 
@@ -76,7 +76,7 @@ let run: [Int] = hits.span               // error: '[Int]' is unsized; declare '
 
 **A function that changes a run of elements takes a `mutable &[T]`.** Inside, the parameter names the elements, so the function lends them on with `mutable`, just as it would lend a variable of its own. At the call, `mutable editable` lends a new reference to the same elements, and `editable` works again once the call returns ([01](../spec/01-values-and-ownership/references.md#reborrowing)):
 
-```swift
+```rayo
 func clear(_ s: mutable &[Int]) { for x in mutable s { x = 0 } }
 
 clear(mutable editable)                  // a new reference to the hits, for this call
@@ -85,7 +85,7 @@ editable[0] = 1                          // fine: 'editable' is free again
 
 ## When a view is scoped
 
-```swift
+```rayo
 struct Token(var text: &Text, var line: Int): Scoped   // a token refers to the script's text
 struct Label(var text: &Text)                          // error: a struct with a scoped field must be declared 'Scoped'
 struct Banner(var text: static &Text)                  // fine: a static reference, such as a literal, isn't scoped
@@ -107,7 +107,7 @@ struct Banner(var text: static &Text)                  // fine: a static referen
 
 **`static` works on any type that holds shared references**, such as a `static &[Float]` of elements or a struct of them like `Token` above. A global that holds references is static without `static` written:
 
-```swift
+```rayo
 let keywords: [2 of Token] = [Token(text: "if", line: 0), Token(text: "else", line: 0)]   // static: every reference is to a literal
 ```
 
@@ -123,7 +123,7 @@ Each `keywords[i]` is a `static Token`, which can go anywhere ([02](../spec/02-v
 
 **Each scoped value has a dependency set: the places it borrows, each shared or exclusive** ([02](../spec/02-views-and-dependencies.md#dependencies)). What a value **carries** is its dependency set.
 
-```swift
+```rayo
 let text: &Text = source                  // carries 'source', shared
 let word = &text[0..<5]                   // carries what 'text' carries
 let tok = Token(text: word, line: 1)      // so does the token that holds it
@@ -145,7 +145,7 @@ editable[0] = 0
 
 ## What a call's result borrows
 
-```swift
+```rayo
 func longest(_ lines: &[&Text]) -> &Text { ... }
 
 let title = longest(lines)                // borrows 'lines', and what 'lines' carries: 'source'
@@ -165,7 +165,7 @@ log("\(title)")
 
 ## Storing views through a `mutable` argument
 
-```swift
+```rayo
 var lines = alloc List<&Text>()
 splitLines(source, into: mutable lines)       // 'lines' takes on what the reference to 'source' carries: 'source'
 var names = alloc List<&Text>()
@@ -195,7 +195,7 @@ use(tokens)
 
 ### What the function may keep
 
-```swift
+```rayo
 func defaultName() -> &Text {
     let s = alloc "grunt"
     return s                              // error: the result borrows local 's', which is destroyed on return
@@ -220,7 +220,7 @@ func addDefault(into out: mutable &List<&Text>) {
 
 **By default a result borrows what every argument lends, even one the function only reads.** That gets in a parser's way when it looks a token up in a symbol table, then moves its lexer on. Here the lexer owns the script's text, so a token's text borrows the lexer itself:
 
-```swift
+```rayo
 struct Lexer(var text: String, var pos: UInt = 0)
 
 extension SymbolTable {
@@ -237,7 +237,7 @@ use(syms)
 
 **The key is only compared, never kept.** Say so, and the result borrows the table alone:
 
-```swift
+```rayo
 extension SymbolTable {
     func find(_ key: &Text) -> (&[Symbol])?
         where return borrows self { ... }   // the result borrows only the table
@@ -257,7 +257,7 @@ use(syms)
 
 **The compiler checks the clause against the body**, so a wrong clause is a compile error, never a dangling reference:
 
-```swift
+```rayo
 func pick(_ a: &Text, _ b: &Text) -> &Text
     where return borrows a {
     b                                     // error: by its 'where' clause, the result may borrow only 'a'
@@ -266,7 +266,7 @@ func pick(_ a: &Text, _ b: &Text) -> &Text
 
 ## Temporaries
 
-```swift
+```rayo
 let text: &Text = try readText("arena.script")      // error: the String dies with this statement; write 'let source = try readText(…)'
 log("\(text)")
 ```
@@ -275,7 +275,7 @@ log("\(text)")
 
 **Name the value, and it lives to the end of its scope:**
 
-```swift
+```rayo
 let source = try readText("arena.script")       // the binding owns the String
 let text: &Text = source                         // fine
 log("\(text)")
@@ -289,7 +289,7 @@ log("\(text)")
 
 ## Staying valid after a parameter changes: `outlives`
 
-```swift
+```rayo
 func copyAll(from src: &List<&Text>, into dst: mutable &List<&Text>)
     where dst outlives src { ... }
 
@@ -306,7 +306,7 @@ use(kept)
 
 **A `for` loop can collect references to a collection's elements.** The loop gets each element from an **iterator**, a value that walks the collection, by calling its `next()`. A collection's iterator declares `next()` `where return outlives self`, so each element borrows the collection, not the iterator:
 
-```swift
+```rayo
 var names = alloc List<&Text>()
 for entry in &table.entries { names.append(entry.name) }    // 'names' borrows 'table'
 use(names)                                                  // fine: the loop's iterator is gone

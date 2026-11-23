@@ -12,7 +12,7 @@ Dependencies begin where code makes a view of a place. They follow values derive
 
 **Through a shared reference, the place that holds the reference drops out.** A place reached through a shared reference `r`, such as `r.hp` or `r[i]`, lies in what `r` refers to. Nothing can change that place through `r`, and nothing it carries ends with `r`, since dropping a reference runs no code. So a view of it depends on what `r` carries, not on the place that holds `r`, as a reborrow `&r` does, since a copy of `r` would reach the same place ([01](../01-values-and-ownership/references.md#reborrowing)):
 
-```swift
+```rayo
 let b = &rest[0]                         // in an iterator over a '&[T]': 'b' depends on what 'rest' refers to
 rest = rest[1...]                        // fine while 'b' is live: 'b' doesn't depend on 'rest'
 let t = Token(text: src[start..<pos])    // in a lexer: depends on the text, not on the lexer's field
@@ -47,7 +47,7 @@ let t = Token(text: src[start..<pos])    // in a lexer: depends on the text, not
 
 **Calling a closure is a call whose `self` is the closure**, so rule 3 applies to it as to a method. `self` is borrowed for a non-`mutating` closure, borrowed for change for a `mutating` one, and owned for a `consuming` one ([05](../05-protocols-generics-and-closures/functions-and-closures.md#closure-kinds)). A closure never lends out its owned captures (rule 5), so the result depends on the closure's dependency set: what it captures by reference, and what its owned captures carry.
 
-```swift
+```rayo
 let get = { &src }
 let v = get()                    // 'v' depends on 'src'
 ```
@@ -66,7 +66,7 @@ Every other type is **unsealed**. Each item above is a closure or a function val
 
 **What the closure carries always flows.** So this compiles:
 
-```swift
+```rayo
 alloc func names(_ t: &[Token]) -> List<&Text> {
     alloc t.map { $0.text }        // the list depends on the tokens 't' refers to, not on the literal
 }
@@ -74,7 +74,7 @@ alloc func names(_ t: &[Token]) -> List<&Text> {
 
 **A place captured exclusively ties the result to the closure**, since besides the result, only the closure reaches that place, and its next call may change or free it. Take a call that doesn't consume the closure, and returns a result depending on a place the closure captures exclusively: the place itself, not what it carries. The result then also depends, exclusively, on the function value and the storage it views, whatever the result's type, as a `mutating` method's result depends on `self`. So the next call conflicts while the result lives. The exemption for sealed types never removes this tie.
 
-```swift
+```rayo
 var grow = { () -> &[Int] in buf.append(0); return buf.span }
 let a = grow()
 _ = grow()                       // error: 'grow' is borrowed by 'a' (used below)
@@ -85,7 +85,7 @@ var nextLine = { reader.readLine() }   // the same: each line it returns ties up
 
 **The tie also binds a call that is passed a `mutating` closure, or a new view of one, without consuming the closure itself.** Its result and absorbing arguments depend, exclusively, on that closure's storage whenever they may depend on a place the closure captures exclusively:
 
-```swift
+```rayo
 func once(_ f: consuming () -> &[Int]) -> &[Int]
 
 let b = once(mutable grow)       // consumes a new view of 'grow', not 'grow' itself
@@ -100,7 +100,7 @@ print("\(b.count)")
 
 So a function that takes a `mutating` closure can't hold one call's scoped result across a second call:
 
-```swift
+```rayo
 func twice(_ f: mutable &(mutating () -> &[Int])) {
     let a = f()
     _ = f()                      // error: 'f' is borrowed by 'a' (used below)
@@ -132,7 +132,7 @@ A copyable type that holds no inline array, at any depth, is **shallow**, scoped
 
 **The rule holds whether the argument is a variable, a parameter or a temporary.** To such a result, an unscoped shallow argument contributes nothing. For example:
 
-```swift
+```rayo
 struct Key(let text: &Text, let hash: UInt64)              // shallow: a reference and an integer
 extension SymbolTable { func find(_ key: &Key) -> (&[Symbol])? }
 
@@ -141,7 +141,7 @@ let syms = symbols.find(Key(text: name, hash: h))          // the key dies with 
 
 **A result that holds a reference to a sized type keeps depending on the argument place**, since it may refer into the argument's own bytes:
 
-```swift
+```rayo
 func hpOf(_ e: &Enemy) -> &Float { e.hp }     // refers into the enemy it is given
 let hp = hpOf(makeEnemy())                    // an error if 'hp' is used later: it refers into a temporary
 ```
@@ -186,7 +186,7 @@ An owned function value is no absorbing argument ([Rule 4: Absorption](dependenc
 
 **A function that returns a mutable view must take a `mutable` argument, or own a mutable view.** A `&` parameter that holds a mutable reference doesn't qualify, since a second view could then write what the first still reads. An `unsafe` function is exempt (next).
 
-```swift
+```rayo
 struct Halves<T>(var low: mutable &[T], var high: mutable &[T]): Scoped
 
 func rest<T>(_ s: mutable &[T]) -> mutable &[T]            // fine: 's' is lent for change
@@ -203,7 +203,7 @@ func peek<T>(_ h: &Halves<T>) -> mutable &[T]              // error: 'h' is only
 - **A value that depends on an exclusive dynamic access its call begins** (rule 6), as the reference a `Slice`'s `lock()` returns does ([06](../06-memory-and-allocators/owning-values.md#long-lived-views-into-long-lived-buffers)).
 - **A value of a guard type** ([Lock guards are released on the thread that took them](dependency-lifetimes.md#lock-guards-are-released-on-the-thread-that-took-them)), whose exclusivity its `Synchronized` type enforces. A `Synchronized` method may return one from a shared `self`, as `Mutex.lock()` does, and any function may pass one on.
 
-```swift
+```rayo
 func lockRegistry(_ s: &Services) -> MutexGuard<Registry> { s.registry.lock() }   // a guard from a shared 's'
 ```
 
@@ -213,7 +213,7 @@ func lockRegistry(_ s: &Services) -> MutexGuard<Registry> { s.registry.lock() } 
 
 **A temporary that is lent, `self` included, lives to the end of its full statement**, and a value depending on it can't outlive that:
 
-```swift
+```rayo
 let x = first(makeArray())      // an error if 'x' is used later
 ```
 
@@ -226,7 +226,7 @@ A **full statement** is a statement, except that each of these is a full stateme
 
 So the temporaries of each of these die before the body runs, unless a `when` subject is kept in a hidden local ([01](../01-values-and-ownership/bindings.md#for-and-when-names)). That makes this an error too:
 
-```swift
+```rayo
 if let x = first(makeArray()) { print("\(x)") }    // error: the array dies before the body runs
 ```
 
@@ -238,7 +238,7 @@ if let x = first(makeArray()) { print("\(x)") }    // error: the array dies befo
 
 So these leave only `table` and `symbols` borrowed:
 
-```swift
+```rayo
 let row = &table.rows()[0]                        // 'rows()' returns a '&[Row]': 'row' depends on what it carries
 let syms = symbols.find(Key(text: "if", hash: h))    // a shallow key, and a sealed result
 ```

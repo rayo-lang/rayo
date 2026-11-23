@@ -10,7 +10,7 @@
 
 **A C library stores a `void* user` per registered item, and calls a callback on its own threads with two of those pointers**, as a physics library's contact callback does. Some items are elements of a `StablePool`, which the program later replaces whole by assigning it a new one, and some are objects allocated in an arena that is later reset. Separately, a global `let` `StablePool` has one of its elements pinned for C. That pool is initialized at startup, never placed in read-only data, since its pin counts are written at run time ([09](../../spec/09-compile-time/constants-and-conditions.md#consts-that-reach-run-time)).
 
-```swift
+```rayo
 pool = alloc StablePool()   // assigns a new pool: the old one is destroyed while C may still hold its elements' addresses
 ```
 
@@ -99,7 +99,7 @@ size_t board_uart_write(const uint8_t* data, size_t len);   // queues bytes to s
 size_t board_uart_pending(void);                            // how many queued bytes are still unsent
 ```
 
-```swift
+```rayo
 import c "board.h" as board where prefix: "board_" unsafe { noalloc board_uart_write }   // the vendor's SDK
 
 let queued = UInt(unsafe board.uart_write(msg.baseAddress, CSize(msg.count)))  // size_t is CSize: a UInt32 here
@@ -132,7 +132,7 @@ if let reg = unsafe *UInt32?(bitPattern: uartData) {    // a pointer made from a
 
 **A loop over many values does vector arithmetic**, such as this:
 
-```swift
+```rayo
 pos += vel * dt          // vector arithmetic on each value
 vel = lerp(…)            // a call to a small math function
 ```
@@ -151,7 +151,7 @@ vel = lerp(…)            // a call to a small math function
 
 **Many types that conform to one protocol are run each iteration through the protocol**, as a server's middleware stages are for each request, or an engine's render passes for each frame. The second criterion passes each value, held as an existential, to this generic function:
 
-```swift
+```rayo
 func run<T: P>(_ x: mutable &T, …)     // generic over the protocol's conforming types
 ```
 
@@ -170,7 +170,7 @@ func run<T: P>(_ x: mutable &T, …)     // generic over the protocol's conformi
 
 The computation uses `Float` and `Simd` math: `a * b + c` patterns, explicit `fma` calls, square roots, conversions, and sums and minimums of a vector's lanes. It also makes calls whose arguments have side effects, such as this one:
 
-```swift
+```rayo
 spawn(at: rng.next(), heading: rng.next())    // each argument draws the next random number
 ```
 

@@ -4,7 +4,7 @@
 
 Safe Rayo code relies on the compiler to check its memory guarantees. Some operations, including raw pointer access and C calls, cannot be verified from their types alone. `unsafe` marks where code takes responsibility for those guarantees.
 
-```swift
+```rayo
 unsafe {
     let p: *Particle = ptr(to: mutable particles[0])
     p[3].pos = .zero
@@ -19,7 +19,7 @@ unsafe func blit(_ dst: *UInt8, _ src: *UInt8, _ n: UInt) { ... }   // callers n
 
 **An `unsafe` block covers all the code written inside it, including the bodies of closure literals there.** `unsafe` before an expression is an `unsafe` block around its operand, as the precedence table of 12 binds it ([12](../12-grammar/constructs.md#expressions)):
 
-```swift
+```rayo
 let sum = unsafe a.pointee + b.pointee      // error: 'unsafe' covers only a.pointee, and b.pointee needs it too
 let total = unsafe (a.pointee + b.pointee)  // covers both reads
 ```
@@ -143,7 +143,7 @@ The rules say what an allocation is, what each access through a raw pointer must
 
 **So a value that counts its parts counts a part only once it is there.** This `Buffer` destroys its first `count` slots, so a slot it counts must hold a `T` whenever something can panic. Its fields are `unsafe`, so only `unsafe` code can break that:
 
-```swift
+```rayo
 struct Buffer<T>(unsafe let storage: *T, unsafe var count: UInt, unsafe let capacity: UInt) {
     deinit { unsafe { storage.deinitialize(count: count) } }   // destroys the first 'count' slots
     mutating func push(_ make: () -> T) {
@@ -158,14 +158,14 @@ struct Buffer<T>(unsafe let storage: *T, unsafe var count: UInt, unsafe let capa
 
 If `make()` panics, the unwind destroys the buffer, or a `recover` closure reads it, and either finds a counted slot with no `T` in it. Updating `count` last fixes it:
 
-```swift
+```rayo
             (storage + count).initialize(to: make())
             count += 1                                          // sound: the slot holds a T before it is counted
 ```
 
 **A property's accessors are calls, each a point that can panic like any other** ([Panics](panics.md#unwinding)). A place property's accessor runs nothing once it has handed out its place, so a panic while the caller uses the place can't stop it halfway. A value property's change is different: a panic between its `get` and its `set` destroys the copy and never calls `set` ([02](../02-views-and-dependencies/place-and-value-properties.md#panics-during-a-change)). So a `get` never takes a value out of storage for its `set` to put back:
 
-```swift
+```rayo
 subscript(i: UInt) -> T {
     get { unsafe (storage + i).move() }                      // unsound: a read, or a panic before set, leaves slot i empty
     set { unsafe (storage + i).initialize(to: consume newValue) }
@@ -190,7 +190,7 @@ Two more facts are part of the boundary between `unsafe` and safe code:
 
 **`ptr(to:)` returns the address of a place**, in two forms: one for a place lent to it with `mutable`, and a shared form for a place lent shared.
 
-```swift
+```rayo
 unsafe func ptr<T>(to place: mutable &T) -> *T    // the form for a place lent for change
 let p = unsafe ptr(to: mutable particles[0])      // the address of particles[0], lent for change
 let q = unsafe ptr(to: particles[0])              // the shared form: the address of a place it borrows

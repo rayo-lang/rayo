@@ -6,7 +6,7 @@
 
 **A closure literal is never a statement.** A `{` at the start of a statement begins a closure literal, and one used as a whole statement is a compile error, since it would never run. `do { … }` groups statements instead:
 
-```swift
+```rayo
 { reset() }         // error: this closure would never run
 do { reset() }      // groups statements, and runs them
 ```
@@ -15,7 +15,7 @@ do { reset() }      // groups statements, and runs them
 
 **A `{` right after `when` begins its body, so that `when` has no subject.** A subject that is a closure literal is written in parentheses:
 
-```swift
+```rayo
 when &action {
     .retry { attempt() }          // the arm's value is what attempt() returns
     else { ({ attempt() }) }      // a closure literal, in parentheses: the arm's value is the closure
@@ -26,7 +26,7 @@ when ({ … }) { … }                // a closure literal as the subject, in pa
 
 **A block's last expression can't start with `.` on a line of its own**, since that line joins the one above ([where statements end](../12-grammar.md#where-statements-end)). An implicit member on a line of its own as a block's value is written in parentheses:
 
-```swift
+```rayo
 let shown: DoorState = if open {
     playSound()
     (.open)                   // written '.open', this line would join the one above: 'playSound().open'
@@ -35,14 +35,14 @@ let shown: DoorState = if open {
 
 **A `{` right after a trailing closure's `}` is a compile error**, though `postfix*` would read it as a call of the first call's result. So an unlabeled closure never follows a trailing closure, and a later one carries its label, as in `} recover: {` ([05](../05-protocols-generics-and-closures/functions-and-closures.md#trailing-closures)). To call a call's result with a closure, parenthesize the call, or bind the result first:
 
-```swift
+```rayo
 makeHandler { copy cfg } { event in log(event) }        // error: a trailing closure after the first carries a label
 (makeHandler { copy cfg })({ event in log(event) })     // calls the handler that makeHandler returns
 ```
 
 **In any expression that a statement's block follows, a `{` always starts the block, never a trailing closure.** To pass a closure there, parenthesize the call:
 
-```swift
+```rayo
 for x in alloc items.filter { $0.alive } { use(x) }      // error: '{ $0.alive }' is read as the loop's body
 for x in alloc items.filter({ $0.alive }) { use(x) }    // the closure is inside the call's parentheses
 ```
@@ -56,7 +56,7 @@ for x in alloc items.filter({ $0.alive }) { use(x) }    // the closure is inside
 
 **In expression position, `unsafe` before `{` begins an `unsafe-block-expr`**, an unsafe block whose value is its last expression, not `unsafe` applied to a closure literal, which is written `unsafe ({ … })`. As a statement, `unsafe { … }` is an ordinary unsafe block:
 
-```swift
+```rayo
 let now = unsafe { platform_time_seconds() }      // an unsafe block, whose value is the call's
 let clock = unsafe ({ platform_time_seconds() })  // 'unsafe' applied to a closure literal
 unsafe { platform_set_audio_callback(onAudioEvent, nil) }   // a statement: an ordinary unsafe block
@@ -68,7 +68,7 @@ unsafe { platform_set_audio_callback(onAudioEvent, nil) }   // a statement: an o
 
 **`try`, `try?` and `try!` take the whole postfix chain after them**, as every prefix operator does. So `try f().x` takes the `x` of `f()`'s `Result`, and a member of the success value is written `(try f()).x` ([10](../10-errors-and-safety/typed-errors.md#propagating-errors-with-try)):
 
-```swift
+```rayo
 let size = (try readText(path)).count    // the count of the String that readText succeeds with
 let bad = try readText(path).count       // error: '.count' applies to the Result, which has no 'count'
 ```
@@ -79,7 +79,7 @@ let bad = try readText(path).count       // error: '.count' applies to the Resul
 
 **Whitespace tells the prefix and postfix range operators, as in `..<x` and `x...`, from the binary ones.** Between two operands, with whitespace on both sides or on neither, a range operator is binary. Attached to an operand on one side only, it is prefix or postfix, whatever is on its other side: whitespace, a bracket or punctuation.
 
-```swift
+```rayo
 let hp = target?.hp                 // '?' after an operand: optional chaining
 let all = 0..<n                     // between two operands, with whitespace on neither side: binary
 let tail = &xs[3...]                // attached to 3 only, and closed by ']': postfix
@@ -90,7 +90,7 @@ let head = &xs[..<n]                // attached to n only: prefix
 
 **An operator can be passed as a function value.** Bare, it is allowed only as a whole argument, as in `reduce(0, +)`. Elsewhere it is written in parentheses, `(+)`. The expected function type chooses the overload, using 05's bounded lookup ([05](../05-protocols-generics-and-closures/operators.md#operators)).
 
-```swift
+```rayo
 let total = counts.reduce(0, +)         // a bare operator as a whole argument
 let add: (Int, Int) -> Int = (+)        // anywhere else, in parentheses
 ```
@@ -102,7 +102,7 @@ let add: (Int, Int) -> Int = (+)        // anywhere else, in parentheses
 
 **Otherwise `<` is the comparison operator.**
 
-```swift
+```rayo
 let xs = alloc List<Int>()                        // '<Int>' parses as generic arguments, and '(' follows
 if a < b, c > d { … }                             // two comparisons: 'd' can't follow generic arguments
 f(a < b, c > (d))                                 // a generic call 'a<b, c>(d)': written '(c > d)', it is two comparisons
@@ -111,7 +111,7 @@ static if T == List<Int> || T == Set<Int> { … }   // '||' can't begin an opera
 
 **While generic arguments are being parsed, a `>>`, `>>=` or `>=` token is split into `>` followed by the rest.** That holds for generic arguments in a type, and for those after an `identifier <` that starts them:
 
-```swift
+```rayo
 var b: Box<Int>= consume a                              // '>=' splits, so 'b' is a Box<Int>
 let q = alloc SpscQueue<Shared<Snapshot>>(capacity: 3)  // '>>' splits, closing two argument lists
 ```
@@ -126,7 +126,7 @@ let q = alloc SpscQueue<Shared<Snapshot>>(capacity: 3)  // '>>' splits, closing 
 - **Error unions and tuples.** Otherwise `(A | B)` is an error union and `(A, B)` a tuple.
 - **A single type.** A parenthesized single type without a label or a trailing comma is that type, not a one-element tuple, as `(&T)?` shows ([below](#references-and-unsized-types)).
 
-```swift
+```rayo
 typealias OnError = (IoError | ParseError) -> Void    // ')' then '->': one error-union parameter
 typealias Failure = (IoError | ParseError)            // an error union
 typealias Hit = (target: Handle<Enemy>, damage: Float) // a tuple
@@ -138,7 +138,7 @@ typealias Single = (Int,)                             // a one-element tuple
 
 **Any other type in an expression is parenthesized.** A `(` in expression position begins such a type when what it holds starts as only a type can, with `*`, `any`, `some`, `@c` or `[ … of`, or when the matching `)` is followed by `.self`. Any other such type is named through a `typealias` first:
 
-```swift
+```rayo
 let size = (*Int).size                // '*' starts as only a type can
 let pair = (Int, Float).self          // ')' is followed by '.self'
 typealias Pair = (Int, Float)
@@ -159,7 +159,7 @@ let p = Pair.construct { … }          // any other such type is named through 
 
 **`Text`, the unsized run of UTF-8, is a type name of the standard library**, and parses as any other type name does ([01](../01-values-and-ownership/references.md#unsized-types)).
 
-```swift
+```rayo
 let picked: (&Enemy)? = nil               // an optional reference
 let slot: &Enemy? = spare                 // a reference to an optional: 'spare' is a local Enemy?
 let name: (static &Text)? = nil           // an optional static reference to text

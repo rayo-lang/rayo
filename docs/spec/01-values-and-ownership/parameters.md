@@ -4,7 +4,7 @@
 
 **A parameter's type says what the function does with its argument**: owns it, borrows it, or borrows it for change.
 
-```swift
+```rayo
 func length(_ v: Vec3) -> Float { ... }                       // owns a copy: a Vec3 is implicitly copyable
 func show(_ e: &Enemy) { ... }                                 // borrows the caller's enemy: reads it, can't change it
 func damage(_ e: mutable &Enemy, by amount: Float) { ... }     // borrows it for change: changes the caller's enemy
@@ -34,7 +34,7 @@ adopt(alloc backpack.items.clone())     // a clone is a new value, so nothing mo
 - **Only a parameter whose type is a reference names a place.** A parameter whose type holds a reference, such as `(&Enemy)?` or `List<&Enemy>`, owns the value it is given, as any `x: T` does.
 - **Methods take `self` as their declaration says.** A plain `func` takes it as a `ref let`, a `mutating func` as a `ref var`, and a `consuming func` owns it. A struct's primary initializer takes its fields owned, since the value owns its fields ([04](../04-types/structs.md#initializers)). So `World(enemies: consume enemies)` moves `enemies` in.
 
-```swift
+```rayo
 func bump(_ x: mutable &Int) { x += 1 }       // writes the caller's Int
 func respawn(_ e: mutable &Enemy) {
     e = makeEnemy()                           // replaces the caller's enemy
@@ -60,7 +60,7 @@ damage(consume lead, by: 5)                   // 'e' names 'boss', and the moved
 - a `_` written there leaves the argument unlabeled, so the call writes no label;
 - with neither, the parameter's own name is its label, as `overcharge`'s is below.
 
-```swift
+```rayo
 func heal(_ e: mutable &Enemy, by amount: Float, overcharge: Bool) { ... }
 
 heal(mutable boss, by: 10, overcharge: true)        // 'e' takes no label, and 'overcharge' is labeled by its name
@@ -79,7 +79,7 @@ A label may be a keyword, as `in` is in `index(of: h, in: handles)` ([12](../12-
 
 **A default value makes an argument optional:**
 
-```swift
+```rayo
 func spawn(_ kind: Kind, at pos: Vec3 = .zero) { ... }
 spawn(.grunt)                                           // leaves out 'at:', so 'pos' is .zero
 ```
@@ -106,7 +106,7 @@ spawn(.grunt)                                           // leaves out 'at:', so 
 
 ## Evaluation order, and when a call's borrows begin
 
-```swift
+```rayo
 func f(_ a: mutable &Int, _ b: &Int) { … }
 items.append(items.count)                // fine: items.count is read, and done, before append borrows items
 upload(builder.finish(builder.count))    // fine: count is read before finish takes builder
@@ -122,13 +122,13 @@ f(mutable x, x)                          // error: two borrows of x overlap for 
 
 **Any other `get` runs as its argument or receiver is evaluated.** It makes a value, whatever the call then does with it: borrows it, changes it, takes it, or calls a method on it. Its result keeps what it depends on borrowed (rule 3 in [02](../02-views-and-dependencies/dependency-projection-and-results.md#rule-3-call-results)).
 
-```swift
+```rayo
 items.insert(consume x, at: items.count)   // count's get has returned before insert borrows items
 ```
 
 **Working out a place never accesses it**, except for an optional chain (`?.`) or a force unwrap (`!`) after `&` or `mutable`. Unwrapping reads the optional, so the borrow up to that point begins there, and lasts until the call returns:
 
-```swift
+```rayo
 damage(mutable world.enemies[h]!, by: reinforce(mutable world.enemies))     // error: '!' begins the borrow of world.enemies before reinforce runs
 ```
 
@@ -142,7 +142,7 @@ damage(mutable world.enemies[h]!, by: reinforce(mutable world.enemies))     // e
 
 **An assignment through an optional chain or `!` reads the optional only after evaluating its right side.** When the left side holds one, the assignment works out its left place up to the first `?` or `!`. Then it evaluates its right side, and only then reads the optional and works out the rest, so the right side's accesses have ended by then. A compound assignment does the same. When the chain stops at a `nil`, the right side's value is dropped. A chain on the left ends in a member or an element, so `x? = v` is a compile error ([04](../04-types/enums.md#optionals)).
 
-```swift
+```rayo
 pool[h]?.hp = 0                                               // works out pool[h], evaluates 0, then reads the optional
 pool[a]?.hp = pool[b]!.hp                                     // fine: pool[b] is read before pool[a]'s optional is
 world.enemies[h]?.hp -= reinforce(mutable world.enemies)      // fine: reinforce returns before the optional is read

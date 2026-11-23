@@ -4,7 +4,7 @@
 
 A generic type may need different fields or cases for different type arguments. Rayo lets compile-time conditions and loops generate those declarations, so each resulting type has ordinary named members. The same constructs can generate declarations at a file's top level.
 
-```swift
+```rayo
 struct Columns<Row>(                                      // a struct of arrays: one list per field of Row
     static for f in Row.fields {
         var \(f.name): List<f.type> = alloc []
@@ -28,7 +28,7 @@ A library writes such a type once, and the compiler generates its members from t
 
 ## Computed names
 
-```swift
+```rayo
 struct Merged<A, B>(                                      // Merged<Enemy, Player> is an error if both have an 'hp'
     static for f in A.fields { var \(f.name): f.type },
     static for f in B.fields { var \(f.name): f.type },
@@ -45,7 +45,7 @@ A generated declaration needs a name that comes from the element it was made for
 
 **Every rule treats generated declarations as if they were written out**: layout, access control, conformances, exclusivity, moves and partial moves, per-field dependency sets, destruction order and reflection. So the generated stored fields of one value are disjoint places ([01](../01-values-and-ownership/exclusivity.md#which-places-overlap)), and `Columns<Particle>.fields` lists them:
 
-```swift
+```rayo
 struct Particle(var pos: Vec3, var vel: Vec3)
 
 var columns = Columns<Particle>()                         // fields: pos: List<Vec3>, vel: List<Vec3>
@@ -70,7 +70,7 @@ A `where` clause that states a property, such as `where Delta<T>: Copyable`, let
 
 ## Generation runs in dependency order
 
-```swift
+```rayo
 struct A(
     static for f in Delta<A>.fields { … }                 // error: A's fields would depend on themselves
 )
@@ -93,7 +93,7 @@ A generated type's members come from lists of other declarations, and **generati
 
 A generated declaration here is one that any `static if` or `static for` generates, directly or through other generated declarations or the `const`s they feed. It may be a member, a top-level declaration, an extension or a conformance. The test is on what it could change, whether or not its branch is taken. So each of these makes generation a cycle:
 
-```swift
+```rayo
 struct Echo {
     static if Echo.conforms(Copyable.self) { deinit { … } }   // error: a deinit would change whether Echo is copyable
 }

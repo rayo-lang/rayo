@@ -8,7 +8,7 @@ Numeric types have fixed representations, so their range, overflow and conversio
 
 **Integers are fixed-width and two's complement, and floating-point numbers are IEEE 754 binary floats.**
 
-```swift
+```rayo
 let hp = 100               // Int
 let elapsed = 0.0          // Double: nothing gives the literal another type
 let step: Float = 0.5      // Float, from the annotation
@@ -36,7 +36,7 @@ let wide: Int = small      // widening: every UInt8 fits in an Int
 
 ### Conversions
 
-```swift
+```rayo
 let a: Int16 = 300
 let b: Int32 = a                 // Int16 to Int32 loses nothing, so it is implicit
 let c: Float = a                 // every Int16 is exact in a Float
@@ -72,7 +72,7 @@ let g: Int64 = d                 // error: Int and Int64 never convert implicitl
 
 A negative value whose integer part isn't 0 never fits an unsigned type, so `UInt` of it is out of range.
 
-```swift
+```rayo
 let x = -2.9
 let zero = 0.0
 let a = Int(x)                  // -2: rounds toward zero
@@ -83,7 +83,7 @@ let d = Int(zero / zero)        // panics: float to integer conversion of NaN
 
 ### Integer overflow, division and shifts
 
-```swift
+```rayo
 func step(_ x: Int32, _ n: Int32) {
     let a = x + 1       // panics on overflow where overflow checks are on (10), wraps where they are off
     let b = x &+ 1      // always wraps
@@ -112,7 +112,7 @@ func pack(_ b: UInt8, _ n: Int, _ bit: UInt8) {
 
 **Prefix `-` belongs to the signed integer types and the floating-point types alone.** Negating an unsigned value overflows for every value but 0, so `-u` on a `UInt` is a compile error rather than a panic when the program runs. A `-` on an untyped value other than a literal, such as `-(1 + 2)`, is untyped too and takes the type its context gives it, which must then be signed. A `-` on a literal is part of the literal, so the literal's own check decides whether it fits ([Literals](collections.md#literals)):
 
-```swift
+```rayo
 func flip(_ i: Int, _ u: UInt) {
     let a = -i              // an Int, which overflows only for Int.min
     let b = -u              // error: '-' needs a signed operand, found UInt
@@ -127,7 +127,7 @@ func flip(_ i: Int, _ u: UInt) {
 
 ### Floating point
 
-```swift
+```rayo
 let p = a * b + c       // rounds twice, after * and after +: never fused into one multiply-add
 let q = (a + b) + c     // never reassociated into a + (b + c), which can round differently
 let r = fma(a, b, c)    // a * b + c rounded once: fused, because the code names fma
@@ -145,7 +145,7 @@ let r = fma(a, b, c)    // a * b + c rounded once: fused, because the code names
 
 **Floating-point types have no `%`.** A float's remainder has two common meanings: the truncated remainder, which C's `fmod` gives and whose quotient rounds toward zero, and IEEE 754's `remainder`, whose quotient rounds to nearest. `%` can't say which one it means, so each is a named function, which the spec leaves to std ([11](../11-compilation-model.md#what-the-spec-defines)).
 
-```swift
+```rayo
 let r = 7.5 % 2.0       // error: '%' takes integers
 ```
 
@@ -153,13 +153,13 @@ let r = 7.5 % 2.0       // error: '%' takes integers
 
 **`fma` is a prelude function that the language builds in** ([11](../11-compilation-model.md#the-prelude)). So it runs in a `const` initializer, which calls no C function, and gives the bits it gives at run time ([09](../09-compile-time/constants-and-conditions.md#running-code-at-compile-time-const)). It is one generic function, which owns copies of its operands, as the free `min` does ([05](../05-protocols-generics-and-closures/operators.md#equality-and-ordering)). Each operand is a number or a vector of numbers, which a call copies with nothing written where it is implicitly copyable ([01](../01-values-and-ownership/moves-copies-destruction.md#implicitly-copyable-types)):
 
-```swift
+```rayo
 func fma<T>(_ a: T, _ b: T, _ c: T) -> T    // T: Half, Float, Double, or a Simd of one of them
 ```
 
 **`T` binds as any generic call's type parameter does** ([05](../05-protocols-generics-and-closures/operators.md#operators)): to the type the typed arguments widen to, else to the expected type, else to the literals' default, as an array literal's elements take one. `T` must then be `Half`, `Float`, `Double`, or a `Simd` of one of them, and any other type is a compile error. So `fma(1, 2, 3)` is an error, since `T` is then `Int`. A type parameter is none of those types, so generic code calls `fma` only on a concrete floating-point type, or on a `Simd` of one with a generic `N`. `fma` is builtin, so no protocol states that constraint. A vector `T` works lane by lane ([SIMD and math](#simd-and-math)).
 
-```swift
+```rayo
 let s = fma(h, f, f)                  // h is a Half and f a Float: h widens, and T is Float
 let t = fma(0.1, 3.0, -0.3)           // only literals: T is Double, their default
 let u: Float = fma(0.1, 3.0, -0.3)    // the expected type makes T a Float
@@ -167,7 +167,7 @@ let u: Float = fma(0.1, 3.0, -0.3)    // the expected type makes T a Float
 
 **A floating-point operation that the target's processor lacks, or would give a different result for, such as by flushing a subnormal to zero, is computed another way.** It runs in software where the processor offers no other way, with the result this section gives. On a target without a fused multiply-add instruction, `fma` still rounds once, never as a multiply and an add that each round, and on a processor without floating-point hardware, such as a Cortex-M0, every operation runs in software. So the hardware changes how long an operation takes, never its result.
 
-```swift
+```rayo
 let lo = min(x, Float.nan)              // NaN: min passes a NaN on
 let lowest = minNumber(x, Float.nan)    // x: minNumber skips a NaN
 let z = min(-0.0, 0.0)                  // -0.0, which counts as less than +0.0
@@ -188,7 +188,7 @@ So a NaN propagates instead of disappearing silently. Both operations are also c
 
 **The language builds in `Simd<T, N>`, the vectors that map to the target's vector hardware, and `std.math` builds the rest in ordinary Rayo:**
 
-```swift
+```rayo
 let v: Vec3 = [1, 2, 3]
 let w = v * 2 + Vec3(repeating: 1)        // element-wise, with the scalar broadcast to every lane
 let n = cross(v, w).normalized            // std.math
@@ -220,7 +220,7 @@ if (a < Vec4(repeating: 8)).all { … }     // 'all' reduces the mask to one Boo
 
 **Packing lanes into a narrower type says what happens to a lane that doesn't fit**, as a scalar conversion does:
 
-```swift
+```rayo
 let wide: Simd<UInt16, 8> = [0, 200, 255, 256, 1000, 7, 65535, 128]
 let packed = Simd<UInt8, 8>(clamping: wide)      // [0, 200, 255, 255, 255, 7, 255, 128]
 let low = Simd<UInt8, 8>(truncating: wide)       // [0, 200, 255, 0, 232, 7, 255, 128]
@@ -262,7 +262,7 @@ So a vector's layout is the same on every target, and no vector asks for more th
 
 A **shuffle** builds a vector from lanes of one or two vectors, picked by a list of lane indices known at compile time. So one operation writes any permutation, broadcast or interleave:
 
-```swift
+```rayo
 let v: Simd<UInt8, 8> = [10, 11, 12, 13, 14, 15, 16, 17]
 let w: Simd<UInt8, 8> = [20, 21, 22, 23, 24, 25, 26, 27]
 
@@ -280,7 +280,7 @@ let bad = shuffle(v, [8, 0])                          // error: lane 8 of one 8-
 
 **Any function that can run at compile time can compute an index list.** In generic code the list is evaluated at each instantiation, since it may depend on that instantiation's `N`. So an index out of range, or a count `K` that isn't a lane count, fails there ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#checking-generic-code)). A shuffle only moves lanes, so `reversed` works for every `T: SimdLane` ([above](#simd-and-math)):
 
-```swift
+```rayo
 func reversedLanes<let N: UInt>() -> [N of UInt] {    // ordinary code, run by the compiler
     var lanes: [N of UInt] = .init(repeating: 0)
     for i in 0..<N { lanes[i] = N - 1 - i }
@@ -302,7 +302,7 @@ func reversed<T: SimdLane, let N: UInt>(_ v: Simd<T, N>) -> Simd<T, N> {
 
 A **mask** is a `Simd<Bool, N>`, one `Bool` per lane. A comparison of vectors gives one, whose lane `i` says whether the comparison holds in lane `i`. A delimiter scan loads 64 bytes at a time from any offset, compares them at once, and turns the mask into an integer to find the first match:
 
-```swift
+```rayo
 func firstNewline(in bytes: &[UInt8]) -> UInt? {
     var i: UInt = 0
     while i + 64 <= bytes.count {
@@ -342,20 +342,20 @@ A **reduction** combines a vector's lanes into one value. A mask has `any`, `all
 - **One lane.** A 1-lane vector reduces to its lane.
 - **Three lanes.** A 3-lane vector reduces as `(v[0] ⊕ v[1]) ⊕ v[2]`, where `⊕` is the reduction's operation, and its padding lane is never read.
 
-```swift
+```rayo
 let total = v.sum()    // for 8 lanes: ((v[0] + v[4]) + (v[2] + v[6])) + ((v[1] + v[5]) + (v[3] + v[7]))
 ```
 
 **An integer sum checks each of its additions as `+` does** ([above](#integer-overflow-division-and-shifts)): it panics on overflow where overflow checks are on, and wraps where they are off. The order is fixed, so whether a sum panics is the same on every target:
 
-```swift
+```rayo
 let d: Simd<Int8, 4> = [100, 100, -100, -100]
 let t = d.sum()        // 0: (100 + -100) + (100 + -100) never overflows, though 100 + 100 would
 ```
 
 **A sum that may overflow its lane type widens the lanes first, or wraps on purpose:**
 
-```swift
+```rayo
 let bytes = Simd<UInt8, 16>(loading: data, at: i)
 let wide = Simd<UInt16, 16>(converting: bytes)    // exact: every UInt8 fits in a UInt16
 let total = wide.sum()                            // at most 16 × 255, which fits in a UInt16
@@ -368,7 +368,7 @@ let check = bytes.wrappingSum()                   // a UInt8 checksum: wraps, ne
 
 **Three-lane vectors come in two layouts**: the builtin `Simd<T, 3>` takes the room of four lanes, and `std.math`'s `Vec3` the room of three:
 
-```swift
+```rayo
 struct Light(var pos: Vec3, var radius: Float)              // 16 bytes: three floats, then one
 struct Light4(var pos: Simd<Float, 3>, var radius: Float)    // 32 bytes: the vector alone takes 16, aligned to 16
 ```
@@ -377,7 +377,7 @@ struct Light4(var pos: Simd<Float, 3>, var radius: Float)    // 32 bytes: the ve
 
 **`Vec3` is `std.math`'s struct of three floats**, 12 bytes with no padding, written in ordinary Rayo:
 
-```swift
+```rayo
 public struct Vec3(public var x: Float, public var y: Float, public var z: Float): ExpressibleByArrayLiteral, ImplicitlyCopyable {
     @inline public init(_ x: Float, _ y: Float, _ z: Float) { self.init(x: x, y: y, z: z) }
 

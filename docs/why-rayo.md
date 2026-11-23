@@ -76,7 +76,7 @@ Six principles decide Rayo's trade-offs.
 
 A tiny game: enemies chase a player, updated on several threads at once, and a scripted door opens over several frames.
 
-```swift
+```rayo
 import std.math                             // normalized and other vector math
 import std.pool                             // Pool; Handle is in the prelude
 import std.jobs                             // forEachInParallel, from std's job system

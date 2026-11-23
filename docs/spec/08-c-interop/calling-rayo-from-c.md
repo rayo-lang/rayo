@@ -4,7 +4,7 @@
 
 A C or C++ program uses a library written in Rayo:
 
-```swift
+```rayo
 @export(c) func nav_load(_ desc: NavDesc) -> WeakShared<NavMesh> { ... }   // Shared.leak: the C caller owns the mesh
 @export(c, name: "nav_path") func findPath(_ mesh: WeakShared<NavMesh>, _ out: mutable &[Int32]) -> Int32 { ... }
 
@@ -109,7 +109,7 @@ A C or C++ program uses a library written in Rayo:
 
 A `@c func` is a Rayo function that C can call through a function pointer:
 
-```swift
+```rayo
 let audioEvents = alloc MpscQueue<AudioEvent>(capacity: 256)  // global let: Synchronized, safe from any thread
 
 @c func onAudioEvent(_ user: *Void?, _ event: CInt) {         // runs on the audio library's thread

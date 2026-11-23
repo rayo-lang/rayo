@@ -4,7 +4,7 @@
 
 An area attack can damage enemies, breakable scenery and any later type that has health. The function needs only the operations common to those types:
 
-```swift
+```rayo
 protocol Damageable {
     var hp: Float { get set }
     mutating func takeDamage(_ amount: Float)
@@ -34,14 +34,14 @@ func applyAoE<T: Damageable>(_ targets: mutable &[T], amount: Float) {
 - **Generic calls.** Generic code may call it only where its own constraints imply the clause.
 - **Existentials.** Through an existential it is callable only when `P` itself implies the clause, since the existential may hold a conformer that fails it ([below](#any-p-explicit-dynamic-dispatch)).
 
-```swift
+```rayo
 func lowest<T: Comparable & Copyable>(_ a: &T, _ b: &T) -> T { a.min(b) }    // fine: T: Copyable implies the clause
 func lowest2<T: Comparable>(_ a: &T, _ b: &T) -> T { a.min(b) }              // error: T may be move-only
 ```
 
 A generic conformer can meet such a requirement in a constrained extension. `Pair<T>` is copyable exactly when `T` is, so its conformance's conditions plus `Self: Copyable` imply the extension's `T: Copyable`:
 
-```swift
+```rayo
 struct Pair<T: Comparable>(let a: T, let b: T): Comparable {
     static func < (lhs: &Self, rhs: &Self) -> Bool { lhs.a < rhs.a || (lhs.a == rhs.a && lhs.b < rhs.b) }
 }
@@ -53,7 +53,7 @@ extension Pair where T: Copyable {
 
 **A member of a conforming type, or of an extension of one, with a constrained requirement's name and signature that isn't its witness is a compile error**, wherever it is declared. Otherwise a concrete call would reach the member while generic code reaches the witness. The exception is a conformer that never meets the clause, such as a move-only `Comparable` type that declares its own `min`. Generic code can't call the requirement there, so no two calls disagree:
 
-```swift
+```rayo
 extension Pair where T == Int {
     func min(_ other: &Self) -> Self { … }    // error: Pair<Int> already has a witness of min, above
 }
@@ -65,7 +65,7 @@ extension Pair where T == Int {
 2. by the associated type's default;
 3. from the witness of the first requirement, in the protocol's order, whose declared type names it, with no search; in a failure position, it skips witnesses that can't fail (below).
 
-```swift
+```rayo
 protocol Table { associatedtype Row }    // the conforming type chooses 'Row'
 struct Archetype<Row>(…): Table          // its generic parameter 'Row' binds Table's 'Row'
 ```
@@ -79,7 +79,7 @@ struct Archetype<Row>(…): Table          // its generic parameter 'Row' binds 
 
 So the order of the requirements never decides whether a type conforms:
 
-```swift
+```rayo
 protocol Gauge {
     associatedtype Failure: Error
     var value: Int!Failure { get }
@@ -109,7 +109,7 @@ struct Thermometer(let value: Int, var lastError: IoError?): Probe             /
 
 **Generics are type-checked once, at the definition, against their constraints:**
 
-```swift
+```rayo
 func toughest<T: Damageable>(_ xs: &[T]) -> Float {
     var best: Float = 0
     for x in &xs { best = max(best, x.hp) }    // fine: Damageable requires 'hp'
@@ -122,7 +122,7 @@ func toughest<T: Damageable>(_ xs: &[T]) -> Float {
 
 **A body copies a `T` with nothing written only under `T: ImplicitlyCopyable`**, even where every instantiation's type argument is an `Int`, since the check sees only the constraints. Under `T: Copyable` alone, it writes `copy x` ([01](../01-values-and-ownership/moves-copies-destruction.md#implicitly-copyable-types)):
 
-```swift
+```rayo
 func firstOf<T: Copyable>(_ xs: &[T]) -> T { copy xs[0] }                 // a copy, written out
 func lastOf<T: ImplicitlyCopyable>(_ xs: &[T]) -> T { xs[xs.count - 1] }  // a copy, with nothing written
 func bad<T: Copyable>(_ xs: &[T]) -> T { xs[0] }                          // error: write 'copy' before 'xs[0]'
@@ -158,7 +158,7 @@ func bad<T: Copyable>(_ xs: &[T]) -> T { xs[0] }                          // err
 
 A wrapper around a C handle holds a pointer to a C type whose layout Rayo doesn't know. A pointer is one address, so the wrapper is an ordinary struct, one for each C type, which frees its handle with that type's own C function:
 
-```swift
+```rayo
 struct Database(let raw: *sqlite3) {                // sqlite3: an @opaque C type, reached only through the pointer
     deinit { unsafe { _ = sqlite3_close(raw) } }
 }
@@ -192,7 +192,7 @@ A reference to an unsized type has a size of its own, so `&[T]`, `&Text` and `&a
 
 **Instantiation always ends.** Since every instantiation is compiled, a generic function, subscript or type that reaches itself with a type argument that strictly contains one of its own parameters would need infinitely many. So it is a compile error at the definition:
 
-```swift
+```rayo
 func nest<T: Copyable>(_ x: T, _ n: Int) {
     guard n > 0 else { return }
     nest((copy x, copy x), n - 1)    // error: nest<T> reaches nest<(T, T)>, whose argument contains T
@@ -206,7 +206,7 @@ func nest<T: Copyable>(_ x: T, _ n: Int) {
 - compile-time code;
 - value arguments.
 
-```swift
+```rayo
 func f<let N: Int>() { f<N + 1>() }   // grows through its value argument: an error where the chain passes the limit
 ```
 
@@ -216,7 +216,7 @@ func f<let N: Int>() { f<N + 1>() }   // grows through its value argument: an er
 
 **`T.self` is a value that names the type `T`, of type `Type<T>`**: empty, copyable, `Sendable` and `const`. `T` may be any type, an `@opaque` or unsized one included ([above](#type-parameters-stand-for-sized-types)). Such a value is a **type value**. So a function can take a type as an argument and bind a type parameter from it, as a run's `reinterpret` does:
 
-```swift
+```rayo
 func reinterpret<U: Pod>(as _: Type<U>) -> (&[U])?    // binds U from the type value it is passed
 let verts = bytes.reinterpret(as: Vertex.self)         // U is Vertex
 ```
@@ -229,7 +229,7 @@ let verts = bytes.reinterpret(as: Vertex.self)         // U is Vertex
 
 Most maps hash the same way, so std's `Map` lets code leave its hashing type out ([04](../04-types/collections.md#hash-maps-and-sets)):
 
-```swift
+```rayo
 struct Map<K: Hashable, V, H: Hashing = SeededHashing>(…)
 
 let a: Map<Name, Int> = alloc [:]                     // Map<Name, Int, SeededHashing>
@@ -252,7 +252,7 @@ func reportAny<K, H>(_ m: &Map<K, Int, H>) { … }      // takes a map with any 
 
 **A type conforms by declaring it, except the conformances the language gives**: the derived marker protocols, such as `Copyable`, `Sendable` and `Frozen`, the structural `Equatable`, `Comparable` and `Hashable` conformances ([Equality and ordering](operators.md#equality-and-ordering)), and `SimdLane`'s, which no type can declare ([04](../04-types/numbers-and-math.md#simd-and-math)). The language also makes the number types, `Bool`, raw pointers, shared references, small `Simd` vectors and some tuples conform to `ImplicitlyCopyable` ([01](../01-values-and-ownership/moves-copies-destruction.md#implicitly-copyable-types)). An `@opaque` type has none of them, and declares none ([above](#type-parameters-stand-for-sized-types)). A **marker protocol** has no requirements, and states a property of a type. Each requirement is met by a **witness**: a method, initializer, operator, subscript, property or stored field, and for an associated type, a type.
 
-```swift
+```rayo
 protocol HasHp { var hp: Float { get set } }
 struct Crate(var hp: Float): HasHp        // the stored field 'hp' is the witness
 struct Rock(let hp: Float): HasHp         // error: a 'let' field witnesses only get and borrow requirements
@@ -290,7 +290,7 @@ struct Rock(let hp: Float): HasHp         // error: a 'let' field witnesses only
 
 A list of widgets holds buttons, sliders and other types that only the running program knows. Code reaches each one through its protocol, and each call goes through the value's own implementation:
 
-```swift
+```rayo
 protocol Drawable { func draw(_ ctx: mutable &DrawContext) }
 
 func drawAll(_ items: &[Box<any Drawable>], _ ctx: mutable &DrawContext) {
@@ -331,7 +331,7 @@ for w in mutable widgets { w.value.update(dt) }         // a mutating requiremen
 
 **Nothing assigns a whole value through an existential**, since `any P` is unsized, and a place of unsized type is never assigned as a whole ([01](../01-values-and-ownership/references.md#unsized-types)). So a requirement called through one can change the value, but never its type or size. Unpacking as a `mutable &T` argument can replace the value, with one of the same type:
 
-```swift
+```rayo
 func reset(_ d: mutable &any Damageable) {
     d.takeDamage(1)                    // fine: a mutating requirement, through the reference
     d = makeCrate()                    // error: 'any Damageable' is unsized, so 'd' is never assigned as a whole
@@ -346,7 +346,7 @@ func reset(_ d: mutable &any Damageable) {
 
 **A value may hold existential references, as a list of targets does**, and each one keeps the place it refers to borrowed, as every stored reference does, by rule 4 ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-4-absorption)):
 
-```swift
+```rayo
 var targets = alloc List<mutable &any Damageable>()
 targets.append(mutable boss)                    // 'boss' stays borrowed exclusively while the list holds the reference
 targets.append(mutable barrel)
@@ -365,7 +365,7 @@ targets[0] = mutable crate                      // points the first reference at
 
 **`box[as: T.self]` is an optional place property that hands out the value as a `T` place**, with a `borrow` and a `mutate` as `box.value` has, and `nil` when its dynamic type isn't `T`. The language provides it, as it provides `UniquePointer.value` ([02](../02-views-and-dependencies/place-and-value-properties.md#places-behind-a-run-time-check)), since no Rayo declaration can be generic over the protocol inside `Box<any P>`. So a test that fails moves nothing:
 
-```swift
+```rayo
 if ref var s = mutable box[as: Slider.self] { s.label = "Go" }    // a Slider changes in place; any other value stays as it was
 ```
 
@@ -381,7 +381,7 @@ if ref var s = mutable box[as: Slider.self] { s.label = "Go" }    // a Slider ch
 
 ## Unpacking an existential
 
-```swift
+```rayo
 func refill<T: Damageable>(_ t: mutable &T) { t.hp = 100 }
 
 func refillAll(_ targets: mutable &List<Box<any Damageable>>) {
@@ -393,7 +393,7 @@ func refillAll(_ targets: mutable &List<Box<any Damageable>>) {
 
 **`any P` never conforms to `P`, and it is unsized, so it binds no `T`** ([above](#type-parameters-stand-for-sized-types)). Two existentials unpack to two types, so passing two boxes' values for one `T` is a compile error:
 
-```swift
+```rayo
 swap(mutable a.value, mutable b.value)     // error: two Box<any Widget>s, whose values unpack to two types
 ```
 

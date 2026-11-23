@@ -8,7 +8,7 @@ A reference is the plainest [view](02-views-and-dependencies/scoped-values.md#sc
 
 For example, a function can fill a list with references to a string's text:
 
-```swift
+```rayo
 func splitLines(_ text: &Text, into out: mutable &List<&Text>) { ... }
 
 var source = alloc "first\nsecond"
@@ -26,7 +26,7 @@ In this example, `lines` depends on `source` through a shared borrow. More gener
 
 A view can keep several places borrowed:
 
-```swift
+```rayo
 func visible(_ items: mutable &List<Sprite>, in cells: &[Cell]) -> mutable &[Sprite] { ... }
 
 var vis = visible(mutable sprites, in: grid.cells)

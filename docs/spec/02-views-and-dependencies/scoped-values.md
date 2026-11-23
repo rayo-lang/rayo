@@ -4,7 +4,7 @@
 
 A **view** is a value that borrows memory something else owns, so code can read or change data where it lies, without copying it. A reference is the plainest one ([01](../01-values-and-ownership/references.md#references)):
 
-```swift
+```rayo
 let text: &Text = source                      // refers to source's text: no copy
 let body = &mesh.vertices.span                // a '&[Vertex]': refers to the list's elements, read-only
 var hot = mutable heat.span                   // a 'mutable &[Float]': refers to them for change
@@ -31,7 +31,7 @@ var hot = mutable heat.span                   // a 'mutable &[Float]': refers to
 
 **Writing through a view changes what it views, so it needs the view in a changeable place**, as any change does ([01](../01-values-and-ownership/bindings.md#changeable-places)). Through a reference, the write also needs a mutable one ([01](../01-values-and-ownership/references.md#forwarding-through-a-reference)). So a `let` can't write through a view it holds, and a loop name that owns a view can:
 
-```swift
+```rayo
 var hot = mutable heat.span                             // a 'mutable &[Float]' that a var holds
 hot[0] = 0                                              // fine: writes heat[0] through the reference
 let cold = mutable chill.span
@@ -44,7 +44,7 @@ for d in &targets { d.takeDamage(1) }                   // error: 'd' names each
 
 **A reference's members are those of what it refers to**, which it forwards ([01](../01-values-and-ownership/references.md#forwarding-through-a-reference)). So what a member does through it follows from how the member is declared, as with `[T]`'s members through a `mutable &[T]`:
 
-```swift
+```rayo
 var some = mutable hits[0..<8]                  // a 'mutable &[Int]' that a var holds
 print("\(some.count) hits")                     // a plain member: reads what 'some' refers to
 some.sort()                                     // a 'mutating' member: writes through 'some'
@@ -72,7 +72,7 @@ let (low, high) = some.consumingSplit(at: 4)    // takes 'some', and hands over 
 
 So `List<&Text>`, `Map<&Text, Int>`, `(&[T])?` and `(&Text, Int)` are scoped, though the collections among them still own their heap memory. `Handle<Token>` and `Type<&Text>` aren't, since neither holds what its argument names. A generic type may be scoped in some instances without being declared `Scoped`:
 
-```swift
+```rayo
 struct Cursor<C: Collection>(var it: C.Iterator)   // needn't be declared Scoped
 let c: Cursor<List<Int>>                           // scoped, since a list's iterator is
 ```
@@ -94,7 +94,7 @@ let c: Cursor<List<Int>>                           // scoped, since a list's ite
 
 **Code that must let a `T` outlive its scope requires `T: ~Scoped`**, which every unscoped type satisfies. `Mutex.lock` constrains its result this way:
 
-```swift
+```rayo
 extension Mutex {
     func lock<R: ~Scoped>(_ body: consuming (mutable &T) -> R) -> R   // R can't be a view of the data
 }
@@ -123,7 +123,7 @@ The closure can compute any unscoped result from the protected data. It can't sm
 
 ## Static values
 
-```swift
+```rayo
 protocol Logger: Sendable { func write(_ line: &Text) }
 enum TokenKind { case kIf, kElse }
 struct Token(let kind: TokenKind, let text: &Text): Scoped

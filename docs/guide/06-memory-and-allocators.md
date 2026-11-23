@@ -2,7 +2,7 @@
 
 The game now needs memory at two speeds. Its meshes, the shapes it draws, live until the level unloads. Each frame's scratch data, such as the list of meshes the camera sees, lives for one frame. An arena suits the scratch: it frees nothing one value at a time, and frees everything it gave out at once, when you reset it.
 
-```swift
+```rayo
 let levelHeap = Allocator.register(TlsfHeap(size: 256.mb))       // the level's data
 let frameArena = Allocator.register(Arena(size: 64.mb))          // scratch data, freed every frame
 
@@ -20,7 +20,7 @@ In C++, a pointer that survives into the next frame is a silent use-after-free: 
 
 ## Allocators are values
 
-```swift
+```rayo
 var levelMeshes = levelHeap.alloc List<Mesh>()   // grows and frees through levelHeap, for its whole life
 var editorMeshes = alloc List<Mesh>()            // the same type, List<Mesh>, from the ambient allocator (below)
 ```
@@ -43,7 +43,7 @@ A list, string or box that owns allocated storage is an **owning value**. It rec
 
 A bare `alloc` takes the **ambient allocator**. It depends only on where the code is written, never on a setting the program changes as it runs ([06](../spec/06-memory-and-allocators/allocator-basics.md#the-ambient-allocator)). In most code it is `.heap`. A type whose values allocate changes that inside its own methods:
 
-```swift
+```rayo
 struct Level(var names: List<String> = alloc List<String>()): Allocating   // lets its caller choose where it's made
 
 extension Level {
@@ -64,7 +64,7 @@ So a value hands its allocator to what it allocates, and nothing else does. Code
 
 **`alloc` applies only to values that allocate.** A plain value goes on the heap only inside a value that allocates, such as a `Box`:
 
-```swift
+```rayo
 var boxed = alloc enemy               // error: 'Enemy' isn't Allocating
 var boss = alloc Box(consume enemy)   // a Box owns the enemy, in one allocation
 ```
@@ -75,7 +75,7 @@ var boss = alloc Box(consume enemy)   // a Box owns the enemy, in one allocation
 
 A list keeps the allocator it was built with, wherever it later grows. A new string appended to it may come from somewhere else:
 
-```swift
+```rayo
 var names = alloc List<String>()                         // from .heap
 names.append(frameArena.alloc "wave \(wave)")            // the list grows in .heap, but the new String is in the arena
 frameArena.reset()
@@ -89,7 +89,7 @@ print(names[0])                                          // panics: the string c
 - **Opening a stale value panics.** To open a value is to reach the storage it owns, as reading an element does ([below](#what-an-open-checks)).
 - **A reset panics while anything, on any thread, still uses the arena's memory.** It never waits.
 
-```swift
+```rayo
 var positions = frameArena.alloc List<Vec3>()
 positions.append(.zero)
 
@@ -98,7 +98,7 @@ frameArena.reset()          // panics: 'pts' is used below
 print(pts[0])
 ```
 
-```swift
+```rayo
 print(positions[0])         // this use of the arena ends with its statement
 frameArena.reset()          // fine: nothing uses the arena, and its memory is freed
 positions.append(.zero)     // panics: 'positions' was allocated in 'frameArena' before its reset
@@ -135,7 +135,7 @@ Each open checks whether the allocator has reset since the value obtained its st
 
 ## Keeping results past a reset
 
-```swift
+```rayo
 do {
     let names = frameArena.alloc collectNames(world)   // an alloc func: the list and its strings come from the arena
     world.results = alloc names.clone()                // the clone and its strings come from .heap
@@ -150,7 +150,7 @@ world.results.append(alloc "late")                     // fine: nothing in it ca
 
 The game gives its boss an allocation of its own:
 
-```swift
+```rayo
 var boss = alloc Box(Enemy(pos: [0, 0, 40], hp: 5000))   // one allocation, from the ambient allocator
 boss.value.hp -= 250                                       // changes the enemy in place
 ```
@@ -161,7 +161,7 @@ boss.value.hp -= 250                                       // changes the enemy 
 
 A `Box` also lets the game store a branching decision tree. A `Tree` value cannot directly contain another whole `Tree` value, since that would make its size endless. Boxes hold the child values in separate allocations:
 
-```swift
+```rayo
 enum Tree {
     case leaf(Int)
     case node(Box<Tree>, Box<Tree>)                 // the child trees live in separate allocations
@@ -178,7 +178,7 @@ enum Tree {
 
 The game already has enemies that take damage. To put them in one list with breakable crates, give both types the same `Damageable` behavior:
 
-```swift
+```rayo
 protocol Damageable {
     mutating func takeDamage(_ amount: Float)
 }
@@ -204,7 +204,7 @@ for t in mutable targets { t.value.takeDamage(10) }    // dynamic dispatch, on e
 
 ## Reference counting: `Shared`
 
-```swift
+```rayo
 struct Texture(var pixels: List<UInt8>, var width: Int)              // Frozen: derived by the compiler
 struct Material(var albedo: Shared<Texture>, var roughness: Float)   // Frozen too, since Shared<Texture> is
 
@@ -231,7 +231,7 @@ print(wet.value.roughness)                                               // 'val
 
 ### Weak links and `LocalShared`
 
-```swift
+```rayo
 let grass = alloc Shared(Texture(pixels: alloc loadPixels("grass.tex"), width: 256))
 let cached = grass.weak()                            // WeakShared<Texture>: owns nothing
 if let tex = cached.upgrade() { draw(tex.value) }    // an owner while 'tex' lives, or nil if the texture is gone
@@ -247,7 +247,7 @@ if let tex = cached.upgrade() { draw(tex.value) }    // an owner while 'tex' liv
 
 ## Long-lived views: `Slice`
 
-```swift
+```rayo
 struct MeshComponent(var vertices: Slice<Vertex>)     // a stored view: a weak link to the buffer, and a range
 
 let package = alloc Shared(try alloc Blob.load("level3.pak"))   // the level's bytes, loaded once
@@ -273,7 +273,7 @@ upload(m.vertices.read()!)                            // a '&[Vertex]': one chec
 
 **`try alloc` is the fallible form, for code that can make room and try again.** Under `try`, an allocation that fails gives an `AllocError`, the prelude's error for an allocation that failed, and the function's result carries it. `spawnBoss` below returns a `Box<Enemy>!AllocError`: the new box, or that error. As with `readText` in [Views](04-views.md), the value comes before the `!` and the error after it:
 
-```swift
+```rayo
 func spawnBoss(at pos: Vec3) -> Box<Enemy>!AllocError {
     do {
         return try alloc Box(Enemy(pos: pos, hp: 5000))        // fails with AllocError instead of ending the program
@@ -295,7 +295,7 @@ So a collection that must back off under a hard memory limit, such as a streamin
 
 **`@noalloc` rules allocation out.** In a function marked `@noalloc`, such as an audio callback, any `alloc`, any call that may allocate and any closure stored as a `Closure` is a compile error:
 
-```swift
+```rayo
 @noalloc
 func fillSilence(_ out: mutable &[Float], _ history: mutable &List<Float>) {
     for i in 0..<out.count { out[i] = 0 }        // fine: nothing here allocates

@@ -4,7 +4,7 @@
 
 A panic stops an operation that cannot continue under the language's rules. It does not return a value for the caller to handle, as a typed error does. It can follow an explicit precondition or a failed check built into an operation:
 
-```swift
+```rayo
 ref let e = &enemies[h]!                         // panics if h is stale
 precondition(count < capacity, "queue full")     // panics if the caller broke the contract
 let share = total / players                      // panics if players is 0, in every build
@@ -12,7 +12,7 @@ let share = total / players                      // panics if players is 0, in e
 
 **A panic is reported through the platform ([08](../08-c-interop/c-contract-and-embedding.md#what-the-runtime-needs-from-the-platform)), then unwinds the thread that panicked.** The thread leaves its frames as a `throw` leaves scopes, destroying what each one owns, until a recovery point ([below](#catching-a-panic-catchpanic)) stops it or the thread ends. So the code that panicked never goes on, and a program can still recover from a bug in one part of its work:
 
-```swift
+```rayo
 catchPanic {
     handle(request)
 } recover: { p in
@@ -93,7 +93,7 @@ Running out of stack, and an allocation that fails in a plain form, end the prog
 
 ### Messages
 
-```swift
+```rayo
 func fatalError(_ message: &some Formattable) -> Never
 func precondition(_ cond: Bool, _ message: &some Formattable)
 func precondition(_ cond: Bool)
@@ -155,7 +155,7 @@ fatalError("enemy \(id) has no mesh")      // an interpolated message, formatted
 - the values the call took have left their places;
 - what the call may have stored in its arguments is absorbed, as rule 4 adds after a call returns ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-4-absorption)).
 
-```swift
+```rayo
 defer { x.reset() }
 f(mutable x)           // fine: if f panics, its borrow of x has ended by the time the defer runs
 ```
@@ -190,7 +190,7 @@ f(mutable x)           // fine: if f panics, its borrow of x has ended by the ti
 
 ## Catching a panic: `catchPanic`
 
-```swift
+```rayo
 func catchPanic<R, EB: Error, ER: Error>(
     _ body: consuming () -> R!EB,
     recover: consuming (Panic) -> R!ER
@@ -220,7 +220,7 @@ let frame = catchPanic {
 - it covers only the conflict between those two closures' captures;
 - everything else is checked as usual. A value that the body closure's creation made depend on a place still conflicts with `recover`'s use of that place ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-4-absorption)).
 
-```swift
+```rayo
 catchPanic {
     views.append(name)               // creating this closure makes 'views' depend on 'name'
 } recover: { _ in
@@ -240,7 +240,7 @@ Moves are checked as for any call's arguments: a place that either closure owns 
 
 ### The `Panic` value
 
-```swift
+```rayo
 struct Panic {                 // copyable and Sendable: up to 256 bytes of its message, inline
     let sequence: UInt64       // its place in the runtime's report order
     …
@@ -262,7 +262,7 @@ struct SourceLocation(let file: static &Text, let line: Int, let column: Int)
 
 ### Resuming a panic: `resumePanic`
 
-```swift
+```rayo
 func resumePanic(_ p: Panic) -> Never
 ```
 
@@ -270,7 +270,7 @@ func resumePanic(_ p: Panic) -> Never
 
 **A library that lends work to other threads carries a piece's panic back with it.** Each piece runs under `catchPanic`, and keeps its panic, if any, in a slot of its own. Once all the work has finished, the library hands the slots back to the lending thread, which resumes a panic it finds ([07](../07-concurrency/thread-work.md#panics-in-lent-work)):
 
-```swift
+```rayo
 let caught: Panic? = catchPanic { piece(); return nil } recover: { p in copy p }   // on a worker: this piece's slot
 ...                                                                                // the library waits for every piece
 if let p = consume caught { resumePanic(consume p) }                                // on the lending thread: carry it on
@@ -284,7 +284,7 @@ if let p = consume caught { resumePanic(consume p) }                            
 
 ## `assert` and `precondition`
 
-```swift
+```rayo
 mutating func push(_ item: Item) {
     precondition(count < capacity, "ring buffer full")    // an API contract: checked in every build
     assert(invariantsHold())                              // an internal invariant, costly to test: debug builds by default

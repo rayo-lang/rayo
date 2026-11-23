@@ -15,7 +15,7 @@ Two kinds of value are exceptions, since taking one makes a new value and leaves
 
 **`consume place` writes a move as an expression.** Moving a place's value out, implicitly or this way, is **consuming** the place. `consume` gives a parameter that owns its argument a place's value, as `give` takes below, and gives a `let` or `var` one to own, as `kept` does. `&` and `mutable` borrow a place instead, and leave its value where it is ([References](references.md#making-a-reference)).
 
-```swift
+```rayo
 var loot = alloc List<Item>()
 give(consume loot)                    // fine: 'loot' is a local that owns its list
 var bag = alloc List<Item>()
@@ -37,7 +37,7 @@ let old = replace(mutable player.inventory, with: alloc List())     // the way t
 
 **The condition on a field covers a temporary's fields and an enum's payload**, and a `when` name takes an enum's payload under the same condition ([`for` and `when` names](bindings.md#for-and-when-names)):
 
-```swift
+```rayo
 take(makeHolder().items)        // a part of a temporary, so no mark: moves 'items' out, an error when makeHolder()'s type has a deinit
 ```
 
@@ -47,7 +47,7 @@ These moves leave the rest of the value to be destroyed:
 - **A `deinit` that consumes some fields and parts leaves the rest to be destroyed after it**, last declared first.
 - **`discard self` ends `self` without its `deinit`**, destroying the fields and parts it hasn't consumed, last declared first. So a `consuming` method can end its value without running the `deinit`, as the two below do.
 
-```swift
+```rayo
 extension File {
     consuming func close() -> Void!IoError { … }   // File's deinit closes it: this closes it, then 'discard self', so it closes once
 }
@@ -60,7 +60,7 @@ extension Bag {
 
 **Only a place that holds the rest of its value has a field or an element assigned.** A place that holds no value, or maybe holds one, is given a whole value, made by an initializer, so no value is ever half-built ([04](../04-types/structs.md#initializers)). So an inline array that holds no value is made whole, by a literal or an initializer, before any element is assigned ([04](../04-types/collections.md#tuples-ranges-and-arrays)):
 
-```swift
+```rayo
 var slots: [4 of Int]
 slots[0] = 1                       // error: 'slots' holds no value yet
 slots = .init(repeating: 0)
@@ -88,7 +88,7 @@ So such a place always holds a value, across a `throw`, an early return, an `awa
 
 **A `const` of a copyable type is taken without `copy`**, as a new value each time, whether or not the type is implicitly copyable. So a `let` or `var` declared from one gets a new value, which it owns. A `const` of a move-only type can only be borrowed or cloned, so `&` borrows the const itself, and a `let` of one takes `alloc` and `.clone()`.
 
-```swift
+```rayo
 const maxLives = 3
 
 var lives = maxLives               // a new Int, with no 'copy' written
@@ -100,7 +100,7 @@ var lives = maxLives               // a new Int, with no 'copy' written
 
 **A binding declared without a value holds none until it is assigned.** A `let` is assigned at most once on each path.
 
-```swift
+```rayo
 let lo: Float, hi: Float           // no values yet
 lo = 0                             // each let is assigned once
 hi = 1

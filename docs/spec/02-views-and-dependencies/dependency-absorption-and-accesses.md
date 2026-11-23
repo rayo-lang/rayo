@@ -10,21 +10,21 @@ Across a call, the caller and callee have different parts of the dependency chec
 
 **An owned argument that is a mutable view absorbs too** (below). Each absorbing argument takes on the places and sets of the `&` arguments, and the sets of the `mutable` and scoped owned ones, with the kinds of rule 3:
 
-```swift
+```rayo
 tokens.append(Token(text: src))        // 'tokens' depends on 'src' from here on
 lexer.lex(into: mutable tokens)        // 'lexer' and 'tokens' stay free of each other
 ```
 
 **Another `mutable` argument's place flows in only when a `where` item names it** ([Precise dependencies (opt-in)](dependency-lifetimes.md#precise-dependencies-opt-in)), since rule 5 rejects storing a view of another `mutable &T` parameter's place unless an item names it. A function that keeps references into one `mutable` argument in another names it:
 
-```swift
+```rayo
 func chunks(_ data: mutable &List<Float>, into work: mutable &List<mutable &[Float]>)
     where work borrows data                  // 'work' keeps references into 'data'
 ```
 
 **Where the place assigned is known, assigning a variable that owns its value, or a stored field, replaces that place's set** ([Naming a field](dependency-lifetimes.md#naming-a-field)). The old value is destroyed, so nothing it reached is reachable through the place. Through a binding that may name one of several places, the assignment adds to each place's set instead, since the others may still hold their old views:
 
-```swift
+```rayo
 ref var r = if flip { mutable d1 } else { mutable d2 }      // an assignment through 'r' adds to the sets of both
 ```
 
@@ -32,7 +32,7 @@ ref var r = if flip { mutable d1 } else { mutable d2 }      // an assignment thr
 
 **Stores through an exclusive view reach what it views.** Such a store lands in memory that the view's exclusive dependencies own, so those places can then reach what was stored. So a dependency added to an exclusive view, or to a place reached through one, is also added to **every place the view depends on exclusively**, transitively. That holds however the dependency is added, and each time, the collection the view came from then depends on `tmp` or `crate`:
 
-```swift
+```rayo
 for v in mutable views { v = tmp }                          // by assignment through the view
 fill(mutable left, tmp)                                     // by absorption into it, here a 'mutableSplit' half
 for d in mutable targets { d = mutable crate; break }       // by storing a borrow into a list of mutable references, once
@@ -44,14 +44,14 @@ for d in mutable targets { d = mutable crate; break }       // by storing a borr
 
 **On the caller's side, an owned argument that is a mutable view absorbs like a `mutable` one**, since it can be stored through too. Examples are an owned struct of mutable references and a `List<mutable &any Damageable>` ([Mutable views](dependency-projection-and-results.md#mutable-views)). So `views`, which `low` and `high` were split from, absorbs this call's other arguments:
 
-```swift
+```rayo
 let (low, high) = views.span.mutableSplit(at: 2)
 poison(Halves(low: consume low, high: consume high), tmp)    // 'views' depends on 'tmp' from here on
 ```
 
 **An owned function value is no absorbing argument, even a `mutating` one, which is a mutable view**, since nothing a call of it stores into its captures may depend on its arguments ([05](../05-protocols-generics-and-closures/functions-and-closures.md#what-a-closure-may-keep-from-its-parameters)). The same holds for a closure of concrete type owned through a `some F` parameter, or through a type parameter constrained to a function type. So the temporary key below leaves nothing borrowed:
 
-```swift
+```rayo
 func forEachMatch(_ key: &Key, _ body: mutating (&Symbol) -> Void) { … }
 
 var hits = alloc List<&Text>()
@@ -73,7 +73,7 @@ A function value or a closure given to a `mutable &T` parameter absorbs as any `
 
 So `names` depends on `tmp` from the closure's creation, whether or not the closure is called:
 
-```swift
+```rayo
 var add = { names.append(tmp) }     // 'names' depends on 'tmp' from here on
 ```
 
@@ -81,7 +81,7 @@ var add = { names.append(tmp) }     // 'names' depends on 'tmp' from here on
 
 **When a closure is called, its `mutable` arguments absorb the closure's dependency set**, as its `self` ([Closure calls](dependency-projection-and-results.md#closure-calls)):
 
-```swift
+```rayo
 let put: (mutable &List<&Text>) -> Void = { o in o.append(src) }
 put(mutable out)                        // 'out' depends on 'src' from here on
 ```
@@ -104,7 +104,7 @@ put(mutable out)                        // 'out' depends on 'src' from here on
 
 **What a C entry returns to C, or stores into what C lent it, may depend on less** ([08](../08-c-interop/calling-rayo-from-c.md#what-a-c-entry-hands-back-to-c)), since nothing in Rayo holds what it borrowed once it returns.
 
-```swift
+```rayo
 func name() -> &Text {
     let s = alloc "temp"
     return s                           // error: the returned reference depends on local 's', which is destroyed on return
@@ -119,7 +119,7 @@ func name() -> &Text {
 
 For example, with a `Doc` that keeps a reference to its own text, and a struct that holds a mutable reference:
 
-```swift
+```rayo
 struct Doc(var text: String, var first: (&Text)?): Scoped
 
 func index(_ d: mutable &Doc) {
@@ -143,7 +143,7 @@ struct Lines(var out: mutable &[&Text], var s: String, var view: &Text): Scoped 
 
 **A closure's owned captures are always an owned parameter's own storage, whatever the closure's kind.** A closure may be called through a view of its storage, and a call through a `consuming` type ends that view and destroys a `consuming` closure's captures ([05](../05-protocols-generics-and-closures/functions-and-closures.md#closure-kinds), [05](../05-protocols-generics-and-closures/functions-and-closures.md#function-typed-values)). So a result or a store may depend on what owned captures carry, never on the captures themselves:
 
-```swift
+```rayo
 let f = { [move s] in &s }     // error: the result refers to an owned capture
 ```
 
@@ -155,14 +155,14 @@ let f = { [move s] in &s }     // error: the result refers to an owned capture
 
 **Nothing a closure stores into its captures may depend on its parameters** ([05](../05-protocols-generics-and-closures/functions-and-closures.md#what-a-closure-may-keep-from-its-parameters)), so a closure can return what depends on one, but can't store it:
 
-```swift
+```rayo
 let names = alloc entries.map { &$0.name }   // the closure returns what depends on its parameter; storing it would be an error
 log("\(names.count) names")
 ```
 
 **A store into a capture may not depend on a place the closure captures exclusively**, unless the closure is `consuming`, since the next call may change or free it:
 
-```swift
+```rayo
 var fill = { buf.append(1); views.append(buf) }    // error: the next call changes 'buf'
 ```
 
@@ -176,7 +176,7 @@ var fill = { buf.append(1); views.append(buf) }    // error: the next call chang
 
 **A view derived from the access, or passed through a call, depends on it:**
 
-```swift
+```rayo
 let items = &r.value!.items       // derived from the access to the object 'r' points at
 let e = first(r.value!)           // passed through a call
 ```
@@ -185,7 +185,7 @@ let e = first(r.value!)           // passed through a call
 
 **A site in a loop's body or `while` condition holds one access at a time**, since a set names an access by the site that began it. Each time the site begins a dynamic access, or a value property's change, no value that depends on the access it began the last time may be used from then on:
 
-```swift
+```rayo
 for w in &nodes { names.append(w.value!.name) }    // error
 ```
 

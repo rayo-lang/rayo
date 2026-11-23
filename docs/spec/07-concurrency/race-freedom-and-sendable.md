@@ -19,7 +19,7 @@ Code on different threads can reach the same memory only through routes that ord
 
 **Reading a value from many threads at once needs nothing special**, as a parallel loop shows:
 
-```swift
+```rayo
 let palette = buildPalette()                  // a local, read below by every thread at once
 particles.forEachInParallel { p in            // may run on many threads at once
     p.color = palette.color(for: p.kind)      // fine: nothing writes 'palette'
@@ -28,7 +28,7 @@ particles.forEachInParallel { p in            // may run on many threads at once
 
 ## What may cross threads: `Sendable`
 
-```swift
+```rayo
 import c "audio.h"                                       // declarations land in module 'audio'
 
 struct Enemy(var pos: Vec3, var hp: Float)               // Sendable: every field is

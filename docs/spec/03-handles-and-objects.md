@@ -6,7 +6,7 @@ Some relationships between values must last longer than a borrow: a squad keeps 
 
 A link to a value in a collection can be a **handle**: a small index into a pool, checked at each use, which can go stale but never dangle.
 
-```swift
+```rayo
 var enemies = alloc Pool<Enemy>(capacity: 4096)
 let h = enemies.insert(Enemy(pos: spawn, hp: 100))   // h: Handle<Enemy>, 8 bytes, implicitly copyable
 squad.members.append(h)                              // store copies anywhere: 'h' stays usable
@@ -18,7 +18,7 @@ if enemies[h] == nil { … }                           // true: a stale handle r
 
 **`pool[h]` is an optional place property** ([02](02-views-and-dependencies/place-and-value-properties.md#optional-places-and-tuples-of-places)): it hands out the element in place, or `nil`. The standard library declares `Handle` this way:
 
-```swift
+```rayo
 @align(8) public struct Handle<T> private init(public let index: UInt32, public let generation: UInt32): ImplicitlyCopyable, Hashable {
     public var bits: UInt64 { … }             // its 8 bytes as one UInt64, for C to hold
     public init?(bits: UInt64) { … }          // nil only for generation 0
@@ -40,7 +40,7 @@ if enemies[h] == nil { … }                           // true: a stale handle r
 
 A `UniquePointer` owns one value, its **object**, in memory from any allocator. Any number of `WeakPointer`s point at it, as a node points at its parent, and every use through either is checked:
 
-```swift
+```rayo
 var renderer = alloc UniquePointer(Renderer(device: consume dev))   // the one owner, move-only
 let r: WeakPointer<Renderer> = renderer.weak()              // implicitly copyable: store any number, cycles included
 
@@ -81,7 +81,7 @@ r.value!.stats.drawCalls += 1                  // '!' panics if the object is go
 
 **Objects stay on their home thread, so data that several threads use lives behind a reference-counted pointer instead.** That pointer is a `Shared<T>`, whose value is `Frozen` or `Synchronized`, such as a `Mutex`. So any number of threads may read the value at once, and it changes only through its own synchronization, if at all. A `WeakShared<T>` links to it without keeping it alive ([06](06-memory-and-allocators/owning-values.md#sharedt-data-with-many-owners)):
 
-```swift
+```rayo
 let mixer = alloc Shared(Mutex(AudioMixer()))              // AudioMixer must be Sendable
 let m: WeakShared<Mutex<AudioMixer>> = mixer.weak()        // implicitly copyable and Sendable: may go to any thread
 
@@ -92,7 +92,7 @@ _ = Thread.start { [copy m, copy clip] in                  // '_ =' detaches the
 
 ### Destroying an object
 
-```swift
+```rayo
 extension Node {
     mutating func prune() { parent!.value!.children.removeAll() }   // destroys this node too, with its siblings
 }

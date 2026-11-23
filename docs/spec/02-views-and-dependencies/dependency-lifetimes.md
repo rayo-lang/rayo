@@ -6,7 +6,7 @@ A dependency usually matters while the value that carries it can still be used. 
 
 ## When destroying a value counts as using it
 
-```swift
+```rayo
 var m = Mutex(0)
 var g = m.lock()
 g.value += 1                                  // g's last use written out
@@ -39,7 +39,7 @@ A field `*T` holds a `T` here, as it does for [scopedness](scoped-values.md#whic
 
 **What a value's destruction uses can't include a part of the value**, at any depth. That conflicts with destroying it, as moving it would, since a `deinit` owns `self` and may change one part before reading another. Take a `Doc` that keeps a reference to its own text:
 
-```swift
+```rayo
 struct Doc(var text: String, var first: (&Text)?): Scoped
 
 doc.first = doc.text                          // 'doc' depends on its own field 'text' from here on
@@ -55,7 +55,7 @@ doc.first = doc.text                          // 'doc' depends on its own field 
 
 ## Lock guards are released on the thread that took them
 
-```swift
+```rayo
 var g = registry.lock()
 _ = Thread.start { [move g] in g.value.flush() }  // error: a guard isn't Sendable, so it stays on the thread that took it
 ```
@@ -74,7 +74,7 @@ A **guard type** is a type declared `@guard`: the type of a value that holds a l
 
 **A `where` clause can say what a function's result, a place property's place or an absorbing parameter depends on.** By default a result depends on every argument rule 3 names, even one it only read. The clause helps where that gets in the way, as with a lookup keyed by a reference into a buffer you want to advance:
 
-```swift
+```rayo
 extension SymbolTable {
     func find(_ key: &Text) -> (&[Symbol])?
         where return borrows self                // the result borrows only the table, not the key
@@ -105,7 +105,7 @@ print("\(syms?.count ?? 0) symbols")
 
 **Several items may name one subject, which then depends on all of them.** A subject no item names follows the default rules.
 
-```swift
+```rayo
 extension SymbolTable {
     func search(_ key: &Text) -> (&[Symbol])?
         where return borrows self, return borrows key   // the result depends on the table and the key
@@ -120,7 +120,7 @@ extension SymbolTable {
 
 **`where return outlives self` lets an iterator over shared elements hand out elements that outlive the iteration:**
 
-```swift
+```rayo
 struct ElementIterator<T>(var rest: &[T]): SharedIterator, Scoped {
     mutating func next() -> (&T)? where return outlives self { ... }   // elements borrow the collection, not the iterator
 }
@@ -140,14 +140,14 @@ Without the clause, each element would depend exclusively on the iterator, and t
 - **An iterator over a `mutable &[T]` doesn't**, since it could hand out a reference and then replace the data under it.
 - **A read guard doesn't either.** It carries only a shared borrow, but dropping it releases the lock, so a guard's `.value` depends on the guard itself, a place property's default ([Place and value properties](place-and-value-properties.md#the-place-lies-in-its-sources)).
 
-```swift
+```rayo
 func copyAll(from src: &List<&Text>, into dst: mutable &List<&Text>)
     where dst outlives src                       // 'dst' takes on what 'src' carries, not 'src' itself
 ```
 
 **Inside `next()`, verification uses rule 1's case of a shared reference** ([Rule 1: Projection](dependency-projection-and-results.md#rule-1-projection)), so this body gives `b` what `rest` carries, the collection's set, not the field's:
 
-```swift
+```rayo
 let b = &rest[0]
 rest = rest[1...]
 return b
@@ -164,7 +164,7 @@ return b
 
 **A value `p` owns can view `p`'s own storage only by making `p` depend on a part of itself.** Then `mutable p` conflicts with that dependency, so the call can't be made. So what such a call returns depends only on what `p` carried, with the same kinds, and a worklist over a `List<mutable &[Float]>` works:
 
-```swift
+```rayo
 while var s = work.popLast() {                  // 'work' stays free while 's' holds its reference
     let p = partition(mutable s)
     let (low, high) = s.consumingSplit(at: p)   // the halves carry what 's' carried
@@ -179,7 +179,7 @@ while var s = work.popLast() {                  // 'work' stays free while 's' h
 
 **An item may name a path of a parameter's stored fields and tuple elements, and a subject may be followed by one**, since a value may carry borrows of several places while a result comes from one of them. So a subject may be `return.name`, `return.0`, or `q.table` for a `mutable &T` parameter `q`, which then takes on what the item names in that field only:
 
-```swift
+```rayo
 struct Query(
     var name: &Text,                             // refers to the request text
     var table: &[Entry],                         // refers to the symbol table
@@ -206,7 +206,7 @@ print("\(e?.id ?? 0)")
 
 **A `mutable` argument's fields may trade what they carry**, as in a `mutating` method that swaps two fields. So after the call, each stored field of the argument, at every depth, has the union of all its fields' sets from before, plus what the call gives it. A field that a `p.f` item names is the exception: it keeps its own set, plus what the items name, and the callee proves it took nothing from `p`'s other fields.
 
-```swift
+```rayo
 struct Pair(var a: &Text, var b: &Text): Scoped {
     mutating func flip() { let t = a; a = b; b = t }
 }
@@ -220,7 +220,7 @@ pair.flip()                                      // both fields depend on 's1' a
 
 **A `var` that holds a reference refers to another place once it is assigned another reference** ([01](../01-values-and-ownership/bindings.md#bindings-that-own-a-value)). A cursor walking down a structure does this at each step, assigning a reference to a place reached through the cursor itself:
 
-```swift
+```rayo
 struct Node(var value: Int = 0, var children: List<Box<Node>> = alloc [])
 
 var cur = mutable tree.root
@@ -242,7 +242,7 @@ tree.root.value = 1                              // error if placed before the l
 
 **A cursor over a value that a call returns keeps the value in a local of its own**, since a `var` that owns a value can't be assigned a reference:
 
-```swift
+```rayo
 var tree = buildTree()                           // owns the tree the call returned
 var at = mutable tree.root                       // the cursor, which assignments point elsewhere
 ```

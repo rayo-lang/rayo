@@ -10,7 +10,7 @@
 
 **Load data written by an older version of a program's types.** An application at version 7 of its types reads documents or messages that version 3 wrote, as a game loads an old save, or a hot reload carries live values into new code. Fields were renamed, added, retyped, and removed across versions, and enum cases removed. The second criterion's migration is this one:
 
-```swift
+```rayo
 let migrated = T.construct { static field in consume old[field] }   // builds each field by moving it out of 'old'
 ```
 
@@ -33,7 +33,7 @@ let migrated = T.construct { static field in consume old[field] }   // builds ea
 
 The last criterion's `Node` holds a type generated from it:
 
-```swift
+```rayo
 struct Node(var pending: Delta<Node>)      // a field whose type is generated from Node itself
 ```
 

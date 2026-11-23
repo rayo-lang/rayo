@@ -2,7 +2,7 @@
 
 The guide in `docs/guide/` teaches Rayo to a programmer who already knows C++, Rust, Swift or C#. Its unnumbered introduction welcomes the reader before chapter 1, and the chapters are read front to back. The spec states every rule exactly and lets readers find the full account of a construct; the guide picks the rules a reader needs first, shows them working, and links to the spec for the rest.
 
-The guide follows `spec-style.md` in saying what Rayo does, in the present tense, and for inline code, lists and punctuation, and in where its code writes `&`. The exceptions are the comparisons with other languages that [Teaching](#teaching) allows, such as one with what a reader expects from another language. Both documents explain in connected prose. The guide builds ideas in learning order; the spec gives each construct's complete rules where a reader can find them.
+The guide follows `spec-style.md` in saying what Rayo does, in the present tense, and for inline code, lists and punctuation, in fencing Rayo code as ```` ```rayo ```` and naming every other block's language, and in where its code writes `&`. The exceptions are the comparisons with other languages that [Teaching](#teaching) allows, such as one with what a reader expects from another language. Both documents explain in connected prose. The guide builds ideas in learning order; the spec gives each construct's complete rules where a reader can find them.
 
 ## Writing
 
@@ -52,4 +52,4 @@ Links to the spec read as in the spec: `([01](../spec/01-values-and-ownership.md
 
 ## Checks
 
-`python3 scripts/check_docs.py` checks the guide's links, layout, dashes and sentence and paragraph lengths, as it does the spec's.
+`python3 scripts/check_docs.py` checks the guide's links, layout, dashes, Rayo code fences and sentence and paragraph lengths, as it does the spec's.

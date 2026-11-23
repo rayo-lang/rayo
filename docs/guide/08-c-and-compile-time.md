@@ -2,7 +2,7 @@
 
 The same game now runs on a console whose SDK is a C library with a header, `platform.h`. Through it you open a window, poll the gamepads and hear from the audio thread. You also want save games without rewriting the saver each time `Enemy` gains a field. Its current target and cached path should not be saved, so `@Transient` marks those fields to skip:
 
-```swift
+```rayo
 import c "platform.h" as plat where prefix: "platform_"   // the SDK's C API, as Rayo declarations
 
 struct Enemy(
@@ -47,7 +47,7 @@ Function-like macros do not import. You can wrap one in a C function inside an `
 
 ## Calling C: `unsafe`
 
-```swift
+```rayo
 func now() -> Double { plat.time_seconds() }            // error: a call into C needs 'unsafe'
 func now() -> Double { unsafe plat.time_seconds() }     // 'unsafe' before an expression covers just it
 
@@ -79,7 +79,7 @@ Breaking that promise is undefined behavior, as in C. Code that makes such promi
 
 ## Raw pointers
 
-```swift
+```rayo
 var raw = plat.pad()
 let p = unsafe ptr(to: mutable raw)             // the address of 'raw': a *plat.pad
 let address = CUIntPtr(bitPattern: p)           // safe: a pointer turned into an integer of its size
@@ -108,7 +108,7 @@ unsafe {
 
 ## Passing memory to C
 
-```swift
+```rayo
 func upload(_ samples: &[Float]) {                      // safe: a run always knows its count
     unsafe { plat.upload(samples.baseAddress, CSize(samples.count)) }
 }
@@ -125,7 +125,7 @@ func log(_ level: Int32, _ text: &Text) {
 
 ### When C keeps the pointer
 
-```swift
+```rayo
 // audio.h, imported as 'audio' where prefix: "audio_":
 //     typedef struct audio_emitter { float gain; float pos[3]; } audio_emitter;
 //     void audio_track(audio_emitter* e);      keeps 'e', and reads it on every update
@@ -140,7 +140,7 @@ unsafe { audio.track(voice.pin.address) }          // valid for as long as 'voic
 
 ## Callbacks: `@c func`
 
-```swift
+```rayo
 let audioEvents = alloc MpscQueue<AudioEvent>(capacity: 256)  // a global queue any thread may push to
 
 @c func onAudioEvent(_ user: *Void?, _ event: CInt) {         // runs on the SDK's audio thread
@@ -168,7 +168,7 @@ unsafe { plat.set_audio_callback(onAudioEvent, nil) }
 
 Say your studio's level editor, written in C++, asks the game whether an enemy description is valid:
 
-```swift
+```rayo
 @export(c) @c struct SpawnDesc(var pos: Vec3, var hp: Float)       // a C struct in the generated header
 @export(c, name: "game_can_spawn") func canSpawn(_ desc: SpawnDesc) -> Bool {
     desc.hp > 0
@@ -213,7 +213,7 @@ Breaking one is undefined behavior, as a wrong `unsafe` block is.
 
 ## Running code at compile time: `const`
 
-```swift
+```rayo
 const sinTable: [1024 of Float] = makeSinTable()         // computed once, by the compiler
 
 func makeSinTable() -> [1024 of Float] {
@@ -246,7 +246,7 @@ let startTime = now()            // fine: a global 'let' is initialized at start
 
 **A `const` that run-time code names is frozen into the program's read-only data** ([09](../spec/09-compile-time/constants-and-conditions.md#consts-that-reach-run-time)), since the running program has no compile-time heap.
 
-```swift
+```rayo
 const lootWeights: Map<Int, Float, FixedHashing> = alloc [1: 0.6, 2: 0.3, 3: 0.1]   // frozen into read-only data
 const dropRates: Map<Int, Float> = alloc [1: 0.6, 2: 0.3, 3: 0.1]                  // error: a seeded Map can't be made at compile time
 let dropRates: Map<Int, Float> = alloc [1: 0.6, 2: 0.3, 3: 0.1]                    // fine: built at startup
@@ -258,7 +258,7 @@ let dropRates: Map<Int, Float> = alloc [1: 0.6, 2: 0.3, 3: 0.1]                 
 
 ## `static if` and `target`
 
-```swift
+```rayo
 static if target.platform == .ps5 {
     import c "platform_ps5.h" as plat where prefix: "platform_"
 } else {
@@ -297,7 +297,7 @@ func endFrame(_ game: &Game) {
 
 ## Reflection: `T.fields` and `static for`
 
-```swift
+```rayo
 func save<T>(_ value: &T, into w: mutable &Writer) {
     static if T.conforms(Pod.self) && T.isPaddingFree {
         w.bytes(of: value)                              // a Float or a Vec3: its bytes, as they are
@@ -340,7 +340,7 @@ func save<T>(_ value: &T, into w: mutable &Writer) {
 
 ## Attributes
 
-```swift
+```rayo
 struct Transient: Attribute {}                          // a field that save skips
 struct Bounds(let min: Float, let max: Float): Attribute {
     init(_ min: Float, _ max: Float) { self.init(min: min, max: max) }   // each Float is implicitly copyable: a copy goes in
@@ -369,7 +369,7 @@ func inspect<T>(_ value: mutable &T, in ui: mutable &Inspector) {
 
 **An attribute's arguments must be `const`:**
 
-```swift
+```rayo
 let maxHp: Float = 500
 struct Boss(@Bounds(0, maxHp) var hp: Float = 100)      // error: 'maxHp' is a global 'let', not a const
 

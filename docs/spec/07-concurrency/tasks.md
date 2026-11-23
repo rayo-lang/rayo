@@ -13,7 +13,7 @@
 
 Calling a `task func` returns a **task**, the value its owner runs. The handshake is one:
 
-```swift
+```rayo
 task func handshake(_ sock: Handle<Socket>) with (net: mutable &Reactor) -> Session!NetError {
     try await send(sock, Hello(version: 3))                    // pending until the socket can take the bytes
     let reply = try await receive(sock, timeout: replyLimit)   // fails with .timedOut once the limit passes with no reply
@@ -26,7 +26,7 @@ task func handshake(_ sock: Handle<Socket>) with (net: mutable &Reactor) -> Sess
 
 **A game script is a task too.** `openDoor` opens a door over half a second, waits for the player to walk away, and then closes it:
 
-```swift
+```rayo
 task func openDoor(_ door: Handle<Door>) with (game: mutable &Game) {
     guard ref let d = &game.doors[door] else { return }
     game.audio.play(d.creakSound, at: d.pos)
@@ -62,7 +62,7 @@ task func openDoor(_ door: Handle<Door>) with (game: mutable &Game) {
 
 **A place in the task's own state is worked out again on resuming**, from the index values already computed, since only the task's body reaches that state. So an assignment to a local may await on its right side, while one to a place reached through the resume parameter may not:
 
-```swift
+```rayo
 total += await next()                 // fine: 'total' is a local, worked out again on resuming; 'next' can't fail, so no 'try'
 game.score += await pointsFor(n)      // error: 'game.score' is worked out before the 'await', through the resume parameter
 let p = await pointsFor(n)            // fine: the 'await' comes first
@@ -91,7 +91,7 @@ game.score += p                       // and the write after it
 
 **Results and errors.** A task returns and fails as a function does:
 
-```swift
+```rayo
 struct LevelId(let index: UInt32): ImplicitlyCopyable                                     // passed with nothing written
 task func loadLevel(_ id: LevelId) with (ctx: mutable &Loader) -> Level!LoadError { … }   // a success type and a failure type
 let level = try await loadLevel(id)          // in another task: yields the result, or propagates the error
@@ -101,7 +101,7 @@ let level = try await loadLevel(id)          // in another task: yields the resu
 
 **Whatever a task waits on is an awaitable**: a value the task polls at its steps until it reports that it is done.
 
-```swift
+```rayo
 protocol Awaitable {
     associatedtype Context
     associatedtype Output = Void
@@ -177,7 +177,7 @@ protocol WakeTarget: Synchronized {   // reached only by shared access, so it ch
 
 **`nextStep()` returns `.pending` once, and `.done` at its next poll:**
 
-```swift
+```rayo
 func nextStep() -> NextStep { … }     // NextStep: an Awaitable whose Context is Void
 ```
 
@@ -185,7 +185,7 @@ So under `step`, a task that awaits it goes on at the next step, as a script tha
 
 **A timed wait counts from its first poll, and is done at the first poll that finds its time has passed:**
 
-```swift
+```rayo
 func sleep(for d: Duration) -> Sleep { … }                         // Sleep: an Awaitable whose Context is Void
 func elapsed<C: TimeSource>(_ d: Duration) -> Elapsed<C> { … }     // Elapsed<C>: an Awaitable whose Context is C
 extension Game: TimeSource { var now: Instant<Game> { simulationTime } }   // so openDoor's wait counts simulation time
@@ -199,20 +199,20 @@ extension Game: TimeSource { var now: Instant<Game> { simulationTime } }   // so
 
 **A suspended task's awaitable is stored in its state, so it can't hold a borrow either.** So `until`'s condition receives the resume parameter as its argument on every poll. `until` takes the condition by concrete type and moves it in ([05](../05-protocols-generics-and-closures/functions-and-closures.md#closures-by-concrete-type-some-f)):
 
-```swift
+```rayo
 func until<C, F>(_ cond: F) -> Until<C, F> where F: (mutable &C) -> Bool, F: ~Scoped { … }   // the condition by its own type, moved in
 ```
 
 It stores the condition by value in the task's state, never boxed, with its captures counting against the state's size. Being unscoped, the condition owns and lists its captures, as `[copy door]` does. A condition that captures the resume parameter, or any other borrow, is rejected:
 
-```swift
+```rayo
 await until { game.isOver }             // error: the condition captures the resume parameter
 await until { g in g.isOver }           // fine: the condition takes it as its argument
 ```
 
 ### Running tasks
 
-```swift
+```rayo
 var scripts = TaskSet<Game>(capacity: 512)                       // resume parameter: a 'mutable &Game'
 guard let door = try? scripts.start(openDoor(frontDoor)) else { return }   // nil when all 512 slots are taken
 scripts.cancel(door)                                             // runs live locals' deinits and live defers, or, unstepped, destroys its parameters
@@ -224,7 +224,7 @@ scripts.step(mutable game)                                       // wherever the
 
 **std's `TaskSet` takes ownership of each task it starts:**
 
-```swift
+```rayo
 init(capacity: UInt)                                       // TaskSet<C>'s; C: the set's resume context type
 init(capacity: UInt, notifying loop: Waker)                // also calls 'loop.wake()' after each wake it records (below)
 mutating func start<A: Awaitable>(_ work: A) -> Handle<TaskSlot>!TaskSetFull<A>         // the task, moved in
@@ -254,7 +254,7 @@ struct TaskSetFull<A>(let work: A): Error                  // start's failure: t
 
 **Stopping at once keeps the other tasks off a half-changed resume parameter.** The panic may have left the resume parameter half-changed, and the owner's `recover` closure sees it first, so it can repair it before any other task runs ([10](../10-errors-and-safety/panics.md#catching-a-panic-catchpanic)). An owner that keeps the program running catches the panic around `step`:
 
-```swift
+```rayo
 catchPanic {
     scripts.step(mutable game)
 } recover: { p in
@@ -270,7 +270,7 @@ catchPanic {
 
 **A thread whose tasks spend most of their time waiting parks until one is woken.** A server's thread waits for its sockets, as this one does:
 
-```swift
+```rayo
 var conns = TaskSet<Server>(capacity: 1024)            // the connections' tasks, run with the server's state
 _ = conns.start(acceptLoop(consume listener))          // puts each new socket in 'server.accepted', and never finishes
 while !stopping.load(.acquire) {                      // stopping: a global Atomic<Bool>, which another thread may set
@@ -283,7 +283,7 @@ A task can't start a task in the set that runs it, since `run` holds the set exc
 
 **std's two runners that park are `TaskSet`'s `run` and the free function `block(on:)`:**
 
-```swift
+```rayo
 mutating func run(_ ctx: mutable &C, until done: (mutable &C) -> Bool) { … }   // TaskSet<C>'s: steps and parks, until 'done' holds or no task is left
 func block<A: Awaitable>(on work: A, with ctx: mutable &A.Context) -> A.Output!A.Failure { … }   // runs one awaitable to its end
 func block<A: Awaitable>(on work: A) -> A.Output!A.Failure where A.Context == Void { … }
@@ -309,7 +309,7 @@ func block<A: Awaitable>(on work: A) -> A.Output!A.Failure where A.Context == Vo
 
 **`runWaker` lets another thread stop `run`, or hand it work.** It is a `Waker` of the set itself, which wakes no task. Its `wake()` sets the run flag and wakes a parked `run`, which steps the set and checks `done` again. So the other thread first changes what `done` reads, through a `Synchronized` value such as an `Atomic`, and then wakes the set. Clearing the flag at 4 synchronizes with the wake that set it, so `done` sees the change:
 
-```swift
+```rayo
 let stop = conns.runWaker                // a copy, sent to the thread that stops the server
 stopping.store(true, .release)           // on that thread: the Atomic<Bool> that 'done' loads
 stop.wake()                              // run steps, finds 'done' true, and returns
@@ -321,7 +321,7 @@ stop.wake()                              // run steps, finds 'done' true, and re
 
 **`block(on:)` runs one awaitable on the calling thread until it is done, and returns its result.** Synchronous code uses it to wait for a task, as here for a load whose reads complete on an I/O thread:
 
-```swift
+```rayo
 let level = try block(on: loadLevel(id), with: mutable loader)    // parks while the load waits for its reads
 ```
 
@@ -337,7 +337,7 @@ let level = try block(on: loadLevel(id), with: mutable loader)    // parks while
 
 **A program that waits in an event loop of its own**, such as one in `epoll_wait`, steps the set from that loop. It makes the set with a notifying `Waker`, whose target ends the loop's wait, such as by writing an eventfd. The set calls that `Waker` after recording each wake or deadline, on the waking thread, so a wake from another thread ends the wait too. The set uses only its `wake()`. Each pass waits no longer than the set's `deadline`, and not at all while `hasWoken` is true:
 
-```swift
+```rayo
 var conns = TaskSet<Reactor>(capacity: 1024, notifying: loopWaker)   // loopWaker's target writes the loop's eventfd
 while reactor.running {
     reactor.wait(polling: conns.hasWoken, until: conns.deadline)      // epoll_wait, at most until the deadline

@@ -6,7 +6,7 @@ An owning value cannot proceed as though an allocation succeeded when it did not
 
 ## Allocation failure
 
-```swift
+```rayo
 func addSpawn(_ p: Vec3, to spawns: mutable &SoA<Vec3>) -> Void!AllocError {
     do {
         try spawns.tryAppend(p)         // the fallible form: fails with AllocError instead of ending the program
@@ -32,7 +32,7 @@ func addSpawn(_ p: Vec3, to spawns: mutable &SoA<Vec3>) -> Void!AllocError {
 - any call that may allocate (below), such as one that may grow a value, as `append` may;
 - any conversion to `Closure<F>`, whether or not that one would allocate, since its type says it may ([05](../05-protocols-generics-and-closures/functions-and-closures.md#unscoped-closures-closuref)).
 
-```swift
+```rayo
 @noalloc
 func fillSilence(_ out: mutable &[Float], _ history: mutable &List<Float>) {
     for i in 0..<out.count { out[i] = 0 }        // fine: nothing here allocates
@@ -57,7 +57,7 @@ func fillSilence(_ out: mutable &[Float], _ history: mutable &List<Float>) {
 
 ## Releasing a value without destroying it: `TrivialFree`
 
-```swift
+```rayo
 alloc func buildLevel(_ n: Int) -> Level!(IoError | ParseError) { … } // builds the level with the allocator its caller's alloc gives
 
 world.level = try levelArena.alloc buildLevel(3)                      // in a function that can fail: the level's lists and strings come from the arena

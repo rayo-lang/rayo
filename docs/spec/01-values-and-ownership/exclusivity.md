@@ -4,7 +4,7 @@
 
 When two names reach the same storage, changing it through one can invalidate what the other still uses. Rayo limits which accesses may overlap. In this loop, removing an enemy would change the collection while the loop is borrowing it:
 
-```swift
+```rayo
 for (h, e) in world.enemies.entries {     // each element a handle and a '&Enemy'
     if e.hp <= 0 {
         world.enemies.remove(h)            // error: 'world.enemies' is borrowed by the loop
@@ -20,7 +20,7 @@ Without the law, a change could destroy or move what a borrow still uses. In the
 
 The compiler checks this one function at a time, from its body and the signatures of the functions it calls: a borrow never outlives the function that makes it, except as that function's signature says. So one body holds every borrow the check must see, and the check is **static, in every build, at no run-time cost**. Changing another field during the loop is allowed:
 
-```swift
+```rayo
 for (h, e) in world.enemies.entries {
     if e.hp <= 0 { world.commands.append(.despawn(h)) }  // a different field: allowed
 }
@@ -49,7 +49,7 @@ The law of exclusivity governs accesses to overlapping places, so which places o
 - **Inline array elements at indices known to differ where the borrows are checked are disjoint**, since each element is a place of its own, as a stored field is ([04](../04-types/collections.md#inline-array-elements)). Any other two overlap, since `a[i]` and `a[j]` may be the same element. So may `a[I]` and `a[J]`, for value parameters `I` and `J` of a body checked once for all its instantiations ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#checking-generic-code)). A collection's elements are reached through its subscript, which is an accessor (next).
 - **A user-declared computed property or subscript accessor is an access to all of `self`**, whatever place or value it hands out, since its body may reach any of it. So two `ref var` bindings of two computed properties of `world` conflict, as in the example below. An imported bitfield's generated accessors are the exception: each accesses only its C memory location (below), as a reflection projection of the bitfield does.
 
-```swift
+```rayo
 ref var p = mutable world.physics       // when 'physics' and 'render' are computed properties,
 ref var r = mutable world.render        // error: each is an access to all of 'world', and 'p' is used below
 p.step(dt)
@@ -62,7 +62,7 @@ p.step(dt)
 - **Enum payloads.** Reaching into a payload, an optional's included, reads the tag, which may be a niche inside the payload ([04](../04-types/enums.md#optionals)). So every path into one enum value's payload overlaps every other, through `?.`, `!`, a pattern or reflection's `value[case:]` ([09](../09-compile-time/reflection.md#what-reflection-can-read)): `s?.n` and `s?.b` conflict. One pattern that binds several parts reads the tag once, though, so one over an optional tuple gives two disjoint borrows, as in the example below.
 - **Bitfields.** Imported bitfields that form one C **memory location** ([08](../08-c-interop/imports-and-inline-c.md#structs-unions-and-enums)). Bitfields in different memory locations, or a bitfield and a neighboring field, are separate places, which two threads may write at once, as C11 allows.
 
-```swift
+```rayo
 g(mutable e.f, mutable e.u)                        // error when 'f' and 'u' are members of one union
 join({ e.f = 1 }, { use(e.u) })                    // error: the same
 join({ v.x = x }, { v.y = y })                     // error for a Simd 'v': each closure accesses the whole vector
@@ -77,7 +77,7 @@ struct { uint32_t a : 20; uint32_t b : 20; };  // 'a' and 'b' are one place, tho
 
 **Two elements at once need an API that checks at run time that they are distinct:**
 
-```swift
+```rayo
 if ref var (a, b) = mutable world.enemies[h1, h2] {    // nil if h1 == h2 or either is stale
     swap(mutable a.hp, mutable b.hp)
 }

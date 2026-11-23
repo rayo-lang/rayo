@@ -23,7 +23,7 @@ An allocator may draw its memory from one other allocator, its **backing**, such
 
 ## Allocating with `alloc`
 
-```swift
+```rayo
 var names = alloc List<String>()                     // storage from the ambient allocator (below)
 var props = levelHeap.alloc List<Prop>()             // storage from levelHeap
 var boss = alloc Box(Enemy(pos: spawn, hp: 5000))    // the enemy goes to the box's allocation
@@ -51,7 +51,7 @@ var boxed = alloc boss.value                         // error: 'Enemy' isn't All
 
 ### The `Allocating` protocol
 
-```swift
+```rayo
 struct Inventory(var items: List<Item> = alloc List<Item>()): Allocating   // the compiler gives it its allocator
 
 let inv = level.alloc Inventory()        // 'items' comes from 'level' too
@@ -74,7 +74,7 @@ let inv = level.alloc Inventory()        // 'items' comes from 'level' too
 
 ### Functions that make a new value: `alloc func`
 
-```swift
+```rayo
 extension List {
     alloc func filter(_ keep: (&Element) -> Bool) -> List<Element> where Element: Copyable {
         var out = alloc List<Element>()                  // the allocator the call received
@@ -94,7 +94,7 @@ extension List {
 
 ## The ambient allocator
 
-```swift
+```rayo
 struct Level(var names: List<String> = alloc List<String>()): Allocating {
     mutating func addName(_ n: &Text) {
         names.append(alloc String(n))          // the level's allocator: the string goes where the list is
@@ -120,7 +120,7 @@ A closure's body takes the ambient allocator of the function the closure is writ
 
 ### Growth
 
-```swift
+```rayo
 var spawns = scratch.alloc List<Vec3>()
 spawns.append(.zero)                // grows through 'scratch', as the alloc at its construction showed
 ```
@@ -143,7 +143,7 @@ A literal is never one of them, since it never allocates by itself ([04](../04-t
 
 ### The static allocator
 
-```swift
+```rayo
 const primes: List<Int> = alloc makePrimes(below: 1000)    // built by the compiler; its buffer is in read-only data
 var more = alloc primes.clone()                            // the clone's buffer comes from the ambient allocator
 more.append(1009)                                          // and grows there, as any list's does
