@@ -342,7 +342,7 @@ protocol Formattable { func format(into sink: mutable &some TextSink) where sink
 ### Printing
 
 ```swift
-func print(_ value: some Formattable)
+func print(_ value: &some Formattable)
 
 let hp = 7
 let name = alloc "grunt"
@@ -350,13 +350,12 @@ print(42)               // 42
 print(hp > 0)           // true
 print("hp \(hp)")       // hp 7
 print(0.1 + 0.2)        // 0.30000000000000004
-print(&name)            // a String place, lent: 'name' stays as it was
-print(name)             // error: 'print' owns its argument; write '&name' or 'consume name'
+print(name)             // grunt: a String place, lent, so 'name' stays as it was
 ```
 
-**`print` writes a value's text, then a newline, to the program's standard output** ([08](../08-c-interop/c-contract-and-embedding.md#what-the-runtime-needs-from-the-platform)). It is a prelude function, and owns its argument, of any `Formattable` type ([11](../11-compilation-model.md#the-prelude)). So `print(hp)` copies an implicitly copyable `hp`, and a place of any other type is lent with `&` or moved in with `consume`.
+**`print` writes a value's text, then a newline, to the program's standard output** ([08](../08-c-interop/c-contract-and-embedding.md#what-the-runtime-needs-from-the-platform)). It is a prelude function, and borrows its argument, of any `Formattable` type, since it only reads it ([11](../11-compilation-model.md#the-prelude)). So a place of any type is lent with nothing written, and a value, such as a literal or a call's result, is lent as a temporary ([05](../05-protocols-generics-and-closures/implicit-conversions.md#places-lent-where-a-reference-is-expected)).
 
-**A reference formats as what it refers to does**, since it takes its `Formattable` conformance from that value ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#conformances)). So `print(&x)` and `print("\(x)")` write the same line, and so does `print(x)` where `x` is implicitly copyable.
+**A reference formats as what it refers to does**, since it takes its `Formattable` conformance from that value ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#conformances)). So `print(x)` and `print("\(x)")` write the same line, whatever `x` holds.
 
 **The language's own types format the same text on every target and in every build**, so a program's printed output can be compared exactly with one recorded on another machine:
 

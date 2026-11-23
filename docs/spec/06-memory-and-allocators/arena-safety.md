@@ -88,7 +88,7 @@ spawns.append(.zero)          // panics: 'spawns' was allocated in 'levelArena' 
 
 ```swift
 struct Door(var name: String) {
-    deinit { print(&name) }                    // runs inside the reset that destroys this door
+    deinit { print(name) }                     // runs inside the reset that destroys this door
 }
 
 var doors = alloc List<UniquePointer<Door>>()  // from .heap: the list's buffer isn't in the arena

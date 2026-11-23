@@ -79,7 +79,7 @@ A list keeps the allocator it was built with, wherever it later grows. A new str
 var names = alloc List<String>()                         // from .heap
 names.append(frameArena.alloc "wave \(wave)")            // the list grows in .heap, but the new String is in the arena
 frameArena.reset()
-print(&names[0])                                         // panics: the string came from 'frameArena' before its reset
+print(names[0])                                          // panics: the string came from 'frameArena' before its reset
 ```
 
 ## Arenas and resets

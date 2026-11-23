@@ -91,15 +91,17 @@ A type parameter stands for a `&T` there once it is bound, as `List<&Text>`'s `E
 - **It applies only where a `&T` is expected.** A `let` or `var` with no annotation, a `ref let`, and a loop's or a `when`'s subject expect no type, so each writes `&` to lend a place ([01](../01-values-and-ownership/bindings.md#bindings)). A function type is no reference either, so a closure in a place given where one is expected writes the mark its kind needs ([below](#function-values-of-closures-in-places)).
 - **It never moves or copies the place.** It makes the borrow `&p` makes, which the law of exclusivity checks as it checks any other, so `f(mutable &x, x)` is a compile error, as `f(mutable &x, &x)` is ([01](../01-values-and-ownership/exclusivity.md#the-law-of-exclusivity)).
 
-**A bare place given for a parameter whose type is a type parameter binds the type parameter to the place's own type**, since nothing expects a `&T` until the type parameter is bound. A `some P` parameter counts, since it is an anonymous type parameter ([Protocols and generics](protocols-and-generics.md#protocols-and-generics)). Such a parameter owns its argument, so the place writes `consume` or `copy`, unless its type is implicitly copyable. Written with `&`, the place binds the type parameter to a reference:
+**A bare place given for a parameter whose type is a type parameter binds the type parameter to the place's own type**, since nothing expects a `&T` until the type parameter is bound. A `some P` parameter counts, since it is an anonymous type parameter ([Protocols and generics](protocols-and-generics.md#protocols-and-generics)). Such a parameter owns its argument, so the place writes `consume` or `copy`, unless its type is implicitly copyable. Written with `&`, the place binds the type parameter to a reference. A parameter that is a reference to a type parameter, such as `&T` or `&some P`, expects a reference, so a bare place given to it is lent, and binds the type parameter to the place's type:
 
 ```swift
-func print(_ value: some Formattable)
+func remember<T>(_ x: T) { … }                       // owns its argument
+func print(_ value: &some Formattable)
 func largest<T: Comparable>(_ xs: &[T]) -> &T { … }
 
-print(&name)                      // binds the type to '&String': 'name' is lent
-print(name)                       // error: 'print' owns its argument, a String; write '&name', 'consume name' or 'copy name'
-print(count)                      // binds the type to Int, and copies 'count'
+remember(&name)                   // binds T to '&String': 'name' is lent
+remember(name)                    // error: 'remember' owns its argument, a String; write '&name', 'consume name' or 'copy name'
+remember(count)                   // binds T to Int, and copies 'count'
+print(name)                       // the parameter is a reference, so 'name' is lent, binding the type to String
 let best = largest(scores)        // the parameter is a reference, so 'scores' is lent, binding T to Int
 ```
 

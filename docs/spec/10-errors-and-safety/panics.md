@@ -94,10 +94,10 @@ Running out of stack, and an allocation that fails in a plain form, end the prog
 ### Messages
 
 ```swift
-func fatalError(_ message: some Formattable) -> Never
-func precondition(_ cond: Bool, _ message: some Formattable)
+func fatalError(_ message: &some Formattable) -> Never
+func precondition(_ cond: Bool, _ message: &some Formattable)
 func precondition(_ cond: Bool)
-func assert(_ cond: Bool, _ message: some Formattable)
+func assert(_ cond: Bool, _ message: &some Formattable)
 func assert(_ cond: Bool)
 
 fatalError("enemy \(id) has no mesh")      // an interpolated message, formatted only when it panics

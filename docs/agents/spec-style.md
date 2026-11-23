@@ -27,7 +27,7 @@ The spec is **precise, plain and explained**: every rule stated exactly, with th
 - **A rule whose consequence isn't obvious gets an example**: a short code block of what compiles and what doesn't, with the reason in a trailing comment, as in `// error: 'seen' is still used below`. Example code may draw on the spec's running game code, such as `Enemy`, `world` and `Mesh`.
 - **Example code writes `&` only where it is required or picks an overload.** A place given where a `&T` is expected is lent with nothing written ([05](../spec/05-protocols-generics-and-closures/implicit-conversions.md#places-lent-where-a-reference-is-expected)), so code there writes the bare form, as `show(boss)` does. `mutable &` is always written, and `&` in three cases:
     - where nothing expects a `&T`, as in `let best = &enemies[0]`, a `ref let`, or a loop's or a `when`'s subject;
-    - where a type parameter would otherwise bind to the place's own type, as in `print(&name)`;
+    - where a type parameter would otherwise bind to the place's own type, as in `remember(&name)` for a `func remember<T>(_ x: T)`;
     - to call the overload that takes a reference, where another takes the argument as written.
 
   Every code example in the docs and in `examples/` follows this rule.
