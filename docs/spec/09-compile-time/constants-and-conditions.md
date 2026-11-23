@@ -6,7 +6,7 @@
 
 A table worked out ahead of time, such as a sine table, a name interned once or a list of presets, is a `const`, and the function that builds it is ordinary code that the compiler runs:
 
-```swift
+```rayo
 const maxPlayers = 8
 const sinTable: [1024 of Float] = makeSinTable()        // runs in the compiler
 const jumpId: Name = "jump"                             // interned by the build
@@ -57,7 +57,7 @@ A `const` **reaches run time** when code names it anywhere but in these places, 
 
 Here `enemyPresets` reaches run time, since `presets()` names it, even if nothing calls `presets()`:
 
-```swift
+```rayo
 struct Preset(var name: String, var hp: Float) {
     alloc func clone() -> Preset { Preset(name: alloc name.clone(), hp: hp) }   // so a List<Preset> can be cloned
 }
@@ -109,7 +109,7 @@ func setUp(_ world: mutable &World) {
 
 **The same test, with the rules above for what can run at compile time, decides which global `let`s go into read-only data** ([07](../07-concurrency/global-state.md#initialization-at-startup)). So the first three below are initialized at startup, and only the last is frozen:
 
-```swift
+```rayo
 let frameArena = Allocator.register(Arena(size: 64.mb))                      // holds an allocator id other than .heap
 let godMode = Atomic(false)                                                  // Synchronized: kept in memory its methods can write
 let presetIds: Map<Name, Int> = alloc ["grunt": 0, "brute": 1]               // seeded hashing: can't run at compile time
@@ -122,7 +122,7 @@ let fixedIds: Map<Name, Int, FixedHashing> = alloc ["grunt": 0, "brute": 1]  // 
 
 `static if` keeps or drops code at compile time, by the target platform, a build flag or what a type argument supports:
 
-```swift
+```rayo
 static if target.platform == .ps5 || target.platform == .xboxSeries {
     typealias GpuResourceId = UInt64
 } else {
@@ -168,7 +168,7 @@ No `import` goes inside a `static for`, at any depth.
 
 **Reading a flag the build doesn't declare is a compile error.** `target.hasFlag("editor")`, a `const` `Bool`, says whether the build declares that flag. So a library can read a flag that only some builds define inside a `static if` on `hasFlag`:
 
-```swift
+```rayo
 static if target.hasFlag("editor") {          // whether this build declares 'editor'
     static if target.flag("editor") { … }     // so the flag is read only in builds that declare it
 }

@@ -2,7 +2,7 @@
 
 Concurrent code becomes unsafe when two threads reach the same storage without coordination and at least one writes. Rayo lets libraries schedule jobs and create threads, while the language checks what data each piece of work borrows and which values may cross threads. Locks coordinate shared access; tasks can suspend and continue under their owner's control.
 
-```swift
+```rayo
 import std.jobs
 
 join({ updateAI(mutable world.ai, sense: world.perception) },     // may run both closures at once, and returns when both are done

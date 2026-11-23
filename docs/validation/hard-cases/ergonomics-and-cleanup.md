@@ -31,7 +31,7 @@
 
 The criteria below use these statements, the last four in a handshake task:
 
-```swift
+```rayo
 while running { work(frameArena); frameArena.reset() }   // 'work' builds its scratch values with frameArena.alloc
 
 total += await next()                       // changes one of the task's own locals

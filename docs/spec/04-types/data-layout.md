@@ -6,7 +6,7 @@ Rayo normally lays out a value according to its fields. Systems code sometimes n
 
 ## Sizes fixed when the program is built
 
-```swift
+```rayo
 let w: [4 of Float] = [0.1, 0.2, 0.3, 0.4]   // 16 bytes: the count is part of the type
 let names = alloc ["ana", "bo"]              // a List: a fixed-size value, with its elements in storage it allocated
 let first: &Text = names[0]                  // a pointer and a length, whatever the text's length
@@ -28,7 +28,7 @@ let first: &Text = names[0]                  // a pointer and a length, whatever
 
 ### The largest value on the stack
 
-```swift
+```rayo
 func main() {
     let grid: [268435456 of Int] = .init(repeating: 0)   // error: 2^31 bytes, one more than a value on the stack takes
     let row: [1024 of Int] = .init(repeating: 0)          // fine: 8 KiB
@@ -50,7 +50,7 @@ func main() {
 
 **A type where any bytes make a valid value is `Pod`** ("plain old data"), so bytes from a file or a packet can be used as one:
 
-```swift
+```rayo
 public struct Vertex(public var pos: Vec3, public var normal: Vec3, public var uv: Vec2)     // every field Pod and public: Pod
 
 let f: Float = 1.5
@@ -80,7 +80,7 @@ if let verts = bytes.reinterpret(as: Vertex.self) {   // a '&[UInt8]' to a '(&[V
 
 **The visibility and `unsafe` conditions protect invariants, since a type that guards one must not be forged from bytes.** A field is as visible as its struct when it is `public` or the struct isn't. A primary initializer is, unless the struct is `public` and its header says `private init` ([11](../11-compilation-model.md#modules-and-names)). A `public` `Fraction` guards one, since its `private init` makes every other module pass the nonzero-denominator check ([Initializers](structs.md#initializers)). So it fails the conditions, and so do these, which `unchecked` code trusts:
 
-```swift
+```rayo
 struct SlotIndex(public unsafe let raw: UInt32)     // an unsafe field
 struct SlotId unsafe init(public let raw: UInt32)   // an unsafe primary initializer
 ```
@@ -103,7 +103,7 @@ Each is `Pod` only through `@pod`, which states that every bit pattern is valid.
 
 **`TrailingArray<Header, Element>` is one allocation of a `Header` followed by `n` `Element`s**, as a network packet or a C API with a flexible array member wants.
 
-```swift
+```rayo
 var msg = alloc TrailingArray<PacketHeader, UInt8>(header: h, count: n, repeating: 0)
 msg.header.kind = .snapshot
 msg.elements[0..<4].copy(from: payload[0..<4])  // a '[UInt8]' place in the trailing storage; lengths checked
@@ -130,7 +130,7 @@ It is move-only, and owns its allocation, whose element count is fixed when it i
 
 **`SoA<T>` stores each field of a struct `T`, or each element of a tuple `T`, in its own buffer**, so a loop reads only the fields it touches, still with field syntax:
 
-```swift
+```rayo
 var particles = alloc SoA<Particle>(capacity: 100_000)  // or alloc SoA<Particle>(), as for List
 particles.append(Particle(pos: p, vel: v, life: 2))
 
@@ -143,7 +143,7 @@ for p in mutable particles {           // p is a row: one place per field
 
 **Columns are places.** `s.life` is the column's buffer as a `[Float]` place, a place property with a `borrow` and a `mutate`. So `&s.life` is a `&[Float]`, and `mutable s.life` a `mutable &[Float]` ([Shared and mutable views of one collection](collections.md#shared-and-mutable-views-of-one-collection)). A reference to a column depends on that column alone, a part of `s` disjoint from the other columns, as a stored field is from its siblings ([01](../01-values-and-ownership/exclusivity.md#which-places-overlap)). So `mutable s.pos` and `&s.vel` can be held at once:
 
-```swift
+```rayo
 var lives = mutable particles.life     // a 'mutable &[Float]' of one column
 let vels = &particles.vel              // a '&[Vec3]' of another, held at the same time
 lives[0] -= 1
@@ -151,7 +151,7 @@ lives[0] -= 1
 
 **Subscripts reach columns by field.** `s[field: f]` is one column, a place with both accessors, as `s.f` is. `s[fields: (f1, f2)]` hands out a tuple of shared references to several columns, and `s[mutableFields: (f1, f2)]` a tuple of mutable references. A tuple of references is a value, not a place, so its two forms have two names, as a method's do ([Shared and mutable views of one collection](collections.md#shared-and-mutable-views-of-one-collection)):
 
-```swift
+```rayo
 var (ts, vs) = table.rows[mutableFields: (tf, vf)]  // 'ts' and 'vs' are mutable references to two distinct columns
 ```
 

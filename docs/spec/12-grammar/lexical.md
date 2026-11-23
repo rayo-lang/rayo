@@ -29,7 +29,7 @@ comment      = '//' to-end-of-line | '/*' nested-comment '*/' ;
 
 **A multi-line string holds the lines between its delimiters**, each with the closing `"""` line's indentation removed, and joined by `\n`. The newlines after the opening `"""` and before the closing one aren't part of it:
 
-```swift
+```rayo
 let banner = """
     Wave 3
       Boss incoming
@@ -56,7 +56,7 @@ associatedtype subscript`.
 
 **Argument labels may be keywords.** A parameter's argument label ([01](../01-values-and-ownership/parameters.md#argument-labels)), and the label a call writes before an argument, can be any keyword:
 
-```swift
+```rayo
 func index<T: Equatable>(of x: &T, in s: &[T]) -> UInt?    // 'of' and 'in' as the parameters' labels
 let i = index(of: h, in: handles)                           // and before the arguments
 ```

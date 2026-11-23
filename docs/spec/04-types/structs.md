@@ -4,7 +4,7 @@
 
 **A struct's stored fields are listed once, in its header**, which is also its **primary initializer**. The body holds everything else:
 
-```swift
+```rayo
 struct Camera(
     var position: Vec3,
     var yaw: Float = 0,
@@ -29,7 +29,7 @@ cam.look(dx: 0.1, dy: 0)
 
 **A value never contains itself.** A struct, tuple, enum or union that would hold a value of its own type inline, through its fields, payloads, optionals or inline arrays at any depth, is a compile error. So is a task whose state would ([07](../07-concurrency/tasks.md#semantics)). Recursion goes through an owner, so the allocation is visible:
 
-```swift
+```rayo
 enum Tree {
     case leaf(value: Float)
     case node(Box<Tree>)          // the subtree lives in an allocation of its own, which the Box owns
@@ -55,7 +55,7 @@ struct Chain(var next: Chain?)    // error: a Chain would hold a Chain inline, i
 
 **Attributes change or check a struct's layout.** `@layout` arranges its fields, with a value that says how, `@c` makes it a C struct, and `@align(N)` raises its alignment:
 
-```swift
+```rayo
 struct Hit(var crit: Bool, var damage: Double, var team: UInt8)                       // 16 bytes: 'damage', 'crit', 'team', then 6 bytes of padding
 @layout(.declared) struct Row(var crit: Bool, var damage: Double, var team: UInt8)    // 24 bytes, in declared order: 7 bytes of padding after 'crit'
 @c struct CHit(var crit: Bool, var damage: Double, var team: UInt8)                   // 24 bytes, as 'Row', and every field has a C representation
@@ -72,7 +72,7 @@ struct Hit(var crit: Bool, var damage: Double, var team: UInt8)                 
 
 **`@layout` and `@align(N)` apply only to a struct or union declaration**, and are a compile error elsewhere. `@layout(.packed)` and `@layout(.packed(N))` apply to either. `@layout(.declared)` applies only to a struct, since every member of a union starts at offset 0, so a union has no order to keep:
 
-```swift
+```rayo
 @c @layout(.packed) struct Header(var magic: UInt32, var kind: UInt8)   // 5 bytes: a packed C struct
 @c @layout(.declared) struct Pair(var a: Int32, var b: Int32)           // error: '@c' already keeps the declared order
 @layout(.packed) @layout(.packed(2)) struct Twice(var a: UInt32)        // error: more than one '@layout'
@@ -81,7 +81,7 @@ struct Hit(var crit: Bool, var damage: Double, var team: UInt8)                 
 
 ## Initializers
 
-```swift
+```rayo
 struct Spawner(
     var target: Handle<Enemy>?,          // a var of optional type: starts as nil, so it is defaulted
     let owner: Handle<Player>?,          // a let of optional type: no default
@@ -100,7 +100,7 @@ let s = Spawner(owner: nil)              // 'target', 'cooldown' and 'spawned' m
 
 **A type can also offer other initializers**, which can check an invariant before the value exists:
 
-```swift
+```rayo
 public struct Fraction private init(let num: Int, let den: Int) {   // other modules can't call the primary
     public init(_ num: Int, over den: Int) {
         precondition(den != 0, "zero denominator")
@@ -139,7 +139,7 @@ public struct Body private init(let mass: Float, let invMass: Float, var velocit
 
 **A packed struct or union can put a field at a misaligned address**, where a load or store of the field's type is invalid ([10](../10-errors-and-safety/unsafe-code.md#raw-accesses)) and faults on some targets. So the compiler tracks which places may be misaligned, and code uses those only by value:
 
-```swift
+```rayo
 @layout(.packed) struct NetRec(var tag: UInt8, var ids: [4 of UInt32])     // 'ids' starts at offset 1
 
 func sum(_ r: &NetRec) -> UInt32 {
@@ -163,7 +163,7 @@ func sum(_ r: &NetRec) -> UInt32 {
 
 **Generic code takes the safe bound**, since it is checked once, at its definition ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#checking-generic-code)). A path that crosses no packed struct or union stays aligned, since ordinary layout keeps every field aligned for its type. Below a packed struct or union, generic code computes the enclosing guarantee and each offset only from the parts that don't depend on a type parameter: at least 1, and 1 after any field of parameter-dependent size. A field whose type depends on a parameter is taken to require the largest alignment any type can have:
 
-```swift
+```rayo
 @layout(.packed(4)) struct Msg<T: Copyable>(var tag: UInt8, var payload: T)
 struct Env<T>(var rec: Rec, var body: T)
 

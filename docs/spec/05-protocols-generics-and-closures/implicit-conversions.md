@@ -4,7 +4,7 @@
 
 Most changes of type are written out, especially when they may lose information. A small set of conversions can instead follow from the type a context expects. The compiler performs those without a conversion expression, while preserving the ownership and borrowing rules of the value being converted.
 
-```swift
+```rayo
 var target: Handle<Enemy>? = h                  // T to T?: a Handle is implicitly copyable, so 'h' is copied in
 let top: &Enemy = enemies[0]                    // a place to a shared reference to it
 let seen: &any Drawable = sprite                // 'sprite' is lent, and its '&Sprite' converts to a reference to an existential
@@ -52,7 +52,7 @@ let pickMax: (Int, Int) -> Int = max            // a named function to a functio
 
 **Where a `&T` is expected, a place converts to a shared reference to itself, lent as `&p` would lend it.** A borrow costs the caller nothing, and a bare place never moves, since a move writes `consume` ([01](../01-values-and-ownership/references.md#places-given-to-a-position)). So a `&` there would tell a reader nothing the expected type doesn't, and a call that only reads its arguments reads as plainly as a receiver or an operator, which take their places with no mark ([01](../01-values-and-ownership/references.md#unmarked-places)). A `&p` written there lends the same way.
 
-```swift
+```rayo
 func show(_ e: &Enemy) { … }
 func total(_ xs: &[Int]) -> Int { … }
 
@@ -74,7 +74,7 @@ show(makeEnemy())                 // lends a temporary, which lives to the end o
 
 **A type parameter stands for a `&T` there when the receiver's type or the call's written generic arguments bind it**, as `List<&Text>`'s `Element` does for `append(name)` above. A type parameter that only the call's arguments bind is bound by a bare place to the place's own type (below), so the place isn't lent:
 
-```swift
+```rayo
 func push<T>(_ list: mutable &List<T>, _ x: T) { … }
 var picks = alloc List<&Enemy>()
 
@@ -103,7 +103,7 @@ picks.append(boss)                // the receiver binds Element to '&Enemy', so 
 
 **A parameter that is a reference to a type parameter, such as `&T` or `&some P`, expects a reference.** So a bare place given to it is lent, binding the type parameter to the place's type, unless its own type already fits, as a place that holds a `&Stats` does, binding `T` to `Stats` ([above](#places-lent-where-a-reference-is-expected)):
 
-```swift
+```rayo
 func remember<T>(_ x: T) { … }                       // owns its argument
 func print(_ value: &some Formattable)
 func largest<T: Comparable>(_ xs: &[T]) -> &T { … }
@@ -126,7 +126,7 @@ let best = largest(scores)        // the parameter is a reference, so 'scores' i
 - through a `mutable &[T]`, it changes elements, each a `T`, and can't add or remove one, since the run's storage belongs to what owns it, such as the list, which alone can resize it ([04](../04-types/collections.md#runs-of-elements));
 - through a `mutable &any P`, it calls requirements, which change the value but never its type ([`any P`: explicit dynamic dispatch](protocols-and-generics.md#what-an-existential-may-call)).
 
-```swift
+```rayo
 func clear(_ xs: mutable &[Int]) { for x in mutable xs { x = 0 } }
 func widen(_ x: mutable &Int64) { x = .max }
 
@@ -148,7 +148,7 @@ widen(mutable count)       // error: 'count' is an Int32, and 'widen' takes 'mut
 
 **So a function that takes a `mutating` callback can pass it on twice**, lending a new view of it each time:
 
-```swift
+```rayo
 func eachMut(_ xs: mutable &[Enemy], _ body: mutating (mutable &Enemy) -> Void) {
     for x in mutable xs { body(mutable x) }
 }

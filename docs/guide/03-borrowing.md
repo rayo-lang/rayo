@@ -10,7 +10,7 @@ A borrow can go wrong if the memory it reads is freed while the borrow still use
 
 Here is a function that adds up a list of hits:
 
-```swift
+```rayo
 func total(list: &List<Int>) -> Int {
     var sum = 0
     for h in &list {
@@ -39,7 +39,7 @@ Those bytes aren't a second list. Nothing owns them, so nothing destroys them, a
 
 `total` can read the list, but it can't hand it over to anyone. Here is a function that tries, by returning the longer of two lists:
 
-```swift
+```rayo
 func longer(a: &List<Int>, b: &List<Int>) -> List<Int> {
     if a.count >= b.count { return consume a }      // error: 'a' is only borrowed, so it can't move out
     return consume b                                // error: 'b' is only borrowed, so it can't move out
@@ -52,7 +52,7 @@ func longer(a: &List<Int>, b: &List<Int>) -> List<Int> {
 
 To return a list, `longer` has to build one that it owns, with `clone()` ([Moves and copies](02-moves-and-copies.md#copies)). That makes it an `alloc func`, as `newRound` is:
 
-```swift
+```rayo
 alloc func longer(a: &List<Int>, b: &List<Int>) -> List<Int> {
     if a.count >= b.count { return alloc a.clone() }
     return alloc b.clone()
@@ -63,7 +63,7 @@ A clone copies every value. A function can also hand back a view of a list it bo
 
 A borrowed `Enemy` follows the same rule:
 
-```swift
+```rayo
 func healthier(a: &Enemy, b: &Enemy) -> Enemy {
     if a.hp >= b.hp { return consume a }    // error: 'a' is only borrowed, so it can't move out
     return copy b                           // fine: a copy of the enemy is the function's own
@@ -74,7 +74,7 @@ func healthier(a: &Enemy, b: &Enemy) -> Enemy {
 
 A function that reads an `Int` usually takes it as a plain `Int` instead. The caller's number is copied in, with nothing written, since an `Int` is implicitly copyable and its copy costs no more than a borrow would ([Moves and copies](02-moves-and-copies.md#adding-to-a-list)). Returning it copies it again:
 
-```swift
+```rayo
 func atLeastZero(hp: Int) -> Int {
     if hp < 0 { return 0 }
     return hp                   // a copy of the function's own Int
@@ -87,7 +87,7 @@ let shown = atLeastZero(hp: damage)     // no mark: a copy goes in
 
 A parameter with a plain type owns what it's given, as `archive`'s list does. So the function may change it, as a `var`'s value can change. For an `Int`, that is a copy of the caller's number:
 
-```swift
+```rayo
 func turnsToHeal(hp: Int, target: Int) -> Int {
     var turns = 0
     while hp < target {
@@ -102,7 +102,7 @@ The caller's variable stays as it was, and the call shows it: `turnsToHeal(hp: c
 
 To change the caller's variable itself, the function asks for a `mutable &T` parameter, a mutable reference:
 
-```swift
+```rayo
 func heal(hp: mutable &Int) {
     hp += 20
 }
@@ -116,7 +116,7 @@ log("hp \(enemyHp)")            // hp 60
 
 With `mutable`, you lend `enemyHp` to `heal`. The mark is one word, with no `&`: the parameter's type, `mutable &Int`, says that `heal` gets a reference, and the mark says what the call does to `enemyHp`, which is to lend it for change. Leaving the mark out is an error:
 
-```swift
+```rayo
 heal(hp: enemyHp)               // error: 'heal' takes 'mutable &Int'; write 'mutable enemyHp'
 ```
 
@@ -126,7 +126,7 @@ The value before the dot needs no mark, even when the method changes it, as `hit
 
 Whether through a `mutable` argument or the value before the dot, a call can change only a variable you could change yourself:
 
-```swift
+```rayo
 let startHp = 100
 heal(hp: mutable startHp)       // error: 'startHp' is a 'let', so it can't change
 let done = alloc List<Int>()
@@ -135,7 +135,7 @@ done.append(7)                  // error: 'done' is a 'let', so it can't change
 
 A `mutable &T` parameter names the caller's variable, which the function can change, so the function can lend it on:
 
-```swift
+```rayo
 func healTwice(hp: mutable &Int) {
     heal(hp: mutable hp)
     heal(hp: mutable hp)
@@ -150,7 +150,7 @@ You've seen `same`, a `let` that holds a reference to a list ([Moves and copies]
 
 To borrow something to change it, declare the name with `ref var`, and write `mutable` before what it borrows, as in a call. Here `first` borrows `hits[0]`, which is the list's first element:
 
-```swift
+```rayo
 var hits = alloc List<Int>()
 hits.append(12)
 hits.append(30)
@@ -163,7 +163,7 @@ log("\(hits[0])")               // 17
 
 The word and the mark have to agree, and a mismatch is an error:
 
-```swift
+```rayo
 ref var first = hits[0]             // error: write 'mutable hits[0]'
 ref var first = &hits[0]            // error: write 'mutable hits[0]'
 ref let first = mutable hits[0]     // error: 'mutable' lends for change; declare 'ref var'
@@ -173,26 +173,26 @@ Every borrow that changes a value says so with `mutable`, in a declaration as at
 
 A `var` that holds a reference is different from a `ref var`: it is a variable of its own, so assigning it a new reference points it somewhere else ([01](../spec/01-values-and-ownership/bindings.md#bindings-that-own-a-value)):
 
-```swift
+```rayo
 var pick = &hits[0]
 pick = hits[1]                  // 'pick' holds a '&Int', so 'hits[1]' is lent: 'pick' refers to the second hit
 ```
 
 A `ref let` of an element borrows it to read, as `same` borrows the whole list. Moving the element out, though, is an error:
 
-```swift
+```rayo
 let top = consume hits[0]       // error: an element can't move out of its list
 ```
 
 An element can't leave its list. If it could, the list would still count two values, but its first one would be gone. For an `Int`, a `let` gets a copy of the element, a value of its own, with nothing written:
 
-```swift
+```rayo
 let top = hits[0]
 ```
 
 In a list of lists, though, each element is a whole list. `copy` is an error there, since a list isn't copyable, and `clone()` would allocate a second list. A borrow reads the element where it sits, and gives it a short name:
 
-```swift
+```rayo
 var rounds = alloc List<List<Int>>()
 rounds.append(alloc hits.clone())
 ref let latest = &rounds[rounds.count - 1]
@@ -205,7 +205,7 @@ log("\(latest.count) hits, \(total(list: latest)) damage")
 
 While `latest` borrows an element of `rounds`, `rounds` can't change:
 
-```swift
+```rayo
 ref let latest = &rounds[rounds.count - 1]
 rounds.append(alloc List<Int>())  // error: 'rounds' is borrowed by 'latest' (used below)
 log("\(latest.count) hits")
@@ -215,7 +215,7 @@ log("\(latest.count) hits")
 
 The compiler can't know whether an `append` will need a bigger block, and doesn't try. While `latest` is in use, it rejects any change to `rounds`. A borrow doesn't last to the end of its block, though. It ends at its last use. So the fix is to finish with `latest` first ([01](../spec/01-values-and-ownership/bindings.md#how-long-a-borrow-lasts)):
 
-```swift
+```rayo
 ref let latest = &rounds[rounds.count - 1]
 log("\(latest.count) hits")
 rounds.append(alloc List<Int>())
@@ -223,7 +223,7 @@ rounds.append(alloc List<Int>())
 
 Moving a list away counts as changing it too:
 
-```swift
+```rayo
 let same = &hits
 archive(list: consume hits)     // error: 'hits' is borrowed by 'same' (used below)
 log("\(same.count)")
@@ -235,7 +235,7 @@ log("\(same.count)")
 
 A `for` loop writes how it takes its list, since no parameter type says it. `&hits` lends the list to read, `mutable hits` lends it to change its elements, and `consume hits` hands the elements over. A loop over `&hits` borrows the list for its whole run, and on each pass, `h` names one element where it sits, read-only:
 
-```swift
+```rayo
 for h in &hits {
     h += 5                      // error: 'h' is a 'ref let'; write 'mutable hits' to change the elements
 }
@@ -243,7 +243,7 @@ for h in &hits {
 
 To change the elements, lend the list to the loop with `mutable`. Then each `h` may change its element, so `h += 5` changes `hits` ([04](../spec/04-types/collections.md#iteration)):
 
-```swift
+```rayo
 for h in mutable hits {
     h += 5
 }
@@ -251,7 +251,7 @@ for h in mutable hits {
 
 Since the loop borrows the whole list, its body can't change the list itself:
 
-```swift
+```rayo
 for h in &hits {
     if h > 20 {
         hits.append(h)          // error: 'hits' is borrowed by the loop
@@ -263,7 +263,7 @@ This is the same problem as with `latest`: `append` may transfer the values to a
 
 To add values that the loop finds, collect them in a list of their own. Then add them once the loop is done:
 
-```swift
+```rayo
 var big = alloc List<Int>()
 for h in &hits {
     if h > 20 { big.append(h) }
@@ -285,7 +285,7 @@ Every read or change of a place uses it. A borrow keeps using its place until th
 
 Reads can happen together. A read changes nothing, so it can't spoil another read. That's why any number of shared borrows can be in use at once. Here the loop and `total` both borrow `hits` to read it at the same time, which is fine:
 
-```swift
+```rayo
 for h in &hits {
     log("\(h) of \(total(list: hits))")
 }
@@ -293,7 +293,7 @@ for h in &hits {
 
 A change can't happen while a shared borrow is in use, even a change that frees nothing:
 
-```swift
+```rayo
 var hp = 100
 let before = &hp
 hp -= 10                        // error: 'hp' is borrowed by 'before' (used below)
@@ -306,7 +306,7 @@ A mutable borrow is the strictest case. While it's in use, no other use of its p
 
 Here `i` is an index that the program works out while it runs, and `top` borrows the first hit of the first round to change it:
 
-```swift
+```rayo
 ref var top = mutable rounds[0][0]
 rounds[i] = alloc List<Int>()   // error: 'rounds' is mutably borrowed by 'top' (used below)
 top += 5
@@ -318,7 +318,7 @@ The compiler doesn't compare indexes into a list, so even `rounds[1] = alloc Lis
 
 A read can clash with a mutable borrow too. One call can do it alone, when it gets the same list twice:
 
-```swift
+```rayo
 func addAll(target: mutable &List<Int>, source: &List<Int>) {
     for x in &source {
         target.append(x)
@@ -332,7 +332,7 @@ The compiler doesn't look inside `addAll` to find this. Its declaration alone sa
 
 The fix is to give `addAll` a second list to read. A clone is worth its cost here, since `addAll` needs the values as they were before it started appending:
 
-```swift
+```rayo
 addAll(target: mutable hits, source: alloc hits.clone())
 ```
 

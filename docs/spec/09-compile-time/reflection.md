@@ -4,7 +4,7 @@
 
 The compiler knows a type's fields, cases and other declarations while it builds the program. Static reflection lets generic code inspect that information and produce operations checked for the actual type. The example below turns a struct's fields into separate logging calls:
 
-```swift
+```rayo
 struct Stats(var hp: Float, var armor: Float)
 
 func dump<T>(_ value: &T) {
@@ -22,7 +22,7 @@ dump(Stats(hp: 100, armor: 5))                          // compiles to two log c
 
 A complete serializer dispatches on the kind of type it gets, walking a struct's fields and an enum's cases with `static for`. Each branch is checked only for the types that reach it ([`static if` and conditional compilation](constants-and-conditions.md#static-if-and-conditional-compilation)):
 
-```swift
+```rayo
 func serialize<T>(_ value: &T, into w: mutable &Writer) {
     static if T.conforms(Pod.self) && T.isPaddingFree {
         w.bytes(of: value)                                    // Vec3, Color, …: raw bytes
@@ -161,7 +161,7 @@ The types it holds are those of its stored fields, elements and payloads. The re
 
 A serializer in one module often reflects over types from another, and must not read what those types keep private:
 
-```swift
+```rayo
 // in module 'gameplay'
 public struct Enemy(
     public var hp: Float,
@@ -190,7 +190,7 @@ public struct Enemy(
 
 Loaders (save files, network replication, asset import) need the reverse of `serialize`: building a `T` field by field, including fields with no default. **Static closures** do it: closures whose body is instantiated once per field, like a `static for` body:
 
-```swift
+```rayo
 func deserialize<T>(_ r: mutable &Reader) -> T!LoadError {
     static if T.conforms(Pod.self) && T.isPaddingFree {      // mirrors serialize: raw bytes
         return try r.read(T.self)
@@ -227,7 +227,7 @@ func deserializeEnum<T>(_ r: mutable &Reader) -> T!LoadError {
 
 **A static closure appears only as the argument of `T.construct` or `T.makeCase`**, which run its instances once each, in field order. It is checked as that sequence of bodies, unrolled. An instance names the enclosing function's places as the body of a `static for` there would. So it may move out of one that no later instance uses, as `rebuild` does with each field of `old`, which it owns ([above](#reflection-and-access-control)):
 
-```swift
+```rayo
 func rebuild<T>(_ old: T) -> T {
     return T.construct { static field in consume old[field] }   // each instance moves out its own field of 'old'
 }
@@ -245,7 +245,7 @@ func rebuild<T>(_ old: T) -> T {
 
 Generic code often needs a part of a value picked by its type rather than its name, and several such parts at once. A columnar store, for one, keeps each table as an `SoA` whose row is a tuple of column types. A query runs over every table that has the columns it needs, reading some columns and changing others. Here every sensor table with `Reading`, `Calibration` and `Calibrated` columns computes its calibrated values from the raw readings, which it leaves as they are:
 
-```swift
+```rayo
 struct Timestamp(var nanoseconds: Int64)
 struct Reading(var value: Double)                         // as the sensor reports it
 struct Calibration(var gain: Double, var offset: Double)
@@ -283,7 +283,7 @@ func calibrateAll(_ t: mutable &Telemetry) {             // every table with all
 
 An entity-component system (ECS) has the same shape. Each archetype is a table whose row is a tuple of component types, and a system runs over every table whose entities have the components it uses. `hasField(ofType:)` can also leave a table out, as "Transform and Velocity, but not Asleep" does:
 
-```swift
+```rayo
 struct Archetype<Row>(                                    // Row: a tuple of component types
     var rows = alloc SoA<Row>(),                          // from the allocator the archetype is made with
     var entities = alloc List<Entity>(),
@@ -322,14 +322,14 @@ func integrateAll(_ w: mutable &World, dt: Float) {        // "Transform and Vel
 
 For one row of a table, held in a `var` in code generic over `Row`, the two fields may be one where the borrows are checked:
 
-```swift
+```rayo
 var row: Row = …
 ref var (o, r) = mutable row[fields: (out, raw)]    // both borrowed exclusively, checked distinct at instantiation
 ```
 
 For a concrete type, each field takes the declaration it needs, since distinct stored fields never overlap:
 
-```swift
+```rayo
 const sOut = Sample.field(ofType: Calibrated.self)
 const sRaw = Sample.field(ofType: Reading.self)
 var sample: Sample = …
@@ -341,7 +341,7 @@ ref let r = &sample[sRaw]                     // borrows the Reading shared: a d
 
 A registry of every type in a module that conforms to a protocol is a `const` built from the module's list of types. A network service keeps one of the message types it decodes, and an ECS one of its component types:
 
-```swift
+```rayo
 const messageTypes: [_ of TypeInfo] = Module("messages").types
     .filter { $0.conforms(WireMessage.self) }
     .map { typeInfo($0.self) }                        // a const table in read-only data

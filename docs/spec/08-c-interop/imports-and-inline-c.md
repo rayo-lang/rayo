@@ -6,7 +6,7 @@ C headers define names and types in C's terms. `import c` maps those declaration
 
 ## Importing headers
 
-```swift
+```rayo
 import c "platform.h"                                    // declarations land in module 'platform'
 import c "SDL3/SDL.h" as sdl                             // explicit name
 import c "vendor/fmod.h" as fmod where prefix: "FMOD_"   // strips the prefix: FMOD_System_Create → fmod.System_Create
@@ -53,7 +53,7 @@ struct sockaddr;      // declared, not defined in this reading: an @opaque type 
 
 **An import can name a header whose reading has the type**, with a rule in its config block:
 
-```swift
+```rayo
 import c "mylib.h" unsafe { struct sockaddr in "sys/socket.h" }   // take struct sockaddr from sys/socket.h's reading
 ```
 
@@ -71,7 +71,7 @@ import c "mylib.h" unsafe { struct sockaddr in "sys/socket.h" }   // take struct
 
 #### The stack a C call needs
 
-```swift
+```rayo
 import c "physics.h" unsafe { stack(256 * 1024) physics_step }   // in the import
 extern c stack(512 * 1024) func solve(_ d: CInt) -> CInt         // on an extern c func declaration
 typealias Visitor = @c stack(1 << 20) (CInt) -> Void             // in a C function pointer's type
@@ -132,7 +132,7 @@ typealias Visitor = @c stack(1 << 20) (CInt) -> Void             // in a C funct
 
   Each converts to and from `Int` and `UInt` as the integer type it aliases does ([04](../04-types/numbers-and-math.md#conversions)). So the conversion is implicit only where it widens, as from a 32-bit `CSize` to `UInt`. Code built for both widths writes the explicit form, which is valid on each:
 
-    ```swift
+    ```rayo
     // C: void platform_upload(const float* data, size_t count);
     //    size_t platform_queued(void);
     unsafe { platform_upload(samples.baseAddress, CSize(samples.count)) }   // checks that the count fits a size_t
@@ -141,7 +141,7 @@ typealias Visitor = @c stack(1 << 20) (CInt) -> Void             // in a C funct
     ```
 - **Flexible array members.** A struct `S` with a flexible array member `T data[]` imports without the member, as a `TrailingArray` header. Its `unsafe` static function `trailing(at:count:)`, called with a `p: *S` and a count `n`, gives a `mutable &[T]` at the member's offset from `p`, without lending the struct:
 
-    ```swift
+    ```rayo
     // C: struct Packet { uint32_t len; uint8_t data[]; };
     var bytes = unsafe Packet.trailing(at: p, count: n)   // a 'mutable &[UInt8]' of n elements at data's offset
     ```
@@ -199,7 +199,7 @@ void clear(long double* p);                                       // imported, w
 
 ### Structs, unions and enums
 
-```swift
+```rayo
 // C: struct Pad { uint32_t id; uint32_t buttons : 16; uint32_t trigger : 8; };
 var pad = Pad()                                  // safe: all-zero bytes are a valid value of every field
 pad.buttons = 0x3                                // a generated accessor writes the bitfield
@@ -244,7 +244,7 @@ enum Team : uint32_t { TEAM_RED, TEAM_BLUE };    // C23 fixes the underlying typ
 
 - **An imported enum is open unless its header declares it closed.** C lets an enum object hold any value of its underlying type, so every `R` is a valid `E`, `E(rawValue:)` never fails, and a `when` over it needs an `else` arm:
 
-    ```swift
+    ```rayo
     // C: enum Stick { STICK_LEFT, STICK_RIGHT };
     when stick {
         .STICK_LEFT  { moveCamera() }
@@ -264,7 +264,7 @@ enum Team : uint32_t { TEAM_RED, TEAM_BLUE };    // C23 fixes the underlying typ
 
 ### C calls in `@noalloc` code: `noalloc`
 
-```swift
+```rayo
 import c "mixer.h" unsafe { noalloc mix_block, apply_gain }   // in the import's config block
 extern c noalloc func soft_clip(_ x: Float) -> Float           // on an extern c func declaration
 ```
@@ -277,7 +277,7 @@ extern c noalloc func soft_clip(_ x: Float) -> Float           // on an extern c
 
 An `extern c` block holds C code inside the Rayo module:
 
-```swift
+```rayo
 extern c """
     #include <math.h>
     static inline float rsqrt(float x) { return 1.0f / sqrtf(x); }

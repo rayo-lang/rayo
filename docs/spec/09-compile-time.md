@@ -4,7 +4,7 @@ Rayo can do work before a program runs when the answer depends only on informati
 
 A network replication layer sends only the fields of an object that changed since the last update. For every type it needs a record with one optional per replicated field, under that field's name, and a function that fills the record in. In Rayo each is written once, for every type:
 
-```swift
+```rayo
 struct Player(
     @Replicated var pos: Vec3,                         // the replication layer sends this field
     @Replicated var hp: Float = 100,

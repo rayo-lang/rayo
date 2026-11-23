@@ -6,7 +6,7 @@ Rayo has several ways to group values. Tuples and fixed-size arrays hold their e
 
 ## Tuples, ranges and arrays
 
-```swift
+```rayo
 let pair: (UInt, Float) = (3, 0.5)
 let stats: (hp: Float, armor: Float) = (hp: 100, armor: 20)
 let (count, weight) = pair                   // destructuring a copy: both elements are implicitly copyable
@@ -32,7 +32,7 @@ Written `[_ of T]`, an array type takes its count from the initializer.
 
 **A literal whose count differs from `N` is a compile error**, since it would leave elements without a value, or have values with no element to hold them. The count is known when the program is checked, so no literal is checked when it runs:
 
-```swift
+```rayo
 let w: [4 of Float] = [0.1, 0.2, 0.3]   // error: a [4 of Float] literal needs 4 elements
 ```
 
@@ -52,7 +52,7 @@ An inline array that holds a value holds all `N` of its elements, since no eleme
 
 **An index is a `UInt`, so the indices of `[N of T]` run from `0` to `N - 1`.** An index known when the program is checked, an integer literal or a `const`, that lies outside `0..<N` is a compile error. Any other index is checked when the program runs, so `a[i]` panics with `index out of range` when `i` is `N` or more. That is a bounds check, on in every build, which only an `unchecked` block removes ([10](../10-errors-and-safety/checks-and-build-modes.md#unchecked-blocks)):
 
-```swift
+```rayo
 const edge: UInt = 64
 
 var grid: [64 of Int] = .init(repeating: 0)
@@ -66,7 +66,7 @@ grid[i] = 1                  // checked when it runs: panics when 'i' is 64 or m
 
 **Rayo separates collections that own their elements, like `List`, from the elements themselves, a run `[T]` that code reaches through a reference.** A reference borrows the elements from whatever owns them, and is scoped ([01](../01-values-and-ownership/references.md#references)):
 
-```swift
+```rayo
 var names = alloc List<String>()          // owns its buffer: move-only, allocated through an allocator
 names.append(alloc "grunt")               // a String owns its text, so it is made with 'alloc' too
 names.append(alloc "brute")
@@ -105,7 +105,7 @@ The other rows, such as the owning collections and `Handle`, are std's ([11](../
 
 **A `Name` is interned text: each text has exactly one `Name`, so two `Name`s are equal exactly when their texts are** ([05](../05-protocols-generics-and-closures/operators.md#equality-and-ordering)). Equal texts give the same `Name` wherever and on whichever thread they are interned, and different texts never do. So `==` compares only the `Name`'s own pointer-sized value, never its text, and no two texts can collide. A compiler's keywords, the keys a config schema declares and a protocol's field names compare this way, as identifiers rather than bytes:
 
-```swift
+```rayo
 let jump: Name = "jump"                     // a literal: interned by the build, so no code runs
 let typed = alloc "jump"
 assert(Name(typed) == jump)                 // interned at run time: finds the literal's entry
@@ -131,7 +131,7 @@ std's `Name` tells the two apart by `hasher.startsFromProcessSeed`, the one prop
 
 **`Name(existing: s)` looks `s` up and never interns it.** It returns the `Name` that `s`'s text already has, or `nil` for text never interned. So a program matches outside text against the names it defines without growing the interner:
 
-```swift
+```rayo
 if let key = Name(existing: line.key), key == jump { … }    // a key read from a file: looked up, never interned
 ```
 
@@ -155,7 +155,7 @@ if let key = Name(existing: line.key), key == jump { … }    // a key read from
 
 **A `&List<T>` converts to a `&[T]`, and a `mutable &List<T>` to a `mutable &[T]`, where the expected type asks for one** ([01](../01-values-and-ownership/bindings.md#conversions)). So a function that reads elements takes a `&[T]`, and its callers give it what they have, which is lent ([05](../05-protocols-generics-and-closures/implicit-conversions.md#places-lent-where-a-reference-is-expected)):
 
-```swift
+```rayo
 func average(_ xs: &[Float]) -> Float { … }
 
 average(samples)                    // a List<Float>: lent as a reference to its elements
@@ -177,7 +177,7 @@ average(samples[0..<64])            // the first 64 of them
 | `reinterpret(as:)`, `mutableReinterpret(as:)` | The elements as a run of another `Pod` type ([Data layout](data-layout.md#plain-data-pod-and-bit-casts)) |
 | `chunks(n)`, `enumerated()`, `zip(other)`, and their mutable forms | Sequences that hand out references to parts or elements ([below](#shared-and-mutable-views-of-one-collection)) |
 
-```swift
+```rayo
 var some = mutable hits[0..<4]            // a 'mutable &[Int]' of the first four hits
 some.sort()                               // sorts the four where they lie
 var (lo, hi) = some.mutableSplit(at: 2)   // two 'mutable &[Int]'s: 'some' stays borrowed while either is used
@@ -186,7 +186,7 @@ lo[0] = hi[0]
 
 ### Hash maps and sets
 
-```swift
+```rayo
 enum Action { case jump, fire, crouch }
 
 const bindings: Map<Name, Action, FixedHashing> = alloc ["jump": .jump]   // frozen into read-only data
@@ -198,7 +198,7 @@ let shortcuts: Map<Name, Action> = alloc ["leap": .jump]                  // fin
 
 **std's `Hasher` is a keyed pseudorandom function: without its seed, nobody can predict what it outputs.** SipHash-1-3 is one such function. Which one std uses is the library's choice. A `Hasher` starts from a 128-bit `HashSeed`:
 
-```swift
+```rayo
 struct HashSeed private init(…): ImplicitlyCopyable {   // 16 bytes; its fields are private too
     init(_ high: UInt64, _ low: UInt64)           // a given seed
     static func fromProcessSeed() -> HashSeed     // a new seed, derived from the process seed
@@ -218,7 +218,7 @@ struct Hasher(…) {
 
 **Each map or set takes a type parameter, `H`, which decides how it seeds the `Hasher`s it feeds its keys to.** `H` defaults to `SeededHashing` ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#default-type-arguments)), so `Map<Name, Action>` is `Map<Name, Action, SeededHashing>`:
 
-```swift
+```rayo
 struct Map<K: Hashable, V, H: Hashing = SeededHashing> private init(…)
 struct Set<T: Hashable, H: Hashing = SeededHashing> private init(…)
 
@@ -236,7 +236,7 @@ A type that conforms to `Hashing` is a **hashing type**. A map or set keeps one 
 
 **A lookup borrows its key, so it takes a `&K`, and a key in a place is lent with nothing written**, an implicitly copyable one too, since the position expects a reference ([05](../05-protocols-generics-and-closures/implicit-conversions.md#places-lent-where-a-reference-is-expected)). A map or set whose keys are `String`s also looks up a `&Text`, since a `String` hashes and compares as its text does. A string literal is a `static &Text` already, so it passes as it is:
 
-```swift
+```rayo
 if let hp = scores[name] { … }            // lends the String 'name' to the lookup
 if let hp = scores["grunt"] { … }         // a literal is the '&Text' the lookup takes
 if let n = counts[id] { … }               // an Int key is lent too
@@ -271,7 +271,7 @@ A program may declare its own, such as one that holds a secret seed it read at s
 
 **A string is UTF-8 bytes, and formatting writes straight to wherever the text is going:**
 
-```swift
+```rayo
 log("hp \(hp)")                                   // written into the log's sink: no allocation
 "pos \(p.x), \(p.y)".format(into: mutable buf)    // written into 'buf': no allocation
 let title = "Rayo"                                // a static &Text: a reference to the literal's own bytes
@@ -289,7 +289,7 @@ for g in label.graphemes { … }                    // user-perceived characters
 
 **A `&String` converts to a `&Text` of its text wherever one is expected** ([01](../01-values-and-ownership/bindings.md#conversions)), so a function that reads text takes a `&Text`, and its callers give it what they have, which is lent ([05](../05-protocols-generics-and-closures/implicit-conversions.md#places-lent-where-a-reference-is-expected)):
 
-```swift
+```rayo
 func greet(_ who: &Text) { log("hello, \(who)") }
 
 greet(player.name)                        // a String field: lent as a reference to its text
@@ -298,7 +298,7 @@ greet("stranger")                         // a literal is a reference to its tex
 
 **Owned text says `alloc`**, so every `String` shows where its storage comes from:
 
-```swift
+```rayo
 let name = alloc "grunt"                  // owns its text: allocates when it is first written
 let wave = level.alloc "Wave \(n) cleared"   // formats into a new String in 'level'
 let kept = alloc String(who)              // owns a copy of the text that the '&Text' parameter 'who' names
@@ -328,7 +328,7 @@ let bare = String("grunt")                // error: making a 'String' needs 'all
 
 **Interpolation writes into a sink.** An interpolated literal, such as `"hp \(hp)"`, evaluates its segments in order, as a call's arguments are evaluated ([01](../01-values-and-ownership/parameters.md#evaluation-order-and-when-a-calls-borrows-begin)). As the message of `fatalError`, `precondition` or `assert`, it is evaluated only when the call panics ([10](../10-errors-and-safety/panics.md#messages)). Its value is a scoped value of a type the compiler builds. That type is `Formattable`: it writes its text and each segment in turn into the sink it is given:
 
-```swift
+```rayo
 protocol TextSink { mutating func write(_ text: &Text) where self borrows static }
 protocol Formattable { func format(into sink: mutable &some TextSink) where sink borrows static }
 ```
@@ -341,7 +341,7 @@ protocol Formattable { func format(into sink: mutable &some TextSink) where sink
 
 ### Printing
 
-```swift
+```rayo
 func print(_ value: &some Formattable)
 
 let hp = 7
@@ -374,7 +374,7 @@ print(name)             // grunt: a String place, lent, so 'name' stays as it wa
 
 **Zeros, infinities and NaN have fixed texts:** `0.0` and `-0.0`, `inf` and `-inf`, and `nan`. Every NaN prints `nan`, whatever its sign or payload, since which NaN a result is stays open ([Floating point](numbers-and-math.md#floating-point)).
 
-```swift
+```rayo
 print(Float(16777216))                // 16777216.0: 2^24, the last Float written plainly
 print(Float(33554432))                // 3.3554432e+07: past 2^24
 print(Double(9007199254740992))       // 9007199254740992.0: 2^53, the last Double written plainly
@@ -389,7 +389,7 @@ print(0.0 / 0.0)                      // nan
 
 **A literal has no type until something expects one**, so `[1, 2, 3]`, `"jump"` and `0.5` become whatever their context asks for:
 
-```swift
+```rayo
 let v: Vec3 = [1, 2, 3]                   // a Vec3: exactly 3 elements
 let mask: LayerMask = [.player, .enemies] // a user type that conforms: any number of layers
 let jump: Name = "jump"                   // interned by the build: no cost at run time
@@ -469,7 +469,7 @@ Literals of different kinds, such as `1` and `"a"`, are an error. An empty `[]` 
 
 **A type interns its string literals with the build's help by conforming to `ExpressibleByInternedLiteral`**, as std's `Name` does. The build makes each text's entry once, and the type's interner starts out holding them all. So a literal costs nothing at run time, and still names the entry that interning its text at run time finds:
 
-```swift
+```rayo
 protocol ExpressibleByInternedLiteral where InternedEntry: ~Scoped {        // an entry refers to nothing that ends
     associatedtype InternedEntry: Frozen & TrivialFree & Sendable         // one per distinct text
     static func internedEntry(for text: static &Text) -> InternedEntry     // run by the compiler, once per distinct text
@@ -502,7 +502,7 @@ protocol ExpressibleByInternedLiteral where InternedEntry: ~Scoped {        // a
 
 **A `for` loop's subject says what the loop does with the elements: reads them where they lie, changes them there, or takes them:**
 
-```swift
+```rayo
 var total: Float = 0
 for e in &enemies { total += e.hp }                        // 'e' is a 'ref let' of each element
 for e in mutable enemies { e.hp -= 1 }                     // 'e' is a 'ref var' of each element
@@ -513,7 +513,7 @@ for (v, f) in vels.mutableZip(forces) { v += f * dt }      // two sequences in l
 
 **A subject writes its mark, or is a value, and what each name is follows from it** ([01](../01-values-and-ownership/bindings.md#for-and-when-names)). So iterating a place never copies it: `&s` and `mutable s` lend it to the loop, and `consume s` moves it in.
 
-```swift
+```rayo
 protocol Sequence { associatedtype Iterator: IteratorProtocol; func makeIterator() -> Iterator }
 protocol IteratorProtocol { associatedtype Element; mutating func next() -> Element? }   // may lend
 protocol SharedIterator: IteratorProtocol {     // elements outlive the iteration (02)
@@ -556,7 +556,7 @@ A reference reaches an element without moving it, so move-only elements iterate 
 - **Through a reference subject, an element that is itself a reference is bound in place.** A name bound to the whole of `b` is a `ref let` of what `b` refers to, as `ref let x = b` would be. One bound to `r` is a `ref var`, as `ref var x = mutable r` reborrows through it ([01](../01-values-and-ownership/bindings.md#bindings-that-refer-to-a-place)).
 - **Any other element is a value the iterator hands out**, such as a range's `Int`, a chunk or an `enumerated()` tuple. Then `b′` is `consume b` and `r′` is `consume r`, and the name owns it for the iteration, as `i` does below.
 
-```swift
+```rayo
 for i in 0..<n { ids.append(i) }           // 'i' owns each Int for its iteration
 for (i, e) in items.enumerated() { … }     // the loop owns each tuple: 'i' a UInt, and 'e' a '&Item'
 for e in &enemies where e.hp > 0 { … }     // the body runs only where the condition holds
@@ -565,7 +565,7 @@ for t in visibleTiles() { … }              // 'visibleTiles()' returns a '&[Ti
 
 **A value subject is moved into a hidden local that lives until the loop ends**, and so is every temporary in the subject's expression, each into its own, in evaluation order. Each is still a temporary, so it stays read-only ([01](../01-values-and-ownership/bindings.md#temporaries-are-read-only)). An adaptor in a hidden local keeps its collection borrowed for the whole loop:
 
-```swift
+```rayo
 for (i, e) in makeEnemies().enumerated() { … }          // the new list is a hidden local, and so is its adaptor
 ```
 
@@ -580,7 +580,7 @@ for (i, e) in makeEnemies().enumerated() { … }          // the new list is a h
 
 **Which elements outlive the iteration follows from the dependency rules** ([02](../02-views-and-dependencies.md#dependencies)):
 
-```swift
+```rayo
 func scale(_ s: mutable &[Float]) { for x in mutable s { x *= 2 } }
 var names = alloc List<&Text>()
 for s in &table.entries { names.append(s.name) }                // fine: each element depends on 'table', not the iterator
@@ -593,7 +593,7 @@ for chunk in data.mutableChunks(64) { scale(mutable chunk) }    // one 'mutable 
 
 **A `mutableZip` is a move-only value whose only iteration is the consuming one.** So a loop over a place holding one consumes it explicitly, and no two iterators hand out its mutable references:
 
-```swift
+```rayo
 for (x, y) in consume z { … }       // 'z' holds a mutableZip: its only iteration consumes it
 ```
 
@@ -601,12 +601,12 @@ for (x, y) in consume z { … }       // 'z' holds a mutableZip: its only iterat
 
 **A place property or subscript with a `borrow` and a `mutate` serves both kinds of reference under one name** ([02](../02-views-and-dependencies/place-and-value-properties.md#place-properties-borrow-and-mutate)). `&x.p` and a read through `x.p` use the `borrow`. `mutable x.p`, a write through `x.p` and a `mutating` call on it use the `mutate`. So a collection's elements, a range of them and an `SoA`'s column each have one name:
 
-```swift
+```rayo
 var span: [T] { borrow { … } mutate { … } }                     // a list's elements, as a place
 subscript(r: Range<UInt>) -> [T] { borrow { … } mutate { … } }  // a range of them
 ```
 
-```swift
+```rayo
 let all = &hits.span                      // a '&[Int]', through the borrow
 var some = mutable hits[0..<4]            // a 'mutable &[Int]', through the mutate
 particles.life.sort()                     // a mutating method, through the column's mutate: sorts it in place
@@ -629,7 +629,7 @@ A run's members table says what each of these hands out ([Runs of elements](#run
 
 **No receiver takes a mark, so the mutable form's receiver takes none, and it must be a changeable place** ([01](../01-values-and-ownership/bindings.md#changeable-places)). What it returns depends on the receiver exclusively, by rule 3 ([02](../02-views-and-dependencies/dependency-projection-and-results.md#rule-3-call-results)). A binding that writes through a mutable reference it holds is a `var`, since writing through a reference needs a changeable place ([01](../01-values-and-ownership/references.md#forwarding-through-a-reference)):
 
-```swift
+```rayo
 for (i, e) in items.enumerated() { … }               // (UInt, &Item) elements
 for (i, e) in items.mutableEnumerated() { … }        // (UInt, mutable &Item) elements
 var (lo, hi) = samples.span.mutableSplit(at: 64)     // two 'mutable &[Float]'s: 'samples' stays borrowed exclusively
@@ -640,7 +640,7 @@ lo[0] = 0
 
 **A `consuming` method that hands over what a `mutating` one lends puts `consuming` in its name**, as `makeConsumingIterator()` does. Each name has one declaration, so the name a call writes says whether it lends or hands over ([05](../05-protocols-generics-and-closures/functions-and-closures.md#functions-and-closures)). A place property with a `borrow` and a `mutate` is one declaration, which serves both kinds of reference ([above](#shared-and-mutable-views-of-one-collection)):
 
-```swift
+```rayo
 var (a, b) = s.mutableSplit(at: m)       // lends two halves of what 's' refers to
 var (c, d) = s.consumingSplit(at: m)     // takes 's', and hands the halves over
 ```

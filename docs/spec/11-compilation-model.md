@@ -4,7 +4,7 @@ Modules decide which declarations a source file can name and what a build checks
 
 ## Modules and names
 
-```swift
+```rayo
 // in the module 'gameplay'
 import engine.math                                        // its public declarations are visible here
 public func armor(_ e: &Enemy) -> Float { e.hp * 0.5 }   // visible to every module that imports 'gameplay'
@@ -16,7 +16,7 @@ public func armor(_ e: &Enemy) -> Float { e.hp * 0.5 }   // visible to every mod
 
 ### Import names
 
-```swift
+```rayo
 import engine.math as m      // named 'm', so 'm.dot' is engine.math's 'dot'
 import engine.physics        // named 'physics', the path's last identifier
 import c "platform.h"        // named 'platform', the header's file name without its extension
@@ -48,7 +48,7 @@ import c "platform.h"        // named 'platform', the header's file name without
 
 **For startup order and the initialization checks, the prelude's modules, and every module they import, count as imports of every module outside that set.** So startup initializes that set first, though no import names it ([07](07-concurrency/global-state.md#initialization-at-startup)).
 
-```swift
+```rayo
 struct Optional<T>(var value: T)      // this module's own Optional shadows the prelude's
 let lockedOn: Handle<Enemy>? = nil    // 'T?' still means the prelude's Optional
 let boxed = Optional(value: 3)        // a name written in the source means this module's Optional
@@ -67,7 +67,7 @@ let boxed = Optional(value: 3)        // a name written in the source means this
 
 ## Type checking is local
 
-```swift
+```rayo
 let dt: Float = 0.016
 let step = dt * 2        // '2' is a Float, taken from the other operand in one step
 let count = 60           // nothing gives this literal a type, so it is an Int
@@ -95,7 +95,7 @@ let count = 60           // nothing gives this literal a type, so it is an Int
 
 ## Runtime costs
 
-```swift
+```rayo
 for e in &enemies {                 // a plain loop over memory, in every build
     total += e.hp
 }
@@ -127,7 +127,7 @@ let step = vec.normalized * speed   // vector arithmetic: no hidden call where t
 
 ### Functions that are never calls: `@inline`
 
-```swift
+```rayo
 @inline func lerp(_ a: Float, _ b: Float, _ t: Float) -> Float { a + (b - a) * t }
 
 speed = lerp(speed, topSpeed, 0.1)  // the body runs in place, in every build

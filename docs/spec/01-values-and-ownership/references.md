@@ -4,7 +4,7 @@
 
 Code often needs a value where it lies: to read an enemy without copying it, or to change it in its list. A reference is the value that lets it do that. It refers to a place, and borrows the place for as long as it is used:
 
-```swift
+```rayo
 struct Enemy(var pos: Vec3, var hp: Float)
 
 func show(_ e: &Enemy) { print("hp \(e.hp)") }    // borrows the caller's enemy, read-only
@@ -42,7 +42,7 @@ A **reference** is a value that refers to a place. A **shared reference**, of ty
 
 **Writing through a reference needs a mutable reference, held in a changeable place or a temporary.** That covers assigning a member, calling a `mutating` method and using a `mutate` accessor. So a `var` that holds a `mutable &T` writes through it, and a `let` that holds one can't, as a `let` changes nothing it holds ([Changeable places](bindings.md#changeable-places)). A temporary that holds one writes through it, as `grid.mutableRow(3)[0] = 1` does where `mutableRow` returns a `mutable &[Float]`, since the change reaches storage the temporary doesn't own.
 
-```swift
+```rayo
 var best = &enemies[0]              // a '&Enemy'
 print("hp \(best.hp)")              // reads enemies[0].hp through 'best'
 best.hp = 0                         // error: 'best' is a shared reference
@@ -55,7 +55,7 @@ held.hp = 0                         // error: a 'let' can't write through the re
 
 **A reference itself has no members, except one the language gives it.** Every member a call reaches through a reference is the referent's, by forwarding, as `[T]`'s own `split(at:)` and `mutableSplit(at:)` are ([04](../04-types/collections.md#mutating-and-consuming-methods)). The one exception is `mutable &[T]`'s `consumingSplit(at:)`, which takes the reference itself and hands over two mutable references to its halves. The halves carry only what the reference carried, so they may outlive a borrow of the place that held it:
 
-```swift
+```rayo
 let whole = mutable samples.span                    // a 'mutable &[Float]'
 var (low, high) = whole.consumingSplit(at: 64)      // takes 'whole', and hands over its halves
 low[0] = 0                                          // writes samples[0]
@@ -72,7 +72,7 @@ low[0] = 0                                          // writes samples[0]
 
 **So a function can be given one mutable reference twice, one call after the other**, and the reference stays usable after each:
 
-```swift
+```rayo
 func scale(_ s: mutable &[Float]) { for x in mutable s { x *= 2 } }
 
 for chunk in data.mutableChunks(64) {
@@ -83,7 +83,7 @@ for chunk in data.mutableChunks(64) {
 
 **Only where the expected type is a reference to a reference does `&r` refer to the place `r` itself**, as a parameter of type `&(&T)` expects. A bare `r` is lent there the same way ([below](#places-given-to-a-position)):
 
-```swift
+```rayo
 func peek(_ r: &(&Enemy)) { … }    // refers to a place that holds a reference
 peek(best)                          // lends 'best' itself, as '&best' would
 ```
@@ -108,7 +108,7 @@ peek(best)                          // lends 'best' itself, as '&best' would
 
 **A place of unsized type is never assigned, moved or copied as a whole**, since nothing knows its size. Its parts are changed through a mutable reference, as `some[0] = 0` changes an element below. So a `mutable &[T]` made from a `List<T>`, or a `mutable &any P` made from a `T: P`, can't store a value of another type in that place ([05](../05-protocols-generics-and-closures/implicit-conversions.md#implicit-conversions)).
 
-```swift
+```rayo
 let all = &hits.span                // a '&[Int]': a pointer and a count
 var some = mutable hits[0..<4]      // a 'mutable &[Int]' of the first four elements
 some[0] = 0                         // writes hits[0]
@@ -149,7 +149,7 @@ let run: [Int] = hits.span          // error: '[Int]' is unsized; declare 'run' 
 
 **The value a position takes has the type it expects, so a mark that doesn't fit is a compile error.** A `&T` parameter takes a shared reference, a `mutable &T` parameter a mutable one, and a `T` parameter a `T` ([Parameters](parameters.md#parameters)). So `&boss` given to an owning parameter is a compile error, and so is a bare `boss` given to a `mutable &T` one ([below](#every-lend-for-change-is-marked)). A value given to a `&T` parameter is lent as a temporary, as `&makeEnemy()` lends one ([above](#making-a-reference)):
 
-```swift
+```rayo
 func keep(_ e: Enemy) { … }         // owns its argument
 
 show(boss)                          // lends 'boss' shared, since 'show' takes '&Enemy'
@@ -180,7 +180,7 @@ let hp = boss.hp                    // a Float is implicitly copyable: a copy, w
 - **An operator's operands.** Operators borrow their operands. An operator declares each parameter `&T`, or `T` where `T` is implicitly copyable, so an operand never moves ([05](../05-protocols-generics-and-closures/operators.md#operators)).
 - **The segments of an interpolated string**, which format through a borrowing method, as a receiver does ([04](../04-types/collections.md#printing)).
 
-```swift
+```rayo
 static func == (lhs: &Ranked, rhs: &Ranked) -> Bool { … }   // each operand is borrowed
 static func * (lhs: Vec3, rhs: Float) -> Vec3 { … }         // a Vec3 is implicitly copyable: each operand is copied
 ```

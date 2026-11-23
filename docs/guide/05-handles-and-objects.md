@@ -15,7 +15,7 @@ The enemy needs a link it can use in a later frame. Each familiar choice has a c
 
 Rayo gives you two links that are checked each time you use them:
 
-```swift
+```rayo
 struct Player(var pos: Vec3, var hp: Float = 100)
 struct Enemy(
     var pos: Vec3,
@@ -41,7 +41,7 @@ struct Enemy(
 
 ## Pools and handles
 
-```swift
+```rayo
 var players = alloc Pool<Player>(capacity: 8)
 let p1 = players.insert(Player(pos: .zero))            // p1: Handle<Player>
 var grunt = Enemy(pos: [5, 0, 5], target: p1)         // the enemy keeps a copy of the handle
@@ -74,7 +74,7 @@ The pool keeps its elements densely packed, so a loop visits them without gaps. 
 
 ### Removals move elements
 
-```swift
+```rayo
 let p2 = players.insert(Player(pos: [4, 0, 0]))
 let p3 = players.insert(Player(pos: [8, 0, 0]))
 ref let p = &players[p2]!                      // borrows the player where it lies, inside the pool
@@ -88,7 +88,7 @@ log("hp \(p.hp)")
 
 **Keep the handle instead, and look the element up again after the removal:**
 
-```swift
+```rayo
 players.remove(p3)
 if ref let p = &players[p2] { log("hp \(p.hp)") }   // p2 still finds its player, wherever it moved
 
@@ -103,7 +103,7 @@ for h in &dead { enemies.remove(h) }
 
 The game's menus have a different shape. A menu is a tree of widgets: each widget owns its children, while a child keeps a link back to its parent. A widget can move to another menu without breaking that link. Here the owning pointer keeps the widget in one place, and a weak pointer lets its children find it:
 
-```swift
+```rayo
 struct Widget(
     var parent: WeakPointer<Widget>? = nil,              // nil once the parent is gone
     var children = alloc List<UniquePointer<Widget>>(),  // owns the child widgets
@@ -111,7 +111,7 @@ struct Widget(
 )
 ```
 
-```swift
+```rayo
 var menu = alloc UniquePointer(Widget())               // the one owner of a new widget
 let m: WeakPointer<Widget> = menu.weak()               // a link to it
 menu.value.children.append(alloc UniquePointer(Widget(parent: menu.weak())))
@@ -139,7 +139,7 @@ if m.value == nil { log("menu closed") }               // checks only that the m
 
 ### Moving an owner
 
-```swift
+```rayo
 var toolbar = alloc UniquePointer(Widget())
 let save = menu.value.children[0].weak()               // a link to the menu's first child
 var moved = menu.value.children.remove(at: 0)          // its owner leaves the menu's list
@@ -170,7 +170,7 @@ save.value?.visible = true                             // still the same widget
 
 **Two weak pointers to one object are aliases the compiler can't see.** The menu might hold two links that happen to name the same widget. Trying to show it through one link while hiding it through the other conflicts:
 
-```swift
+```rayo
 func switchPanels(_ shown: WeakPointer<Widget>, _ hidden: WeakPointer<Widget>) {
     guard ref var panel = mutable shown.value else { return }    // a modify access, held while 'panel' is used
     hidden.value?.visible = false                   // panics if both links name one widget
@@ -184,7 +184,7 @@ func switchPanels(_ shown: WeakPointer<Widget>, _ hidden: WeakPointer<Widget>) {
 
 **Keep each access short, and code that may alias works.** An access that nothing uses afterwards ends with its statement:
 
-```swift
+```rayo
 func switchPanels(_ shown: WeakPointer<Widget>, _ hidden: WeakPointer<Widget>) {
     shown.value?.visible = true                       // this access ends here
     hidden.value?.visible = false                     // fine, even when both links name one widget
@@ -205,7 +205,7 @@ func switchPanels(_ shown: WeakPointer<Widget>, _ hidden: WeakPointer<Widget>) {
 
 **Destroying an object while an access to it is live panics**, since its `deinit` would run under code that still uses it. So a widget can't destroy itself from inside its own method:
 
-```swift
+```rayo
 extension Widget {
     mutating func closeMenu() { parent!.value!.children.removeAll() }   // destroys every item, this one included
 }

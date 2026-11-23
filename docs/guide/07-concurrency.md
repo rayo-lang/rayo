@@ -12,7 +12,7 @@ std::for_each(std::execution::par, enemies.begin(), enemies.end(), [&](Enemy& e)
 
 The compiler says nothing about the race. A frame now and then reports the wrong total. In Rayo, each parallel worker can change only its own enemy, and a separate reduction adds up their health:
 
-```swift
+```rayo
 import std.jobs                                         // join, forEachInParallel, parallelReduce
 
 func integrate(_ enemies: mutable &List<Enemy>, dt: Float) {
@@ -30,7 +30,7 @@ func totalHp(_ enemies: &List<Enemy>) -> Float {
 
 ## Lending work to other threads
 
-```swift
+```rayo
 join({ integrate(mutable world.enemies, dt: dt) },      // may run both closures at once, and returns when both are done
      { mix(mutable world.audio) })                      // fine: each closure writes a different field
 
@@ -50,7 +50,7 @@ The ordinary law of exclusivity still applies. The first `join` works because ea
 
 `forEachInParallel` may run its body on several threads at once, so its closure cannot change a captured variable. `join` runs each closure once and can accept one that changes its own capture. That difference rejects this attempt to add to `total`:
 
-```swift
+```rayo
 var total: Float = 0
 enemies.forEachInParallel { e in
     total += e.hp       // error: writes 'total', so the closure is 'mutating', but the loop runs it on many threads at once
@@ -63,7 +63,7 @@ The job system's own `unsafe` code promises to call each closure only as its kin
 
 ### Scoped threads
 
-```swift
+```rayo
 ThreadScope.run { s in
     s.spawn { integrate(mutable world.enemies, dt: dt) }    // runs on another thread
     mix(mutable world.audio)                                // runs on this thread meanwhile
@@ -79,7 +79,7 @@ ThreadScope.run { s in
 
 ## What may cross threads: `Sendable`
 
-```swift
+```rayo
 struct Hud(var root: WeakPointer<Widget>)               // not Sendable: holds a weak pointer
 struct GLTexture(let id: UInt32): ~Sendable             // opts out: the id is valid only on the GL thread
 ```
@@ -97,7 +97,7 @@ The compiler works out `Sendable` from what a type holds, as it does for `Copyab
 
 **Lent work captures only `Sendable` values, even when it only borrows them.** A job system takes its closures as a **`@sendable` function type**, which accepts only closures whose captures are all `Sendable`. `forEachInParallel`'s body has the type `@sendable (mutable &Enemy) -> Void`:
 
-```swift
+```rayo
 func drawMarkers(_ enemies: mutable &List<Enemy>, _ hud: &Hud) {
     enemies.forEachInParallel { e in
         mark(hud, at: e.pos)        // error: 'Hud' isn't Sendable, so lent work can't capture it
@@ -115,7 +115,7 @@ func drawMarkers(_ enemies: mutable &List<Enemy>, _ hud: &Hud) {
 
 ### Locks: `Mutex` and `RwLock`
 
-```swift
+```rayo
 let deaths = Mutex(alloc List<Vec3>())
 enemies.forEachInParallel { e in
     if e.hp <= 0 {
@@ -160,7 +160,7 @@ nav.write { grid in grid.block(cellOf(crate.pos)) }                       // one
 
 ### Atomics
 
-```swift
+```rayo
 let spawned = Atomic(0)
 spawned.add(1, .relaxed)                 // through a shared borrow, from any thread
 
@@ -195,7 +195,7 @@ func countCrowds(_ enemies: mutable &List<Enemy>, into cells: &AtomicArray<Int32
 
 ## Threads that outlive the caller
 
-```swift
+```rayo
 var level = loadLevel()
 let bounces = 3
 _ = Thread.start(name: "bake") {
@@ -216,7 +216,7 @@ bake.join()                                                             // waits
 
 **`Thread.start` returns a `Thread<R>`, where `R` is what the body returns, and `join()` waits for the thread to end and returns that value** ([07](../spec/07-concurrency/thread-work.md#joining-a-thread)). The bake returns nothing, so `bake` is a `Thread<Void>`. A thread that computes something hands it back through `join()`, as this one does with a checksum of some bytes it owns:
 
-```swift
+```rayo
 let hashing = Thread.start { [move bytes] in crc32(bytes) }   // a Thread<UInt32>
 let crc = hashing.join()                                      // waits, then returns the body's UInt32
 ```
@@ -227,7 +227,7 @@ let crc = hashing.join()                                      // waits, then ret
 
 **To hand a thread data that other threads also use, give it a weak link to a `Shared` value** ([03](../spec/03-handles-and-objects.md#sharing-across-threads)). A `WeakShared` is copyable, and `Sendable` when the value is. The thread upgrades it each time it needs the value:
 
-```swift
+```rayo
 let mixer = alloc Shared(Mutex(AudioMixer()))
 let m = mixer.weak()                                              // a WeakShared<Mutex<AudioMixer>>
 _ = Thread.start { [copy m, copy clip] in                         // '_ =' detaches the thread: nothing joins it
@@ -239,7 +239,7 @@ _ = Thread.start { [copy m, copy clip] in                         // '_ =' detac
 
 ### Queues and channels
 
-```swift
+```rayo
 func startRenderer() -> (Thread<Void>, Sender<Shared<Snapshot>>) {
     let (tx, rx) = alloc Channel<Shared<Snapshot>>.make(capacity: 3)
     let render: Thread<Void> = Thread.start(name: "render") { [move rx] in   // the thread owns the receiver
@@ -255,7 +255,7 @@ func startRenderer() -> (Thread<Void>, Sender<Shared<Snapshot>>) {
 
 **The loop ends once every `Sender` is gone**, after the render thread has drawn every snapshot sent before. The channel is then **disconnected**, and `receive()` returns `nil` instead of parking for ever ([07](../spec/07-concurrency/synchronization.md#disconnected-channels)). So the simulation stops the render thread by dropping its sender, and then joins it:
 
-```swift
+```rayo
 var (render, tx) = startRenderer()
 while running {
     step(mutable world)
@@ -283,7 +283,7 @@ render.join()                                    // waits for the last frame
 
 ## Global state
 
-```swift
+```rayo
 let config = alloc Published(GameConfig())    // any thread reads it, and publish swaps in a new one
 let spawned = Atomic(0)
 @threadlocal var scratch = alloc List<Int>()  // each thread has its own copy
@@ -312,7 +312,7 @@ func tick() {
 
 ## Tasks
 
-```swift
+```rayo
 task func openDoor(_ door: Handle<Door>) with (game: mutable &Game) {
     guard ref let d = &game.doors[door] else { return }
     game.audio.play(d.creakSound, at: d.pos)
@@ -342,7 +342,7 @@ scripts.step(mutable game)                                 // steps each task th
 
 **A thread with nothing to do but run its tasks calls `run` instead of `step`:**
 
-```swift
+```rayo
 let quitLoading = Atomic(false)                                  // a global, which the main thread sets
 var loads = TaskSet<Loader>(capacity: 64)
 _ = loads.start(streamZone(consume next))                        // its reads go through an I/O library, which wakes it as each completes
@@ -353,7 +353,7 @@ loads.run(mutable loader, until: { _ in quitLoading.load(.acquire) })    // park
 
 **Another thread stops `run` through the set's `runWaker`**, a waker that wakes no task, only `run`, which then checks its condition again. Here the main thread holds a copy of it, `wakeLoads`:
 
-```swift
+```rayo
 quitLoading.store(true, .release)
 wakeLoads.wake()                                                 // run wakes, finds quitLoading set, and returns
 ```

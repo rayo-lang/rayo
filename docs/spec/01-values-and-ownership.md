@@ -2,7 +2,7 @@
 
 Ownership answers a basic question about every value: who is responsible for it? Code can hand a value to a new owner, make a separate copy, or borrow it for a time. Those choices affect when the value is destroyed and which parts of the program may use it. This chapter defines the operations and the access rules that keep them safe.
 
-```swift
+```rayo
 struct Enemy(var pos: Vec3, var hp: Float)
 
 var a = Enemy(pos: .zero, hp: 100)

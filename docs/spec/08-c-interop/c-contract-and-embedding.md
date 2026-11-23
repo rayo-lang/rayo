@@ -40,7 +40,7 @@ At a C boundary, Rayo can check only what the imported or exported types express
 
 **Breaking one is undefined behavior**, as a wrong `unsafe` block is. So an entry point that takes a Rayo type relies on C to pass a valid value, while one that takes the raw form accepts anything C passes:
 
-```swift
+```rayo
 enum NavMode: Int32 { case walk, fly }
 
 @export(c) func nav_set_mode(_ mesh: WeakShared<NavMesh>, _ mode: NavMode) { ... }   // C must pass a valid case

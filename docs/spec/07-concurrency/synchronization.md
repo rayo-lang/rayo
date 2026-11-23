@@ -12,7 +12,7 @@ Some values must be shared even while their state changes. Atomics, locks and qu
 
 **An 8-byte `Atomic<T>` exists only on a target with lock-free 64-bit atomics**, where `target.has64BitAtomics` is `true` ([09](../09-compile-time/constants-and-conditions.md#static-if-and-conditional-compilation)). Elsewhere it is a compile error, since no lock-free operation on 8 bytes can be built there, and an atomic never takes a lock. So is an `AtomicArray<T>` of 8-byte elements. Every target with 64-bit pointers has these atomics ([11](../11-compilation-model.md#what-a-target-must-provide)), so the error comes only on some 32-bit targets:
 
-```swift
+```rayo
 let spawned = Atomic<Int>(0)          // error without 64-bit atomics: an Int is 8 bytes on every target
 let kills = Atomic<UInt32>(0)         // 4 bytes: fine on every target
 
@@ -89,7 +89,7 @@ So by 11's rule the acquire load, which goes through the `Name`, reads a value n
 
 **`Mutex<T>` owns its data, and reaching it requires locking**, in closure form or as a guard:
 
-```swift
+```rayo
 let log = Mutex(alloc List<Message>())
 log.lock { msgs in msgs.append(consume m) }   // closure form: lock takes 'consuming (mutable &T) -> R', called once
 
@@ -120,7 +120,7 @@ log.lock { msgs in
 
 **While a lock is poisoned, `lock`, `read` and `write` on it panic, until `clearPoison()` resets it:**
 
-```swift
+```rayo
 func clearPoison()            // Mutex's and RwLock's: a shared borrow, so any thread may call it
 ```
 
@@ -138,7 +138,7 @@ The panic left the data as it found it, perhaps half-changed. Only the panicking
 
 **`Channel<T>` makes a channel, a queue that two kinds of owned ends share, `Sender<T>` and `Receiver<T>`:**
 
-```swift
+```rayo
 let (tx, rx) = alloc Channel<Request>.make(capacity: 64)   // tx: a Sender<Request>, rx: a Receiver<Request>
 ```
 
@@ -146,7 +146,7 @@ The ends are move-only, unscoped values that point to shared heap state, so `T` 
 
 **Each end has its own methods:**
 
-```swift
+```rayo
 func share() -> Sender<T>                                        // Sender<T>'s: another Sender of the same channel
 mutating func send(_ item: T) -> Void!Disconnected<T>            // Sender<T>'s: parks while full; fails once the Receiver is gone
 mutating func trySend(_ item: T) -> Void!TrySendError<T>         // Sender<T>'s: never parks
@@ -192,7 +192,7 @@ So each send either put its item in before the disconnection, and the item is de
 
 **`receive()` parks while the channel is empty and connected, and returns `nil` once it is disconnected for receiving.** So a consumer's loop ends when its producers are done, after it has handled every item they sent:
 
-```swift
+```rayo
 while let r = rx.receive() { handle(consume r) }      // ends once every Sender is gone and the channel is empty
 for r in mutable rx { handle(consume r) }            // the same loop
 ```
@@ -201,7 +201,7 @@ for r in mutable rx { handle(consume r) }            // the same loop
 
 **`tryReceive()` never parks, and tells an empty channel from a disconnected one:**
 
-```swift
+```rayo
 enum TryReceiveError: Error, ImplicitlyCopyable {
     case empty              // connected, with no item yet
     case disconnected       // every Sender is gone, and no item is left
@@ -210,7 +210,7 @@ enum TryReceiveError: Error, ImplicitlyCopyable {
 
 **`receive(timeout:)` parks as `receive()` does, until `timeout` has passed on `MonotonicClock`, and tells a timeout from a disconnection** ([Time](#time-duration-and-instant)):
 
-```swift
+```rayo
 enum ReceiveTimeoutError: Error, ImplicitlyCopyable {
     case timedOut           // connected, and no item came before the timeout passed
     case disconnected       // every Sender is gone, and no item is left
@@ -221,13 +221,13 @@ It fails with `.timedOut` once its deadline, `timeout` after the call, has passe
 
 **`send` fails once the channel is disconnected for sending, and an item a send can't deliver comes back to its sender:**
 
-```swift
+```rayo
 struct Disconnected<T>(let item: T): Error      // the error of send, and of a future's fulfill: the value nobody will take
 ```
 
 **`trySend` never parks, and hands the item back whether the channel is full or disconnected:**
 
-```swift
+```rayo
 enum TrySendError<T>: Error {
     case full(T)            // connected, with no room
     case disconnected(T)    // the Receiver is gone
@@ -238,7 +238,7 @@ enum TrySendError<T>: Error {
 
 **A send's result is a `Result`, so the unused-value rule makes the sender check it or drop it on purpose** ([05](../05-protocols-generics-and-closures/functions-and-closures.md#unused-values)):
 
-```swift
+```rayo
 tx.send(consume r)        // error: the Void!Disconnected<Request> is never used
 _ = tx.send(consume r)    // fine: if the Receiver is gone, the request is destroyed here
 try tx.send(consume r)    // fine in a function that fails with Disconnected<Request>
@@ -248,7 +248,7 @@ try tx.send(consume r)    // fine in a function that fails with Disconnected<Req
 
 **A future carries one value from a producer to a waiter, through two owned ends that `Future<T>.make()` returns:** a `Promise<T>`, which the producer fulfills once, and a `Future<T>`, which the waiter waits on.
 
-```swift
+```rayo
 let (promise, lightmap) = Future<Lightmap>.make()                // promise: a Promise<Lightmap>, lightmap: a Future<Lightmap>
 _ = Thread.start(name: "bake") { [move promise, move level] in   // '_ =' detaches the thread
     _ = promise.fulfill(bakeLightmap(level))                     // '_ =': if nobody waits any more, the lightmap is destroyed
@@ -260,7 +260,7 @@ if let map = lightmap.wait() { apply(map) }                      // parks until 
 
 **Each end is used once:**
 
-```swift
+```rayo
 consuming func fulfill(_ value: T) -> Void!Disconnected<T>         // Promise<T>'s: fails, handing the value back, once the Future is gone
 consuming func wait() -> T?                                        // Future<T>'s: parks until fulfilled; nil once disconnected
 ```
@@ -269,13 +269,13 @@ consuming func wait() -> T?                                        // Future<T>'
 
 **A `Future`'s `isReady` says whether a wait would return at once, and never parks or consumes the `Future`:**
 
-```swift
+```rayo
 var isReady: Bool { get }     // Future<T>'s
 ```
 
 It is `true` once the future is fulfilled or disconnected, and then a `wait()` or an `await` returns at once. A ready future stays ready, so nothing the producer does can make a check that read `true` wrong. Code that must not park, such as a frame loop, checks it each step:
 
-```swift
+```rayo
 while !lightmap.isReady { drawLoadingScreen() }   // never parks: checks once a frame
 if let map = lightmap.wait() { apply(map) }       // returns at once: the bake is done, or its Promise is gone
 ```
@@ -303,7 +303,7 @@ if let map = lightmap.wait() { apply(map) }       // returns at once: the bake i
 
 **So that no panic leaves a thread waiting, code in a `ThreadScope` owns each channel or future end it uses inside the scope**, in the block or in the spawned closure that uses it ([Scoped threads](thread-work.md#scoped-threads)). The compiler doesn't check this. Owning the ends there is what lets each unwind in the scope destroy the ends its code used:
 
-```swift
+```rayo
 ThreadScope.run { s in
     var assets = consume rx                                          // the block owns the Receiver: an unwind out of the block destroys it
     let meshes = tx.share()
@@ -328,7 +328,7 @@ ThreadScope.run { s in
 
 **A `Condvar` wait consumes the guard and returns a new one:**
 
-```swift
+```rayo
 g = cv.wait(consume g)       // unlocks, parks, relocks after it wakes, and returns a new guard
 ```
 
@@ -367,7 +367,7 @@ g = cv.wait(consume g)       // unlocks, parks, relocks after it wakes, and retu
 
 Those methods change a `Shared` field's value only through that value's own synchronization. So such a struct can be a `Shared`'s value ([06](../06-memory-and-allocators/owning-values.md#sharedt-data-with-many-owners)):
 
-```swift
+```rayo
 struct Services(                                   // Synchronized, derived
     let log: Mutex<List<Message>>,
     let registry: Mutex<Registry>,
@@ -379,7 +379,7 @@ let services = alloc Shared(Services(log: Mutex(…), registry: Mutex(…), conf
 
 **Declaring a conformance to `Synchronized` requires `unsafe`**, because the compiler can't verify the implementation ([10](../10-errors-and-safety/unsafe-code.md#unverified-promises)):
 
-```swift
+```rayo
 struct SpinQueue<T>(…): unsafe Synchronized { … }   // in the type's declaration
 extension SpinQueue: unsafe Synchronized {}          // or, instead, in an extension
 ```
@@ -388,7 +388,7 @@ extension SpinQueue: unsafe Synchronized {}          // or, instead, in an exten
 
 **std counts time in whole nanoseconds, held in an `Int64`, so times add and compare exactly on every target.** A `Duration` is a length of time, which every clock shares. An `Instant<Clock>` is a point in time on one clock, so the instants of two clocks have different types, and never mix:
 
-```swift
+```rayo
 struct Duration(let nanoseconds: Int64): Hashable, Comparable, ImplicitlyCopyable                     // may be negative; Duration.zero is no time
 struct Instant<Clock: TimeSource>(let nanoseconds: Int64): Hashable, Comparable, ImplicitlyCopyable   // nanoseconds since Clock's own start
 
@@ -398,7 +398,7 @@ static func milliseconds(_ ms: Int64) -> Duration { … }         // Duration's,
 
 **A clock is a `TimeSource`, whose `now` is an instant of its own:**
 
-```swift
+```rayo
 protocol TimeSource { var now: Instant<Self> { get } }
 struct MonotonicClock(): TimeSource, ImplicitlyCopyable { … }   // the system's clock for waits: MonotonicClock().now is an Instant<MonotonicClock>
 ```
@@ -419,7 +419,7 @@ struct MonotonicClock(): TimeSource, ImplicitlyCopyable { … }   // the system'
 
 **`Thread.sleep(for:)` parks the calling thread until `d` has passed** ([above](#time-duration-and-instant)), and returns at once when `d` is zero or less:
 
-```swift
+```rayo
 static func sleep(for d: Duration) { … }        // Thread's
 ```
 
@@ -427,7 +427,7 @@ static func sleep(for d: Duration) { … }        // Thread's
 
 **A blocking primitive parks its waiting thread through the runtime**, which any `unsafe` code may call:
 
-```swift
+```rayo
 unsafe static func park(on word: *UInt32, expected: UInt32, timeout: Duration?) -> Bool { … }   // Runtime's: parks the calling thread on 'word'
 unsafe static func wake(on word: *UInt32, count: UInt) { … }                                     // Runtime's: wakes threads parked on 'word'
 ```

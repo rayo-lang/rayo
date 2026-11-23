@@ -6,7 +6,7 @@ When a value needs a lifetime independent of the local that created it, an ownin
 
 ## Owning boxes
 
-```swift
+```rayo
 enum Tree { case leaf(Int); case node(Box<Tree>, Box<Tree>) }   // recursion goes through a Box
 let rock = alloc Shared(loadTexture("rock.tex"))                // immutable, with any number of owners
 ```
@@ -30,7 +30,7 @@ let rock = alloc Shared(loadTexture("rock.tex"))                // immutable, wi
 
 **`Shared<T>` counts the owners of a value that many places, on any threads, hold at once:**
 
-```swift
+```rayo
 struct Texture(var pixels: List<UInt8>, var width: Int)                  // Frozen: derived by the compiler
 struct Material(var albedo: Shared<Texture>, var roughness: Float)       // Frozen too, since Shared<Texture> is
 
@@ -93,7 +93,7 @@ log.value.lock { msgs in msgs.append(consume m) }                        // the 
 
 **For a view that has to be stored in long-lived state, which a scoped reference can't be, the view is a checked `Slice<T>`** ([02](../02-views-and-dependencies/scoped-values.md#where-a-scoped-value-can-go)). Its buffer lives behind a `Shared` ([above](#sharedt-data-with-many-owners)), as a fixed-size **`Blob`** of bytes, or a `Blob` or `List` under an `RwLock`:
 
-```swift
+```rayo
 let package = alloc Shared(try alloc Blob.load("level3.pak"))   // Blob: fixed-size bytes, 16-byte-aligned unless asked
 struct MeshComponent(var vertices: Slice<Vertex>)                // a checked view: a weak link to the buffer and an element range
 
@@ -122,7 +122,7 @@ upload(m.vertices.read()!)                                       // a '&[Vertex]
 
 A `Font` owns its file's blob through a `Shared`, plus `Slice`s into it:
 
-```swift
+```rayo
 struct Font(
     var file: Shared<Blob>,          // an owner: the blob lives while any font that shares it does
     var glyphs: Slice<GlyphRecord>,  // stored views into that same blob

@@ -2,7 +2,7 @@
 
 Suppose a game records damage to an enemy. Start with a complete program that subtracts a hit and reports the health left:
 
-```swift
+```rayo
 func main() {
     let damage = 30
     var hp = 100
@@ -21,7 +21,7 @@ A variable gives a value a name. The program uses `let` for `damage`, since it n
 
 If you try to change a `let`, the program doesn't compile:
 
-```swift
+```rayo
 damage = 40                     // error: 'damage' is a 'let', so it can't change
 ```
 
@@ -29,14 +29,14 @@ Use `let` when you do not need to assign a new value. It tells a reader that the
 
 Every variable also has a type, which stays the same for as long as the variable exists. Usually Rayo works the type out from the starting value: `hp` starts at `100`, a whole number, so it's an `Int`, Rayo's usual type for whole numbers. When you want another type, you write it after the name:
 
-```swift
+```rayo
 let speed: Float = 4            // the 4 becomes a Float to match
 var level: UInt8 = 1            // and this 1 a UInt8
 ```
 
 A name stays with one variable, too. While `hp` is in scope, declaring another `hp` doesn't compile, even inside a nested block such as the body of an `if`:
 
-```swift
+```rayo
 let hp = hp + 10                // error: 'hp' is already declared
 let boosted = hp + 10           // fine: the new value has a name of its own
 ```
@@ -49,14 +49,14 @@ Rayo has the number types you'd expect. `Int8`, `Int16`, `Int32` and `Int64` hol
 
 A number written in the code, such as `2`, doesn't have a type of its own. It takes the type that the code around it asks for:
 
-```swift
+```rayo
 let dt: Float = 0.016
 let step = dt * 2               // 2 becomes a Float, because dt is one
 ```
 
 When nothing around a number asks for a type, it falls back on a default: a whole number becomes an `Int`, and one with a decimal point becomes a `Double`:
 
-```swift
+```rayo
 let count = 60                  // an Int
 let elapsed = 0.5               // a Double
 ```
@@ -65,7 +65,7 @@ let elapsed = 0.5               // a Double
 
 When you combine two different number types, Rayo converts one of them for you only if nothing can be lost on the way. A `Double` can hold every `Float` exactly, so multiplying the two gives a `Double`. Turning the `Double` result into a `Float` could round it, so Rayo won't do it on its own. You have to ask, by writing the conversion out:
 
-```swift
+```rayo
 let total = dt * elapsed            // a Double
 let short: Float = dt * elapsed     // error: a Double doesn't turn into a Float by itself
 let fine = Float(dt * elapsed)      // a Float, rounded because you asked
@@ -73,7 +73,7 @@ let fine = Float(dt * elapsed)      // a Float, rounded because you asked
 
 The same rule decides when a whole number mixes with another type. An `Int8` turns into an `Int` by itself, since an `Int` holds every `Int8`. An `Int`, though, never turns into a `Float` or a `Double` by itself, even where C and Java would convert it quietly. A `Double` reaches far bigger numbers than an `Int` does, but it keeps only about 16 digits exactly, and a large `Int` has 19.
 
-```swift
+```rayo
 let extra: Int8 = 5
 let score = count + extra           // an Int: every Int8 fits in an Int
 let wrong = dt * count              // error: an Int doesn't turn into a Float by itself
@@ -86,7 +86,7 @@ The difference from `dt * 2` is that a written number like `2` has no type yet, 
 
 Each whole-number type has a largest and a smallest value. An `Int8` holds -128 to 127, so this addition has no answer that fits:
 
-```swift
+```rayo
 let hp8: Int8 = 120
 let a = hp8 + 10                // the 10 becomes an Int8 too, and 130 doesn't fit
 ```
@@ -97,7 +97,7 @@ A `debug` build checks every addition, subtraction and multiplication. When one 
 
 Sometimes going past the limit isn't a bug. A hash function relies on numbers wrapping around, and a meter that fills up should simply stop when it's full. For those cases, Rayo has operators, such as `&+` and `+|`, that say what to do at the limit, so they never panic:
 
-```swift
+```rayo
 let b = hp8 &+ 10               // -126: wraps around
 let c = hp8 +| 10               // 127: stops at the largest Int8
 ```
@@ -108,7 +108,7 @@ Dividing a whole number by zero always panics, in both modes, since no answer wo
 
 So far, health has been a number on its own. A game needs to keep it beside an enemy's position and velocity. A `struct` gives those values one name:
 
-```swift
+```rayo
 import std.math
 
 struct Enemy(
@@ -127,7 +127,7 @@ enemy.hp -= 30
 
 A function takes some values, does its work, and can give a value back ([05](../spec/05-protocols-generics-and-closures/functions-and-closures.md#functions-and-closures)):
 
-```swift
+```rayo
 func burnDamage(perSecond: Float, seconds: Float) -> Float {
     perSecond * seconds
 }
@@ -139,7 +139,7 @@ let burn = burnDamage(perSecond: 12.5, seconds: 3)     // 37.5
 
 When a function that returns a value has a body of one expression, like `burnDamage`, that expression's value is what it returns. A longer body says what it returns with `return`:
 
-```swift
+```rayo
 func average(total: Float, count: UInt) -> Float {
     let n = Float(count)
     return total / n
@@ -148,7 +148,7 @@ func average(total: Float, count: UInt) -> Float {
 
 A function that gives nothing back leaves out the `->`:
 
-```swift
+```rayo
 func report(hp: Int) {
     log("hp is \(hp)")
 }
@@ -160,7 +160,7 @@ Inside `report`, `hp` holds its own copy of the number the caller passed, so if 
 
 An `if` runs code only when a condition holds:
 
-```swift
+```rayo
 if hp <= 0 {
     log("defeated")
 } else if hp < 30 {
@@ -174,7 +174,7 @@ A condition is a `Bool`, a value that is either `true` or `false`. Comparisons s
 
 An `if` can also give back a value, the value of whichever branch ran. That's handy when a variable's starting value depends on a condition:
 
-```swift
+```rayo
 let bonus = if boosted { 10 } else { 0 }
 ```
 
@@ -184,7 +184,7 @@ Without this, you'd have to declare `bonus` as a `var` and set it in each branch
 
 A `while` loop repeats its body for as long as a condition holds, checking it before each pass. This one counts how many seconds an enemy lasts under steady damage:
 
-```swift
+```rayo
 var hp = 100
 var seconds = 0
 while hp > 0 {
@@ -196,7 +196,7 @@ log("defeated after \(seconds) seconds")       // defeated after 9 seconds
 
 When you know how many times to repeat, a `for` loop over a **range** is simpler:
 
-```swift
+```rayo
 for wave in 1...3 {
     log("wave \(wave)")
 }
@@ -206,7 +206,7 @@ The range `1...3` holds the numbers 1, 2 and 3, and the loop runs once for each,
 
 Inside any loop, `continue` skips the rest of the current pass, and `break` leaves the loop altogether:
 
-```swift
+```rayo
 for i in 0..<100 {
     if i % 2 == 0 { continue }      // skip the even numbers
     if i > 7 { break }              // stop after 7

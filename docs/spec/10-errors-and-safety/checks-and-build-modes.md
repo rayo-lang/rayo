@@ -6,7 +6,7 @@ Some run-time checks prevent memory errors; others catch logic mistakes that lea
 
 ## Check levels
 
-```swift
+```rayo
 ref let v = &verts[i]     // bounds check: without it, a bad index would read memory outside the buffer
 let n = a + b             // overflow check: without it, the sum wraps, which is a wrong value but memory-safe
 ```
@@ -26,7 +26,7 @@ An enclosing `unchecked` block turns every one off ([below](#unchecked-blocks)).
 
 ### Choosing checks for a module or a scope
 
-```swift
+```rayo
 @checks(.all) func accumulate(_ total: mutable &Int, _ xs: &[Int]) { … }  // overflow checked here, even in release
 @checks(.none) do { for x in &xs { sum += x } }                           // diagnostics off in this block only; bounds stay on
 ```
@@ -39,7 +39,7 @@ An enclosing `unchecked` block turns every one off ([below](#unchecked-blocks)).
 
 ### `unchecked` blocks
 
-```swift
+```rayo
 unchecked {                        // bounds and the table's other checks off here
     for i in 0..<n { dst[i] = src[i] * k }
 }

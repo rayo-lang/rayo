@@ -58,7 +58,7 @@
 
 **A place a closure captures exclusively ties the result to the closure.** Besides the result, only the closure reaches that place, and its next call may change or free it. So the result depends on the closure exclusively, and the next call conflicts while it lives ([02](../../spec/02-views-and-dependencies/dependency-projection-and-results.md#closure-calls)):
 
-```swift
+```rayo
 var grow = { () -> &[Int] in buf.append(0); return buf.span }    // captures 'buf' exclusively
 let a = grow()                   // 'a' views buf's elements, and depends on 'grow' exclusively
 grow()                           // error: 'grow' is borrowed by 'a' (used below); this call may move buf's elements
@@ -102,7 +102,7 @@ use(a)                           // 'a' is still live here
 
 **A set names an access by the site that began it, so a site in a loop holds one access at a time.** Each time the site begins an access, no value that depends on the access it began the last time may be used from then on:
 
-```swift
+```rayo
 for w in &nodes { names.append(w.value!.name) }    // error: the second pass's append uses 'names', which depends on the first pass's access
 ```
 

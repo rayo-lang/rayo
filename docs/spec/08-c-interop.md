@@ -2,7 +2,7 @@
 
 A Rayo program can use a C library without rewriting its interface. Imported headers provide the declarations, and calls use the platform's C ABI. The boundary also makes Rayo state when it relies on C's pointer and memory guarantees. For example, a safe wrapper can take a reference to a run of elements while keeping the direct C call inside `unsafe`:
 
-```swift
+```rayo
 import c "platform.h"          // the header's declarations become Rayo declarations, in module 'platform'
 
 // platform.h declares:  void platform_upload(const float* data, size_t count);

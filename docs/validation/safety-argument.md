@@ -2,7 +2,7 @@
 
 The [spec](../spec/README.md) defines Rayo. This document checks its safety claim by tracing the rules to five invariants. It is an argument about the design, not a source of language rules or a mechanically verified proof.
 
-```swift
+```rayo
 var lines = alloc List<&Text>()
 splitLines(source, into: mutable lines)     // rule 4: 'lines' takes on what the other argument borrows: 'source', shared
 source.append("x")                          // error: changes 'source' while 'lines', used below, borrows it

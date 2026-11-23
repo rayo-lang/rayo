@@ -4,7 +4,7 @@
 
 A function that can fail in an expected way returns the failure to its caller as a value. Its result type, such as `Mesh!LoadError`, says what it returns when it succeeds and which errors it can fail with:
 
-```swift
+```rayo
 enum LoadError: Error {
     case notFound(path: static &Text)
     case corrupt(offset: UInt?)                               // nil where the offset isn't known
@@ -29,7 +29,7 @@ extension LoadError {                                   // enables 'try' across 
 
 ## Results
 
-```swift
+```rayo
 enum Result<Success, Failure: Error> {
     case success(Success)
     case failure(Failure)
@@ -59,7 +59,7 @@ Like every Rayo enum, it is never `Pod`, since a tag that no case uses is no val
 
 ### What a failure type names
 
-```swift
+```rayo
 func tryMap<E: Error>(_ xs: &[Int], _ f: (Int) -> Int!E) -> List<Int>!E
 func square(_ x: Int) -> Int { x * x }
 let squares = tryMap(xs, square)     // square can't fail, so E is Never, and the call is a List<Int>
@@ -88,7 +88,7 @@ log("\(squares.count) squares")
 
 **An initializer that can fail writes its result type as `-> Self!E`:**
 
-```swift
+```rayo
 public init(mass: Float) -> Self!PhysicsError    // a call to it evaluates to a Body!PhysicsError
 ```
 
@@ -97,7 +97,7 @@ public init(mass: Float) -> Self!PhysicsError    // a call to it evaluates to a 
 
 **A witness that can't fail meets a requirement that can**, as `init()` meets `init() -> Self!E`. It does so through the conversion that a named function makes to such a type ([05](../05-protocols-generics-and-closures/functions-and-closures.md#function-typed-values)). A function or initializer whose result is `T!Never` or `Self!Never` can't fail either, and gets the same wrapper. The wrapper takes the `T` out as `try` does, which never fails, and costs nothing, since the two share a layout.
 
-```swift
+```rayo
 protocol SeedSource { var seed: UInt64!IoError { get } }
 struct FixedSeed(let seed: UInt64): SeedSource      // a stored UInt64 meets it: each read through SeedSource is a .success
 ```
@@ -111,7 +111,7 @@ struct FixedSeed(let seed: UInt64): SeedSource      // a stored UInt64 meets it:
 
 A function that can fail for more than one reason names every error type in its failure type:
 
-```swift
+```rayo
 func loadLevel(_ path: &Text) -> Level!(IoError | ParseError) {
     let bytes = try readFile(path)            // fails with IoError
     return try parseLevel(bytes)              // fails with ParseError
@@ -129,7 +129,7 @@ typealias Failure = (IoError | ParseError)
 
 ## Propagating errors with `try`
 
-```swift
+```rayo
 func loadBossLevel(_ path: &Text) -> Level!LoadError {
     let level = try loadLevel(path)            // the level, or a return with the error, converted to LoadError
     guard level.hasBoss else { throw .badValue(field: "boss") }
@@ -153,7 +153,7 @@ func loadBossLevel(_ path: &Text) -> Level!LoadError {
 
 **A property can fail only through the value its `get` returns:**
 
-```swift
+```rayo
 var level: Level!IoError { get { try load(path) } }   // a get body: it propagates an IoError, or returns .success
 var cache: Mesh!LoadError { borrow { &slot } }        // hands out a place that holds a Result; the borrow can't fail
 ```
@@ -173,7 +173,7 @@ var cache: Mesh!LoadError { borrow { &slot } }        // hands out a place that 
 
 **Conversions in generic code.** A protocol may require a conversion, and a `try` in generic code then converts through that requirement:
 
-```swift
+```rayo
 protocol FromIo: Error { @converts init(_ e: IoError) }   // every conforming error converts from IoError
 
 func load<E: FromIo>(_ p: &Text) -> List<UInt8>!E {
@@ -184,7 +184,7 @@ func load<E: FromIo>(_ p: &Text) -> List<UInt8>!E {
 
 ## Keeping an error as a value
 
-```swift
+```rayo
 let outcome = loadLevel(path)       // no 'try': a Level!(IoError | ParseError), kept as a value
 loader.report(consume outcome)      // handed on: whoever takes it apart handles the error
 loadLevel(path)                     // error: the Result is never used
@@ -197,7 +197,7 @@ _ = loadLevel(path)                 // fine: the outcome is dropped on purpose
 
 **A closure literal called in place turns a block of `try`s into one `Result`**, since its body fails as the body of a function with a bare `!` does ([above](#what-a-failure-type-names)). This is how code runs a block and keeps its first failure as a value:
 
-```swift
+```rayo
 let outcome = {
     let bytes = try readFile(path)
     return try parseLevel(bytes)
@@ -206,7 +206,7 @@ let outcome = {
 
 **A `Result` is an ordinary enum, so a `when` matches it as it matches any enum** ([04](../04-types/enums.md#matching-with-when-and-choosing-with-if)). A pattern on `.failure` matches an error union with the patterns of a `catch` ([below](#handling-errors-with-do-and-catch)). A subject lent with `&` stays where it is, so a `when` reads a `Result` the code only borrows, which `try` can't take, and binds its payload in place ([01](../01-values-and-ownership/bindings.md#for-and-when-names)):
 
-```swift
+```rayo
 func show(_ outcome: &(Level!(IoError | ParseError))) {
     let first = try? consume outcome                            // error: 'outcome' is borrowed, so 'try?' can't take it
     when &outcome {
@@ -222,7 +222,7 @@ func show(_ outcome: &(Level!(IoError | ParseError))) {
 
 ## Handling errors with `do` and `catch`
 
-```swift
+```rayo
 do {
     let level = try loadLevel(path)           // the do block's error type: IoError | ParseError
     start(consume level)

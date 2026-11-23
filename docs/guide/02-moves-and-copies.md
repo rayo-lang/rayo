@@ -2,7 +2,7 @@
 
 In the first chapter, an enemy lost health when it took a hit. To keep a record of those hits, put their damage in a list. A list allocates memory on the heap for its values, and may allocate more as you add them:
 
-```swift
+```rayo
 var hits = alloc List<Int>()
 hits.append(12)
 hits.append(30)
@@ -19,7 +19,7 @@ Rayo frees it for you, with no garbage collector: the compiler places the code t
 
 A list in a function's local variable is destroyed when the function returns:
 
-```swift
+```rayo
 func recordFight() {
     var hits = alloc List<Int>()
     hits.append(12)
@@ -35,7 +35,7 @@ You never write a `free`. The compiler knows where each variable goes out of sco
 
 A value is also destroyed when its owner is assigned another value, since nothing owns the old one any more:
 
-```swift
+```rayo
 var hits = alloc List<Int>()
 hits.append(12)
 hits = alloc List<Int>()        // the first list is destroyed here
@@ -45,7 +45,7 @@ hits = alloc List<Int>()        // the first list is destroyed here
 
 A parameter declared with a plain type, such as `List<Int>`, takes over the value passed to it ([01](../spec/01-values-and-ownership/parameters.md#parameters)):
 
-```swift
+```rayo
 func archive(list: List<Int>) {
     log("archived \(list.count) hits")
 }
@@ -60,7 +60,7 @@ Passing `consume hits` to `archive` **moves** the list. `archive`'s parameter be
 
 The call says `consume`, so a reader sees the move where it happens, without a trip to `archive`'s declaration. Leaving it out is an error that tells you what to write:
 
-```swift
+```rayo
 archive(list: hits)             // error: 'archive' takes 'List<Int>'; write 'consume hits'
 ```
 
@@ -70,7 +70,7 @@ A move is also cheap. The list itself is only a few bytes, which say where its h
 
 A `var` that has been moved from can be assigned a new value, and is usable again:
 
-```swift
+```rayo
 hits = alloc List<Int>()
 hits.append(5)                  // fine
 ```
@@ -81,7 +81,7 @@ A function that only needs to read the list doesn't have to take it over. A para
 
 A list owns the values in it, so `append`'s parameter takes over what it's given. Adding a variable's number to a list still leaves the variable usable, with nothing written:
 
-```swift
+```rayo
 let best = 30
 hits.append(best)
 log("best is \(best)")          // fine: best is 30
@@ -91,7 +91,7 @@ The list owns a copy of the 30, and `best` keeps its own. An `Int` is **implicit
 
 A struct you declare isn't, unless it says so. Chapter 1's `Enemy` holds only numbers, but handing a variable of it to `append` needs a word that says what happens to the variable:
 
-```swift
+```rayo
 var wave = alloc List<Enemy>()
 let boss = Enemy(pos: .zero, hp: 500)
 wave.append(boss)               // error: write 'consume boss' or 'copy boss'
@@ -109,7 +109,7 @@ A value written in the call, as in `hits.append(12)`, is made right there, so no
 
 To add `boss` to the list and still use it afterwards, add a copy:
 
-```swift
+```rayo
 let boss = Enemy(pos: .zero, hp: 500)
 wave.append(copy boss)
 log("boss has \(boss.hp)")      // fine: boss has 500
@@ -119,7 +119,7 @@ log("boss has \(boss.hp)")      // fine: boss has 500
 
 A copy's cost grows with the value. An `Int` is 8 bytes, but a struct can hold a long array, and a quiet copy of it would hide real work in a line that reads like a move. So a type copies with nothing written only when its author promises its copies stay cheap, by listing `ImplicitlyCopyable`:
 
-```swift
+```rayo
 struct EntityId(let index: UInt32, let generation: UInt32): ImplicitlyCopyable
 ```
 
@@ -127,7 +127,7 @@ The compiler checks the promise as far as it can: every field must be implicitly
 
 `copy` doesn't work on a list:
 
-```swift
+```rayo
 let backup = copy hits          // error: 'List<Int>' is not copyable
 let twin = alloc hits.clone()   // a second list, sharing nothing with the first
 ```
@@ -144,7 +144,7 @@ A clone is meant to be fully independent of the original: changing or destroying
 
 A `let` or a `var` owns the value it holds, as `hits` owns its list. So a variable declared from another one has to say how it gets that value, as a call that takes the value over does, and leaving that out is an error:
 
-```swift
+```rayo
 var hits = alloc List<Int>()
 hits.append(12)
 let same = hits                 // error: write 'consume' or '&' before 'hits'
@@ -152,7 +152,7 @@ let same = hits                 // error: write 'consume' or '&' before 'hits'
 
 The error names two ways out, since a list can't be copied (above). `consume` moves the value over, as the rest of this section shows. `&hits` makes a **reference** to the list: a value that refers to the list where it lies, and owns nothing of it, the same way a `&List<Int>` parameter borrows its argument ([01](../spec/01-values-and-ownership/references.md#references)):
 
-```swift
+```rayo
 let same = &hits
 log("\(same.count)")            // 1
 ```
@@ -161,7 +161,7 @@ log("\(same.count)")            // 1
 
 A borrow comes with one restriction. `same` can't change the list, and the list can't change while you still use `same` either:
 
-```swift
+```rayo
 let same = &hits
 hits.append(5)                  // error: 'hits' is borrowed by 'same' (used below)
 log("\(same.count)")
@@ -171,14 +171,14 @@ Once `same` isn't used any more, `hits` can change the list again. Chapter 3 sho
 
 To move the list into the new variable instead, write `consume` before it, as the call to `archive` did ([01](../spec/01-values-and-ownership/moving-values-out.md#moving-values-out)):
 
-```swift
+```rayo
 let finished = consume hits
 log("\(hits.count)")            // error: 'hits' was moved
 ```
 
 Assigning to a variable that already exists works the same way, with `consume`, or `copy` for a copyable value:
 
-```swift
+```rayo
 alloc func newRound() -> List<Int> {
     var round = alloc List<Int>()
     round.append(0)
@@ -195,7 +195,7 @@ older = consume current         // older's first list is destroyed, and 'current
 
 An implicitly copyable value needs no word at all. Declaring or assigning a variable from one copies it:
 
-```swift
+```rayo
 var hp = 100
 let before = hp                 // a copy: 'hp' and 'before' each hold 100
 hp -= 10
@@ -208,7 +208,7 @@ log("lost \(before - hp)")      // lost 10
 
 The compiler follows every path through the code to know whether a variable still holds a value. Here the list moves on only one path:
 
-```swift
+```rayo
 var hits = alloc List<Int>()
 if bossFight {
     archive(list: consume hits)
@@ -220,7 +220,7 @@ When `bossFight` is true, `archive` takes the list. By the time it returns, it h
 
 The fix is to make sure every path leaves `hits` holding a list ([01](../spec/01-values-and-ownership/moving-values-out.md#places-that-hold-no-value)):
 
-```swift
+```rayo
 if bossFight {
     archive(list: consume hits)
     hits = alloc List<Int>()

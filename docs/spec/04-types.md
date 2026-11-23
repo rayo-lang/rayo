@@ -2,7 +2,7 @@
 
 Types tell the compiler what a value contains and which operations are valid. They also make many costs visible in Rayo: a conversion that may lose information is explicit, and an owning collection is a different type from a reference to its elements. The examples below show those choices in declarations, arithmetic and iteration.
 
-```swift
+```rayo
 struct Particle(var pos: Vec3, var vel: Vec3, var life: Float)     // 28 bytes, with no padding
 
 let dt: Float = 0.016                                   // a literal takes its type from context; with none, 0.016 is a Double

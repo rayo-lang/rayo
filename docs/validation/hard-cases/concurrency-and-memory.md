@@ -6,7 +6,7 @@
 
 **std provides threads and structured concurrency, checked by the language's ordinary rules** ([07](../../spec/07-concurrency.md)). Where a case forks work, assume std's shapes in 07, which a job system of a program's own would share:
 
-```swift
+```rayo
 join({ … }, { … })                          // may run both closures at once, and returns when both are done
 particles.forEachInParallel { p in … }      // runs the body over the elements, on many threads
 ThreadScope.run { s in s.spawn { … } }      // starts threads that may borrow the caller's locals
@@ -121,7 +121,7 @@ The team writes its workers twice, once over `Runtime.startThread` and once over
 
 The criteria below use these statements, the first five in the tasks that handle a connection, and the rest outside them. As in 07, `sock` is a `Handle<Socket>` into the reactor, which owns the sockets, so it is implicitly copyable and no borrow of it is live across an `await` ([07](../../spec/07-concurrency/tasks.md#task-functions-coroutines-that-wait-without-a-thread)):
 
-```swift
+```rayo
 let req = try await read(sock, timeout: .seconds(30))              // fails with .timedOut once 30 s pass with no bytes
 await sleep(for: .milliseconds(200))                               // a retry's backoff, on MonotonicClock
 let digest = await consume hashed                                  // a Future<Digest> that a worker thread fulfills: nil if its Promise is gone
@@ -157,7 +157,7 @@ let db = try block(on: connect(consume dbAddress))                 // in main, b
 
 **Code builds a `List` in a scratch arena that is reset regularly, such as once per request or once per frame, and keeps what it needs past the reset in a long-lived struct.** A reset makes every value allocated from the arena before it stale ([06](../../spec/06-memory-and-allocators/arena-safety.md#what-a-reset-does)), so what is kept must be copied out first. Here `scratch` is a `List<String>` built in the arena:
 
-```swift
+```rayo
 world.results = alloc scratch.clone()   // clones the list into .heap, the ambient allocator here
 frameArena.reset()                      // resets the arena that built 'scratch'
 world.results.append(consume r)         // grows the kept list after the reset

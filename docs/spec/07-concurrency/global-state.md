@@ -6,7 +6,7 @@
 
 **Safe code has no unsynchronized mutable globals**, since a global is reachable from every thread. A bare global `var` needs `unsafe` to access.
 
-```swift
+```rayo
 let config = alloc Published(GameConfig())     // global; safe from any thread
 let godMode = Atomic(false)
 @threadlocal var scratch = alloc List<Int>()
@@ -73,7 +73,7 @@ So an identity names one thread, and what is keyed by it, such as an object's ho
 
 ### Initialization at startup
 
-```swift
+```rayo
 let names = loadNames()      // runs before main, unless it can run at compile time
 let table = buildTable()     // may read 'names'; reading a global declared after it is an error
 ```

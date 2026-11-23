@@ -4,7 +4,7 @@
 
 **An enum is one of several cases, each of which may carry a payload.** Enums are Rayo's tagged unions, and a `when` takes them apart ([below](#matching-with-when-and-choosing-with-if)):
 
-```swift
+```rayo
 enum Blend: UInt8 { case opaque, alpha, additive }          // plain enum with a raw type
 
 enum Shape {
@@ -32,7 +32,7 @@ func area(_ s: &Shape) -> Float {
 
 ## Matching with `when`, and choosing with `if`
 
-```swift
+```rayo
 let label = when &state {
     .idle { "idle" }
     .chase(t) where t.isBoss { "fleeing" }
@@ -67,7 +67,7 @@ if state == .idle { wander() }                 // a case without a payload, test
 - **Exhaustive.** A `when` with a subject covers every value of its subject's type, or ends in `else`. An arm with a `where` guard covers nothing. An expression pattern covers its values only when it is a literal of a number type or `Bool`, or a range between such literals, compared by the language's own `==` or `contains`, never a user-defined one. A literal in a payload covers its value the same way. A `when` without a subject ends in `else` when its value is used.
 - **One set of names per arm.** Patterns that share an arm bind the same names, with the same types. The subject says what each name is, a `ref let` or a `ref var` of its part, or an owner, so every pattern of the arm binds it the same way ([01](../01-values-and-ownership/bindings.md#for-and-when-names)). No arm falls through into the next.
 
-```swift
+```rayo
 let label = when &hit {
     .miss { "miss" }
     .damage(0) { "graze" }                           // a literal inside a payload compares
@@ -94,7 +94,7 @@ let label = when &hit {
 
 ## Optionals
 
-```swift
+```rayo
 var target: Handle<Enemy>? = nil     // 8 bytes, the same as Handle<Enemy>
 if target != nil { attack(target) }  // a Handle<Enemy> inside the check
 let hp = enemies[h]?.hp ?? 0         // the element's hp, copied, or 0 when 'h' names no enemy
@@ -113,7 +113,7 @@ let hp = enemies[h]?.hp ?? 0         // the element's hp, copied, or 0 when 'h' 
 
 **An optional chain can be assigned through when it ends in a member or an element.** `a?.b = v` and `a?[i] = v` write only when `a` holds a value, and evaluate `v` before they read `a` ([01](../01-values-and-ownership/parameters.md#evaluation-order-and-when-a-calls-borrows-begin)). A chain with nothing after the `?` is a compile error that points to an optional binding. The binding evaluates the right side only when the optional holds a value, so nothing is destroyed when nothing is written:
 
-```swift
+```rayo
 x? = consume spare                                 // error: write 'if ref var t = mutable x { t = consume spare }'
 if ref var t = mutable x { t = consume spare }     // moves 'spare' in only when 'x' holds a value
 ```
@@ -122,7 +122,7 @@ if ref var t = mutable x { t = consume spare }     // moves 'spare' in only when
 
 **Where `a` is a reference to an optional, a `&T?` or a `mutable &T?`, its payload is a reference of the same kind to the value inside.** So `??` gives a reference to `a`'s payload or `b`'s, as a `ref` binding unwraps such a reference in a condition ([01](../01-values-and-ownership/bindings.md#conditions)):
 
-```swift
+```rayo
 ref let shown = &nickname ?? &player.name    // names the String inside 'nickname', or the player's name
 let label = nickname ?? player.name          // error: write 'copy', 'consume' or '&' before 'nickname'
 ```
@@ -147,7 +147,7 @@ let label = nickname ?? player.name          // error: write 'copy', 'consume' o
 
 ### Narrowing
 
-```swift
+```rayo
 if e.target != nil {
     chase(e.target)                // 'e.target' is a Handle<Player> here
     e.target = nil
@@ -192,7 +192,7 @@ An optional binding, such as `if ref let`, binds what such a place holds to a ne
 
 **An untagged union stores several types in the same bytes, with nothing recording which is there:**
 
-```swift
+```rayo
 union Bits { var f: Float; var u: UInt32 }          // Pod and padding-free
 union Mixed { var byte: UInt8; var word: UInt32 }   // 'byte' covers one byte of four: not padding-free
 

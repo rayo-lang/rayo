@@ -14,7 +14,7 @@
 
 ## Where statements end
 
-```swift
+```rayo
 let total = base +              // a line that ends in a binary operator continues
     bonus * 2
 let hps = alloc enemies
@@ -46,7 +46,7 @@ x = 1; y = 2                    // ';' separates statements on one line
 - **A labeled trailing closure continues its call** when its label follows the previous trailing closure's `}` on the same line, as in `} recover: {`. So that `}` doesn't end the statement. A label at the start of the next line begins a new statement instead.
 - **A `when` arm ends with the `}` of its block.** Whatever follows begins the next arm, on the same line or the next, so a line that starts with `.` or `else` there begins an arm rather than joining the one above. An arm's patterns and guard may span lines by the rules above, as `.chase(t)` does below.
 
-```swift
+```rayo
 let label = when state {
     .idle { "idle" }
     .chase(t)

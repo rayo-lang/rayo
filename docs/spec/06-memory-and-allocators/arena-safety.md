@@ -6,7 +6,7 @@ An arena can free many allocations at once, even when values made from them rema
 
 ## Arena safety: checked values and checked resets
 
-```swift
+```rayo
 let levelArena = Allocator.register(Arena(size: 256.mb))
 var spawns = levelArena.alloc List<Vec3>()
 spawns.append(.zero)
@@ -16,7 +16,7 @@ levelArena.reset()            // panics: 'pts' is used below, so something still
 print(pts[0])
 ```
 
-```swift
+```rayo
 print(spawns[0])              // the open ends with its statement
 levelArena.reset()            // fine: nothing uses the arena, whose memory is freed at once
 spawns.append(.zero)          // panics: 'spawns' was allocated in 'levelArena' before its reset
@@ -86,7 +86,7 @@ spawns.append(.zero)          // panics: 'spawns' was allocated in 'levelArena' 
 
 **An object's `deinit` that a reset or an unregistration runs can still read what it owns from that allocator:**
 
-```swift
+```rayo
 struct Door(var name: String) {
     deinit { print(name) }                     // runs inside the reset that destroys this door
 }
@@ -105,7 +105,7 @@ levelArena.reset()                             // destroys the doors; each deini
 
 ## Unregistering an allocator
 
-```swift
+```rayo
 let levelHeap = Allocator.register(TlsfHeap(size: 64.mb))
 var props = levelHeap.alloc List<Prop>()
 // ... the level runs ...
