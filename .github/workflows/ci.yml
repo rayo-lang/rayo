@@ -312,10 +312,10 @@ jobs:
           changed-paths: ${{ needs.changes.outputs.test-paths }}
 
   # The benchmarks build a pull request's rayoc and the rayoc of its base, in one job on one machine, and run each on
-  # the same programs, so a rise in instructions or peak memory past its threshold fails the job. They report
-  # wall-clock time and never compare it. The CI check leaves the job out, since a change may cost more on purpose:
-  # its pull request says why. A push to main only builds its release rayoc, which it saves for pull requests to
-  # start from.
+  # the same programs, so a rise in instructions past the threshold fails the job. They report peak memory and
+  # wall-clock time and never compare them, and a runner that counts no instructions compares nothing. The CI check
+  # leaves the job out, since a change may cost more on purpose: its pull request says why. A push to main only
+  # builds its release rayoc, which it saves for pull requests to start from.
   benchmarks:
     name: Benchmark on macOS
     needs: changes

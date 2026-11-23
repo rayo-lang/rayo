@@ -3,7 +3,7 @@ instructions it retires and its peak memory, which the system reports for the pr
 
     python3 Benchmarks/benchmark.py                                    # builds rayoc, measures it, prints the results
     python3 Benchmarks/benchmark.py --save --code 'main, as merged'    # saves the results as the commit's baseline
-    python3 Benchmarks/benchmark.py --compare 2042c3c1                 # fails where a measure rose past its threshold
+    python3 Benchmarks/benchmark.py --compare 2042c3c1                 # fails where instructions rose past 5%
 
 Each benchmark runs `rayoc` to one of the points it stops at. `--check` runs every check, from parsing through
 lowering and the ownership checks to verifying the IR, and prints nothing; `--emit=checked` and `--emit=ir` run the same
@@ -13,8 +13,8 @@ a profiler then finds which check it is.
 
 A baseline is named by the commit it measured, and records what the code there is, the machine, the build and how each
 measure was taken. A comparison fails where the median instructions of a benchmark rose more than 5% over the
-baseline's, or its median peak memory more than 20%, since peak memory varies between runs of one rayoc by up to 11%.
-Wall-clock time varies with the machine's load, so it is reported and never compared.
+baseline's. Peak memory varies between runs of one rayoc by up to 11%, and wall-clock time with the machine's load, so
+both are reported and never compared; a machine that counts no instructions compares nothing.
 It runs on macOS, where `/usr/bin/time -l` gives the measures, and on Linux, where `perf stat` and `/usr/bin/time`
 give them.
 """
@@ -34,10 +34,8 @@ import time
 BASELINES = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'baselines')
 DEFAULT_SIZES = '200,400,800,1600'
 DEFAULT_RUNS = 3
-DEFAULT_INSTRUCTIONS_THRESHOLD = 5.0
-# A run's peak memory varies with where its allocator lands, up to 11% between runs of one rayoc on one machine.
-DEFAULT_MEMORY_THRESHOLD = 20.0
-UNCOUNTED = "This machine didn't count the instructions rayoc retired, so only its peak memory was compared."
+DEFAULT_THRESHOLD = 5.0
+UNCOUNTED = "This machine didn't count the instructions rayoc retired, so nothing was compared with the baseline."
 
 # The points rayoc stops at, each with the arguments that stop it there. A dump is written to /dev/null.
 STOP_POINTS = [
@@ -217,18 +215,15 @@ def stage_costs(results, program):
     return costs
 
 
-def regressions(baseline, current, instructions_threshold, memory_threshold):
-    """A line for each measure of a benchmark in both runs whose instructions or peak memory rose more than its
-    threshold, in percent, over the baseline's. Wall time is never compared."""
+def regressions(baseline, current, threshold):
+    """A line for each benchmark in both runs whose instructions rose more than `threshold` percent over the
+    baseline's. Peak memory and wall time vary between runs of one rayoc, so they are never compared."""
     found = []
-    measures = (('instructions', 'instructions', instructions_threshold),
-                ('peak_memory_bytes', 'peak memory', memory_threshold))
     for name in sorted(set(baseline) & set(current)):
-        for key, label, threshold in measures:
-            old, new = baseline[name].get(key), current[name].get(key)
-            # Compared in whole counts, since a rise to exactly the threshold may come out a hair past it as a ratio.
-            if old and new is not None and (new - old) * 100 > old * threshold:
-                found.append(f'{name}: {label} rose {(new - old) * 100 / old:.1f}%, past {threshold:.1f}%')
+        old, new = baseline[name].get('instructions'), current[name].get('instructions')
+        # Compared in whole counts, since a rise to exactly the threshold may come out a hair past it as a ratio.
+        if old and new is not None and (new - old) * 100 > old * threshold:
+            found.append(f'{name}: instructions rose {(new - old) * 100 / old:.1f}%, past {threshold:.1f}%')
     return found
 
 
@@ -257,7 +252,8 @@ def change(old, new):
 
 def summary(results, measured, baseline=None, found=()):
     """A Markdown report of `results`, the measures of `measured`, with each change from `baseline` and each measure
-    in `found` that rose past its threshold over it, if there is a baseline."""
+    in `found` that rose past the threshold over it, if there is a baseline."""
+    uncounted = all(measures['instructions'] is None for measures in results.values())
     lines = [f'### Benchmarks of {measured}', '']
     if baseline is None:
         lines += ['| Benchmark | Instructions | Peak memory | Wall time |', '| --- | ---: | ---: | ---: |']
@@ -274,10 +270,10 @@ def summary(results, measured, baseline=None, found=()):
                          f"{memory} | {change(old.get('peak_memory_bytes'), measures['peak_memory_bytes'])} | "
                          f'{seconds} | {before} |')
         if found:
-            lines += ['', 'These rose past their thresholds:', '', *(f'- {line}' for line in found)]
-        else:
-            lines += ['', 'Nothing rose past its threshold.']
-    if all(measures['instructions'] is None for measures in results.values()):
+            lines += ['', 'These rose past the threshold:', '', *(f'- {line}' for line in found)]
+        elif not uncounted:
+            lines += ['', 'Nothing rose past the threshold.']
+    if uncounted:
         lines += ['', UNCOUNTED]
     return '\n'.join(lines) + '\n'
 
@@ -324,10 +320,8 @@ def arguments_parser():
     parser.add_argument('--save', action='store_true', help="save the results as the baseline of the package's commit")
     parser.add_argument('--code', help='what the code at the commit is, which a saved baseline and a summary record')
     parser.add_argument('--compare', metavar='COMMIT', help='compare with the baseline of this commit')
-    parser.add_argument('--threshold', type=float, default=DEFAULT_INSTRUCTIONS_THRESHOLD,
+    parser.add_argument('--threshold', type=float, default=DEFAULT_THRESHOLD,
                         help='the percentage rise in instructions a comparison fails past')
-    parser.add_argument('--memory-threshold', type=float, default=DEFAULT_MEMORY_THRESHOLD,
-                        help='the percentage rise in peak memory a comparison fails past')
     parser.add_argument('--summary', metavar='FILE', help='add a Markdown report of the results to this file')
     return parser
 
@@ -369,8 +363,8 @@ def main(arguments):
 
     found = []
     if baseline:
-        found = regressions(baseline['results'], results, options.threshold, options.memory_threshold)
-        print(f'Compared with {described(baseline)}:', *(found or ['nothing rose past its threshold']), sep='\n')
+        found = regressions(baseline['results'], results, options.threshold)
+        print(f'Compared with {described(baseline)}:', *(found or ['nothing rose past the threshold']), sep='\n')
     if all(measures['instructions'] is None for measures in results.values()):
         # GitHub Actions shows a line that starts so as a warning on the run.
         print(('::warning::' if os.environ.get('GITHUB_ACTIONS') == 'true' else 'warning: ') + UNCOUNTED)

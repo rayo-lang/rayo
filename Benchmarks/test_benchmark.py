@@ -35,26 +35,25 @@ class MeasuresTests(unittest.TestCase):
 
 
 class RegressionTests(unittest.TestCase):
-    def test_a_rise_in_instructions_or_memory_past_its_own_threshold_is_a_regression(self):
+    def test_a_rise_in_instructions_past_the_threshold_is_a_regression(self):
         baseline = {'check/loops-200': measures(1000, 1000), 'check/loops-400': measures(2000, 2000)}
-        current = {'check/loops-200': measures(1051, 1000), 'check/loops-400': measures(2000, 2402)}
+        current = {'check/loops-200': measures(1051, 1000), 'check/loops-400': measures(2000, 2000)}
 
-        self.assertEqual(regressions(baseline, current, instructions_threshold=5.0, memory_threshold=20.0), [
+        self.assertEqual(regressions(baseline, current, threshold=5.0), [
             'check/loops-200: instructions rose 5.1%, past 5.0%',
-            'check/loops-400: peak memory rose 20.1%, past 20.0%',
         ])
 
-    def test_wall_time_falls_within_any_rise_and_a_rise_to_a_threshold_does_too(self):
+    def test_memory_and_wall_time_fall_within_any_rise_and_instructions_within_a_rise_to_the_threshold(self):
         baseline = {'check/loops-200': measures(1000, 1000, seconds=1.0)}
-        current = {'check/loops-200': measures(1050, 1200, seconds=9.0)}
+        current = {'check/loops-200': measures(1050, 9000, seconds=9.0)}
 
-        self.assertEqual(regressions(baseline, current, instructions_threshold=5.0, memory_threshold=20.0), [])
+        self.assertEqual(regressions(baseline, current, threshold=5.0), [])
 
-    def test_a_measure_either_run_lacks_and_a_benchmark_either_run_lacks_are_not_compared(self):
+    def test_instructions_either_run_lacks_and_a_benchmark_either_run_lacks_are_not_compared(self):
         baseline = {'check/loops-200': measures(None, 1000), 'check/loops-400': measures(1000, 1000)}
         current = {'check/loops-200': measures(9000, 1000), 'check/loops-800': measures(9000, 9000)}
 
-        self.assertEqual(regressions(baseline, current, instructions_threshold=5.0, memory_threshold=20.0), [])
+        self.assertEqual(regressions(baseline, current, threshold=5.0), [])
 
 
 class StageCostTests(unittest.TestCase):
@@ -109,7 +108,7 @@ Compared with the baseline 2042c3c1 (main), measured 2026-11-23T10:00:00+00:00 o
 | check/loops-200 | 0 M | +10.0% | 0.0 MiB | -0.5% | 300 ms | 200 ms |
 | check/loops-400 | 0 M | - | 0.0 MiB | - | 1,000 ms | - |
 
-These rose past their thresholds:
+These rose past the threshold:
 
 - check/loops-200: rose
 ''')
@@ -117,14 +116,17 @@ These rose past their thresholds:
     def test_a_summary_with_a_baseline_says_where_nothing_rose(self):
         baseline = baseline_of({'check/loops-200': measures(1000, 1000)})
 
-        self.assertIn('\nNothing rose past its threshold.\n', summary({'check/loops-200': measures(1000, 1000)},
-                                                                      'rayoc', baseline, []))
+        self.assertIn('\nNothing rose past the threshold.\n', summary({'check/loops-200': measures(1000, 1000)},
+                                                                       'rayoc', baseline, []))
 
-    def test_a_summary_of_results_with_no_instruction_count_says_only_memory_was_compared(self):
+    def test_a_summary_of_results_with_no_instruction_count_says_nothing_was_compared(self):
         results = {'check/loops-200': measures(None, 1000)}
+        baseline = baseline_of({'check/loops-200': measures(None, 900)})
 
         self.assertIn('| check/loops-200 | - |', summary(results, 'rayoc'))
         self.assertIn(UNCOUNTED, summary(results, 'rayoc'))
+        self.assertIn('| check/loops-200 | - | - | 0.0 MiB | +11.1% |', summary(results, 'rayoc', baseline, []))
+        self.assertNotIn('Nothing rose', summary(results, 'rayoc', baseline, []))
         self.assertNotIn(UNCOUNTED, summary({'check/loops-200': measures(1000, 1000)}, 'rayoc'))
 
 

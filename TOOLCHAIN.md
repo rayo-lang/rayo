@@ -85,7 +85,7 @@ python3 Benchmarks/benchmark.py --save --code 'main, as merged'
 python3 Benchmarks/benchmark.py --compare 2042c3c1
 ```
 
-A comparison fails where a benchmark's instructions rise more than 5% over the baseline's, or its peak memory more than 20%, since peak memory varies by up to 11% between runs of one `rayoc`. Wall-clock time is reported, never compared, since it varies with the machine's load. CI's benchmark job compares each pull request that changes the compiler with its base, both measured in the same job at the three smaller sizes. GitHub's macOS runners are virtual machines that count no instructions, so the job compares peak memory alone.
+A comparison fails where a benchmark's instructions rise more than 5% over the baseline's. Peak memory and wall-clock time are reported, never compared, since peak memory varies by up to 11% between runs of one `rayoc` and wall-clock time with the machine's load. CI's benchmark job compares each pull request that changes the compiler with its base, both measured in the same job at the three smaller sizes. GitHub's macOS runners are virtual machines that count no instructions, so there the job reports both sides and compares nothing.
 
 ## How rayo and rayoc work together
 
