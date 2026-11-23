@@ -185,13 +185,14 @@ let package = Package(
         ]),
         .testTarget(name: "RayoSyntaxTests", dependencies: ["RayoDiagnostics", "RayoSyntax"]),
         .target(name: "SnapshotTesting", path: "Tests/SnapshotTesting"),
+        .target(name: "GrowthTesting", path: "Tests/GrowthTesting"),
         .testTarget(
             name: "RayoSemaTests",
             dependencies: ["RayoCheckedProgram", "RayoDiagnostics", "RayoSema", "RayoSyntax", "SnapshotTesting"],
             exclude: ["Snapshots"],
         ),
         .testTarget(name: "RayoCompilerTests", dependencies: [
-            "RayoCompiler", "RayoDiagnostics", "RayoIR", "RayoOwnership", "RayoSema", "RayoSource",
+            "GrowthTesting", "RayoCompiler", "RayoDiagnostics", "RayoIR", "RayoOwnership", "RayoSema", "RayoSource",
         ]),
         .target(name: "ToolStandIn", path: "Tests/ToolStandIn"),
         .executableTarget(name: "tool-stand-in", dependencies: ["ToolStandIn"], path: "Tests/tool-stand-in"),
@@ -200,11 +201,11 @@ let package = Package(
             "rayo", "rayoc", "tool-stand-in", "RayoDriver", "RayoLLVMInstall", "RayoRuntime", "ToolStandIn",
         ]),
         .testTarget(name: "RayoIRTests", dependencies: [
-            "RayoCheckedProgram", "RayoDiagnostics", "RayoIR", "RayoSema", "RayoSource", "RayoSyntax",
+            "GrowthTesting", "RayoCheckedProgram", "RayoDiagnostics", "RayoIR", "RayoSema", "RayoSource", "RayoSyntax",
             "SnapshotTesting",
         ], exclude: ["Snapshots"]),
         .testTarget(name: "RayoOwnershipTests", dependencies: [
-            "RayoCheckedProgram", "RayoDiagnostics", "RayoIR", "RayoOwnership", "RayoSource",
+            "GrowthTesting", "RayoCheckedProgram", "RayoDiagnostics", "RayoIR", "RayoOwnership", "RayoSource",
         ]),
         .testTarget(name: "LLVMTests", dependencies: ["LLVM"]),
         .target(name: "RayoLLVMTestSupport", path: "Tests/RayoLLVMTestSupport"),

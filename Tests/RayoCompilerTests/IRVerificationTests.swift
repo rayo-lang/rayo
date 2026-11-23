@@ -1,3 +1,4 @@
+import GrowthTesting
 @testable import RayoCompiler
 import RayoDiagnostics
 import RayoIR
@@ -71,7 +72,7 @@ struct IRVerificationTests {
 
         // A check that grows in line with the length takes about eight times as long. One that grows with its square
         // takes up to sixty-four times. Sixteen is a factor of two from the first, and of four from the second.
-        let times = try fastestTimesToCheck(short, long, in: .release, runs: 3)
+        let times = try fastestTimes(over: short, long, runs: 3) { program in try timeToCheck(program, in: .release) }
         #expect(times.long < times.short * 16)
     }
 }
@@ -85,21 +86,6 @@ private func ownedIR(of source: String) throws -> IRProgram {
     let (owned, ownershipErrors) = OwnershipChecker.check(Lowering.lower(checked.program))
     try #require(errors.allSatisfy { $0.severity != .error } && ownershipErrors.isEmpty)
     return owned
-}
-
-/// The fastest time `build` of `rayoc` takes to check `short` and `long`, as the ownership stage's IR, of `runs`
-/// runs each. The runs take the two in turn, so that a runner busy with other work during one run slows neither one's
-/// time.
-private func fastestTimesToCheck(
-    _ short: IRProgram, _ long: IRProgram, in build: CompilerBuild, runs: Int,
-) throws -> (short: Duration, long: Duration) {
-    var shortTime = Duration.seconds(Int64.max)
-    var longTime = Duration.seconds(Int64.max)
-    for _ in 0..<runs {
-        shortTime = min(shortTime, try timeToCheck(short, in: build))
-        longTime = min(longTime, try timeToCheck(long, in: build))
-    }
-    return (shortTime, longTime)
 }
 
 /// How long `build` of `rayoc` takes to check `program`, as the ownership stage's IR. It throws where the checks

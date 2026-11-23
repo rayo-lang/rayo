@@ -197,4 +197,5 @@ Each row says what a module or test target holds, and changes only when one is a
 | `Tests/RayoOwnershipTests` | Tests of the ownership checks |
 | `Tests/RayoLLVMTests` | Tests of the code Rayo IR compiles to |
 | `Tests/SnapshotTesting` | Snapshot testing for other test targets: comparing a test's text with a file kept beside it |
+| `Tests/GrowthTesting` | Timing for other test targets' growth tests: the fastest of several runs over a short and a long input |
 | `Tests/RayoLLVMTestSupport` | C stand-ins for the runtime's functions in the LLVM tests |
