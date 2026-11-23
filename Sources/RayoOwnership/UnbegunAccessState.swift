@@ -25,12 +25,6 @@ struct UnbegunAccessState: DataflowState {
         isUnbegun[access.index]
     }
 
-    /// The slots of the array's nodes that this state doesn't share with `other`, which a merge of the two reads.
-    /// Tests count them to see how the state's cost grows.
-    func unsharedSlots(comparedWith other: UnbegunAccessState) -> Int {
-        isUnbegun.unsharedSlots(comparedWith: other.isUnbegun)
-    }
-
     mutating func apply(_ effect: Effect, in function: Void) {
         guard case .begin(let id, _) = effect else { return }
         isUnbegun[id.index] = false

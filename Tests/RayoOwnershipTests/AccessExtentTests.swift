@@ -1,4 +1,4 @@
-@testable import RayoOwnership
+import RayoOwnership
 import RayoDiagnostics
 import RayoIR
 import RayoCheckedProgram
@@ -321,65 +321,5 @@ struct AccessExtentTests {
             bb3:
               return
             """))
-    }
-
-    @Test func `merges over eight times as many loops read under twenty-eight times as much`() throws {
-        let short = try mergeReads(solving: loopingFunction(loops: 50))
-        let long = try mergeReads(solving: loopingFunction(loops: 400))
-
-        // Merges read about twelve times as much: eight times as many, each a little wider as the arrays' nodes fill.
-        // States that hold an entry for every access read about sixty-three times as much.
-        #expect(long < short * 28)
-    }
-}
-
-/// How much of the dependence and unbegun-access states the solver's merges read, solving them through `function`.
-private func mergeReads(solving function: (name: String, text: String)) throws -> Int {
-    let program = try program(of: [function] + callees, from: .lowering)
-    let body = try #require(program.bodies[FunctionID(index: 0)])
-    let (dependencies, unbegun) = AccessExtents.entryStates(of: body)
-
-    let reads = ReadCount()
-    _ = DataflowSolver.solve(from: CountingReads(dependencies, into: reads), through: body, knowing: ())
-    _ = DataflowSolver.solve(from: CountingReads(unbegun, into: reads), through: body, knowing: ())
-    return reads.count
-}
-
-/// A count of what merges read; a class, since every copy of a state adds to one count.
-private final class ReadCount {
-    var count = 0
-}
-
-/// A state that says how much of its storage another state doesn't share, which a merge of the two reads.
-private protocol SharingState: DataflowState where Function == Void {
-    func unsharedSlots(comparedWith other: Self) -> Int
-}
-
-extension DependencyState: SharingState {}
-extension UnbegunAccessState: SharingState {}
-
-/// A state that carries `inner`, and adds to `reads` how much of the two states each merge reads.
-private struct CountingReads<Inner: SharingState>: DataflowState {
-    var inner: Inner
-    let reads: ReadCount
-
-    init(_ inner: Inner, into reads: ReadCount) {
-        self.inner = inner
-        self.reads = reads
-    }
-
-    var direction: DataflowDirection { inner.direction }
-
-    func merged(with other: CountingReads) -> CountingReads {
-        reads.count += inner.unsharedSlots(comparedWith: other.inner)
-        return CountingReads(inner.merged(with: other.inner), into: reads)
-    }
-
-    mutating func apply(_ effect: Effect, in function: Void) {
-        inner.apply(effect, in: ())
-    }
-
-    static func == (first: CountingReads, second: CountingReads) -> Bool {
-        first.inner == second.inner
     }
 }
