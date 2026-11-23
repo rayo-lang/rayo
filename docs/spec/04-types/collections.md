@@ -550,8 +550,8 @@ A reference reaches an element without moving it, so move-only elements iterate 
 | Any other value | `var it = S.makeIterator()` | `while let b = it.next()`: bind the pattern to `b′`, then run the body |
 
 - **A loop over `&s` holds `s` borrowed shared, and one over `mutable s` holds it exclusively, until the loop ends.** The mark picks the form, as it picks the reference an argument passes ([01](../01-values-and-ownership/references.md#making-a-reference)). So a loop that changes elements in place writes `mutable`.
-- **`mutable` on a subject needs a changeable place, as it does anywhere** ([01](../01-values-and-ownership/bindings.md#changeable-places)). That may be a temporary, such as a call's result. A place property with a `borrow` and no `mutate` can't be lent this way.
-- **A subject lent from a place property changes the storage its place lies in**, as `mutable hits.span` changes the elements of `hits`. A temporary that owns its elements, such as `mutable makeEnemies()`, is destroyed with its changes when the loop ends.
+- **`mutable` on a subject needs a changeable place, as it does anywhere** ([01](../01-values-and-ownership/bindings.md#changeable-places)). A temporary isn't one, so `mutable makeEnemies()` is a compile error, while `for e in makeEnemies()` owns each element and may change it. A place property with a `borrow` and no `mutate` can't be lent this way.
+- **A subject lent from a place property changes the storage its place lies in**, as `mutable hits.span` changes the elements of `hits`.
 - **A loop over a whole value whose type conforms to `ConsumingSequence`** gives it to the iterator. So a loop over `consume jobs` hands each job over, and the iterator's `deinit` destroys the elements a `break`, `return` or `throw` leaves. `[N of T]` conforms to `ConsumingSequence`, as std's owning collections do.
 - **Through a reference subject, an element that is itself a reference is bound in place.** A name bound to the whole of `b` is a `ref let` of what `b` refers to, as `ref let x = b` would be. One bound to `r` is a `ref var`, as `ref var x = mutable r` reborrows through it ([01](../01-values-and-ownership/bindings.md#bindings-that-refer-to-a-place)).
 - **Any other element is a value the iterator hands out**, such as a range's `Int`, a chunk or an `enumerated()` tuple. Then `b′` is `consume b` and `r′` is `consume r`, and the name owns it for the iteration, as `i` does below.
@@ -563,10 +563,10 @@ for e in &enemies where e.hp > 0 { … }     // the body runs only where the con
 for t in visibleTiles() { … }              // 'visibleTiles()' returns a '&[Tile]': 't' is a 'ref let' of each tile
 ```
 
-**A value subject is moved into a hidden `var` that lives until the loop ends**, and so is every temporary in the subject's expression, each into its own, in evaluation order. An adaptor in a hidden local keeps its collection borrowed for the whole loop:
+**A value subject is moved into a hidden local that lives until the loop ends**, and so is every temporary in the subject's expression, each into its own, in evaluation order. Each is still a temporary, so it stays read-only ([01](../01-values-and-ownership/bindings.md#changeable-places)). An adaptor in a hidden local keeps its collection borrowed for the whole loop:
 
 ```swift
-for (i, e) in makeEnemies().mutableEnumerated() { … }   // the new list is a hidden local, and so is its adaptor
+for (i, e) in makeEnemies().enumerated() { … }          // the new list is a hidden local, and so is its adaptor
 ```
 
 **What each name of the pattern binds decides whether it can change** ([01](../01-values-and-ownership/bindings.md#for-and-when-names)):

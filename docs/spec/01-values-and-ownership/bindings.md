@@ -272,7 +272,7 @@ when &state {
 - **A `ref` name can't be consumed**, since what it names has another owner. A name that owns its value can be, as a `let` can.
 - **A `when` name takes its part out of a value subject only once its arm is chosen**, since patterns and guards run under a borrow of the subject until then ([04](../04-types/enums.md#matching-with-when-and-choosing-with-if)).
 - **A `deinit` on the path keeps a value subject whole.** This holds in an arm where any of its patterns has, on the path to a part, a type that declares a `deinit`, whichever pattern matched. The value stays whole in a hidden local until the arm ends, as a `for` loop's sequence does. The arm's names then name its parts, read-only, or for change where the subject is a mutable reference. So the `deinit` runs on the changed value, and nothing moves out of it.
-- **A temporary subject lent with `&` or `mutable` is kept whole the same way**, as a loop keeps `mutable makeEnemies()` ([04](../04-types/collections.md#iteration)), so its names name its parts until the arm ends.
+- **A temporary subject lent with `&` is kept whole the same way**, as a loop keeps `&makeEnemies()` ([04](../04-types/collections.md#iteration)), so its names name its parts until the arm ends.
 - **In a type's own `deinit`, that type's `deinit` keeps nothing whole**, since it is already running. So `when consume self` takes an enum `self`'s payload apart there ([What can be moved from](moving-values-out.md#what-can-be-moved-from)).
 - **A subject in a temporary's own storage that can't be moved out is kept whole the same way**, with the whole temporary in that hidden local, as `connect().state` is where `Conn` declares a `deinit`.
 
@@ -394,12 +394,11 @@ var d: &any Drawable = sprite               // refers to 'sprite', and may later
 **Only a changeable place can be changed, or lent with `mutable`**, so a shared borrow never becomes a write. A place is **changeable** when it is:
 
 - a `var`;
-- a temporary, which its statement owns ([02](../02-views-and-dependencies/dependency-projection-and-results.md#temporaries));
 - the place a `ref var` names: a `ref var` binding, a `mutable &T` parameter, `self` in a `mutating` method, or a `for` or `when` name whose subject is a mutable reference;
 - a `for` or `when` name that owns its value, which is never assigned as a whole ([above](#for-and-when-names));
 - a parameter that owns its argument, or `self` in a `consuming` method, a `deinit` or an initializer;
 - an owned capture of a `mutating` or `consuming` closure;
-- the place a `mutable &T` refers to, reached through a changeable place that holds the reference ([References](references.md#forwarding-through-a-reference));
+- the place a `mutable &T` refers to, reached through a changeable place or a temporary that holds the reference ([References](references.md#forwarding-through-a-reference));
 - a `var` field, an element, or a property with a `mutate` or a `set` ([02](../02-views-and-dependencies/place-and-value-properties.md#place-and-value-properties)), of a changeable place.
 
 **Everything else is read-only, and so is whatever is reached through it**: a `let`, a `ref let`, a `&T` parameter, `self` in a plain method, a `let` field, a `const` and a global `let`. So is a `for` or `when` name whose subject is a shared reference, or that holds a copy, and the place any shared reference refers to. So is the place a `let` reaches through a reference it holds ([References](references.md#forwarding-through-a-reference)).
@@ -408,6 +407,19 @@ var d: &any Drawable = sprite               // refers to 'sprite', and may later
 let x = makeEnemy()
 ref var y = mutable x              // error: a let is read-only, even one that owns its value
 heal(mutable x)                    // error: the same
+```
+
+**A temporary is read-only too, and so are its parts**, such as a call's result or what a `get` returns ([02](../02-views-and-dependencies/dependency-projection-and-results.md#temporaries)). It owns what it holds and is destroyed at the end of its statement, so a change to it would be lost before anything saw it. So lending a temporary for change, assigning into it or a part of it, and calling a `mutating` method on it are compile errors. The error names the temporary, and says to keep it in a `var`, or to change the storage itself.
+
+**A temporary may still be lent shared, or consumed**, as an owning parameter or a `consuming` method takes it, and a mutable reference it holds still writes through ([References](references.md#forwarding-through-a-reference)):
+
+```swift
+heal(mutable makeEnemy())          // error: 'makeEnemy()' is a temporary; keep it in a 'var'
+makeEnemy().hp = 0                 // error: the same
+makeIterator().next()              // error: 'next' is mutating; keep the iterator in a 'var', as 'var it = makeIterator()'
+show(makeEnemy())                  // fine: a shared lend
+grid.row(3)[0] = 1                 // fine where 'row' returns a 'mutable &[Float]': writes the grid
+scale(grid.row(3))                 // fine: passes that reference on
 ```
 
 **There are four exceptions, each with its own way of keeping exclusivity**, the first two checked at run time:

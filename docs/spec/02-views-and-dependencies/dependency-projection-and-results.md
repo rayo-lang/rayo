@@ -211,7 +211,7 @@ func lockRegistry(_ s: &Services) -> MutexGuard<Registry> { s.registry.lock() } 
 
 **An argument that isn't a place is a temporary**, like `makeArray()` in `first(makeArray())`. A parameter that owns a temporary takes it over, so only its set flows.
 
-**A temporary lent shared or for change, `self` included, lives to the end of its full statement**, and a value depending on it can't outlive that:
+**A temporary that is lent, `self` included, lives to the end of its full statement**, and a value depending on it can't outlive that:
 
 ```swift
 let x = first(makeArray())      // an error if 'x' is used later
@@ -247,5 +247,5 @@ let syms = symbols.find(Key(text: "if", hash: h))    // a shallow key, and a sea
 
 **Two kinds of temporary can be kept in hidden locals instead:**
 
-- a `for` loop's sequence expression keeps its temporaries in hidden mutable locals until the loop ends;
+- a `for` loop's sequence expression keeps its temporaries in hidden locals until the loop ends;
 - a closure literal can be kept in a hidden local of a local's scope ([05](../05-protocols-generics-and-closures/functions-and-closures.md#function-typed-values)).

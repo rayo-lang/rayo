@@ -23,8 +23,8 @@ A **reference** is a value that refers to a place. A **shared reference**, of ty
 
 **`&p` of a place `p` of type `T` makes a `&T`, and `mutable p` makes a `mutable &T`.** The reference borrows `p`, shared or for change, until the reference's last use, and the law of exclusivity checks that borrow as it checks any other ([Exclusivity](exclusivity.md#the-law-of-exclusivity)). `mutable p` needs `p` to be a [changeable place](bindings.md#changeable-places), so a shared borrow never becomes a write. Where a `&T` is expected, a bare `p` makes the same shared reference, with no `&` written ([below](#places-given-to-a-position)).
 
-- **`&` and `mutable` of a value lend a temporary.** A call's result or a literal is no place, so `&makeEnemy()` lends a temporary that lives to the end of its statement ([02](../02-views-and-dependencies/dependency-projection-and-results.md#temporaries)). So `heal(mutable makeEnemy())` changes an enemy that the statement then destroys.
-- **`mutable` of a `&` expression is a compile error that names `mutable p`**, so `mutable &boss` says to write `mutable boss`. The reference it would lend for change is a temporary that dies with its statement, so the change would reach nothing.
+- **`&` of a value lends a temporary, and `mutable` of one is a compile error.** A call's result or a literal is no place, so `&makeEnemy()` lends a temporary that lives to the end of its statement ([02](../02-views-and-dependencies/dependency-projection-and-results.md#temporaries)). A temporary isn't changeable, so `heal(mutable makeEnemy())` is an error ([Changeable places](bindings.md#changeable-places)). A `mutable &T` that a call returns is passed on as it is, as `scale(grid.row(3))` passes one.
+- **`mutable` of a `&` expression is a compile error that names `mutable p`**, so `mutable &boss` says to write `mutable boss`. The reference `&boss` makes is a temporary, so `mutable` can't lend it.
 - **A member lends a place as it is declared.** `&x.p` of a place property uses its `borrow`, and `mutable x.p` its `mutate`. `mutable` of a member with only a `borrow` is a compile error, since nothing lends that place for change ([02](../02-views-and-dependencies/place-and-value-properties.md#place-properties-borrow-and-mutate)).
 - **Where a function type is expected, `&f` and `mutable f` make a function value** of the closure in the place `f`: `&f` from a non-`mutating` closure, and `mutable f` from a `mutating` one ([05](../05-protocols-generics-and-closures/implicit-conversions.md#implicit-conversions)).
 
@@ -40,7 +40,7 @@ A **reference** is a value that refers to a place. A **shared reference**, of ty
 
 **A reference forwards its members, methods, subscripts and operators to the value it refers to.** So `r.hp`, `r.takeDamage(1)`, `r[i]` and `r + v` reach that value, as they would through the place itself. This is **forwarding**, and it lets code use a reference wherever it would use the value.
 
-**Writing through a reference needs a mutable reference, held in a changeable place.** That covers assigning a member, calling a `mutating` method and using a `mutate` accessor. So a `var` that holds a `mutable &T` writes through it, and a `let` that holds one can't, as a `let` changes nothing it holds ([Changeable places](bindings.md#changeable-places)).
+**Writing through a reference needs a mutable reference, held in a changeable place or a temporary.** That covers assigning a member, calling a `mutating` method and using a `mutate` accessor. So a `var` that holds a `mutable &T` writes through it, and a `let` that holds one can't, as a `let` changes nothing it holds ([Changeable places](bindings.md#changeable-places)). A temporary that holds one writes through it, as `grid.row(3)[0] = 1` does where `row` returns a `mutable &[Float]`, since the change reaches storage the temporary doesn't own.
 
 ```swift
 var best = &enemies[0]              // a '&Enemy'

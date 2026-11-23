@@ -18,7 +18,7 @@ A binding that is a place it borrows: a `ref let` or `ref var`, a `&T` or `mutab
 _Avoid_: reference variable, alias
 
 **Changeable place**:
-A place that may be changed or lent with `mutable`, such as a `var`, a temporary or a `mutable &T` parameter ([01](docs/spec/01-values-and-ownership/bindings.md#changeable-places)).
+A place that may be changed or lent with `mutable`, such as a `var`, a `var` field of one or a `mutable &T` parameter ([01](docs/spec/01-values-and-ownership/bindings.md#changeable-places)).
 
 **Consume**:
 To move a value out of a place the code owns, implicitly or with `consume place` ([01](docs/spec/01-values-and-ownership/moving-values-out.md#moving-values-out)).
