@@ -380,9 +380,8 @@ public enum ErrorCode: Sendable, Hashable {
     @Code(285, error: "'&' isn't supported outside a call's arguments")
     case unsupportedReference
 
-    @Code(286, error:
-        "only a local, a parameter, or a field or element of one can be lent; put the value in a 'let' and lend that")
-    case unlendableValue
+    @Code(286, error: "lending a value that no local holds isn't supported; put it in a 'let' and lend that")
+    case unsupportedLentValue
 
     // MARK: Ownership
 

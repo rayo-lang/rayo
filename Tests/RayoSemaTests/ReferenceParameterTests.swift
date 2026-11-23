@@ -52,12 +52,11 @@ struct ReferenceParameterTests {
         ("read(makeEnemy().stats.hp)", [10]), ("show(if c { makeEnemy() } else { copy e })", [17, 38]),
         ("show(if c { &e } else { makeEnemy() })", [29]),
     ])
-    func `a value that no local or parameter holds can't be lent to a '&T' parameter`(
+    func `lending a value that no local or parameter holds to a '&T' parameter is reported as unsupported`(
         statement: String, columns: [Int],
     ) {
         #expect(messages(of: statement) == columns.map {
-            "\($0): error[E0286]: only a local, a parameter, or a field or element of one can be lent; put the value "
-                + "in a 'let' and lend that"
+            "\($0): error[E0286]: lending a value that no local holds isn't supported; put it in a 'let' and lend that"
         })
     }
 

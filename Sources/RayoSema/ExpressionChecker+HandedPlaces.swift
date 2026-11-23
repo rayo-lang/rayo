@@ -16,13 +16,13 @@ extension ExpressionChecker {
     /// Reports `value` where `expected` names a parameter that borrows its argument, since a call lends such a
     /// parameter a place with `&`. A place rooted in a local is reported with the `&` to write, even where its type
     /// is implicitly copyable, since a copy is a value, and the parameter takes the place; the call still lends the
-    /// place, so that error leaves the body's meaning whole. Any other value, such as a call's result or a copy, has
-    /// no place that the call can lend.
+    /// place, so that error leaves the body's meaning whole. Any other value, such as a call's result or a copy, is
+    /// reported as unsupported, since rayoc lends no value that no local holds.
     func reportUnlent(_ value: CheckedExpr, to expected: Expectation) {
         guard let parameter = expected.parameter, parameter.convention == .borrowed else { return }
         // A value that stands here is no `if`, since each branch of an `if` stands in its place on its own.
         guard let handed = value.handedPlaces.first else {
-            file.errors.report(.unlendableValue, at: value.range)
+            file.errors.report(.unsupportedLentValue, at: value.range)
             return
         }
         let code = ErrorCode.unlentPlace(name: parameter.callee, type: typeName(of: value.type),
