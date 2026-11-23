@@ -122,7 +122,7 @@ struct DroppedValueTests {
             bb0:
               %0 @1:1-1:2 = operand UInt 5 @1:1-1:2
               _ = index read %0 @1:1-1:2 below 3 @2:3-2:4
-              _ = call builtin "print(_: Int)"(1) @1:1-1:2
+              _ = call builtin "print(_: &Int)"(1) @1:1-1:2
               return
             }
             """
@@ -140,7 +140,7 @@ struct DroppedValueTests {
             bb0:
               %0 @1:1-1:2 = operand -1 @1:1-1:2
               _ = call builtin "UInt(_: Int)"(read %0 @1:1-1:2) @2:3-2:4
-              _ = call builtin "print(_: Int)"(1) @1:1-1:2
+              _ = call builtin "print(_: &Int)"(1) @1:1-1:2
               return
             }
             """
@@ -167,7 +167,7 @@ struct DroppedValueTests {
             bb0:
               %0 @1:1-1:2 = operand \(operand) @1:1-1:2
               _ = \(operation), read %0 @1:1-1:2 @3:7-3:12
-              _ = call builtin "print(_: Int)"(1) @1:1-1:2
+              _ = call builtin "print(_: &Int)"(1) @1:1-1:2
               return
             }
             """

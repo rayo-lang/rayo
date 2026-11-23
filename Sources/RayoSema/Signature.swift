@@ -77,17 +77,20 @@ struct Signature: CustomStringConvertible {
 }
 
 extension Signature {
-    /// The signature of a built-in function, under the name a call writes to reach it.
+    /// The signature of a built-in function, under the name a call writes to reach it. A built-in that borrows its
+    /// argument is lent any value, as `print` is, so a call's result or a literal is lent as a temporary.
     init(of builtin: Builtin) {
-        self.init(name: builtin.name.spelling, target: .callee(.builtin(builtin)),
-                  parameters: builtin.parameters.map(Parameter.init), result: .type(builtin.result))
+        let parameters = builtin.parameters.map { Parameter($0, borrowsTemporaries: true) }
+        self.init(name: builtin.name.spelling, target: .callee(.builtin(builtin)), parameters: parameters,
+                  result: .type(builtin.result))
     }
 
     /// The signature of `init(repeating:)` of the array of `count` values of `element`, which makes the array with
     /// each element a copy of its one argument. Its parameter owns the argument, so a call gives a place with nothing
     /// written, as it gives any parameter that owns its argument.
     init(fillingArrayOf count: Int, _ element: RayoType) {
-        let parameter = Parameter(FunctionParameter(label: "repeating", convention: .owned, type: element))
+        let parameter = Parameter(FunctionParameter(label: "repeating", convention: .owned, type: element),
+                                  borrowsTemporaries: false)
         self.init(name: Member.initializerName, target: .filledArray, parameters: [parameter],
                   result: .type(.array(count: count, element: element)))
     }

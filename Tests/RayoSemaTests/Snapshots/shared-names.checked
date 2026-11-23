@@ -16,21 +16,24 @@ func "main()"() -> Void {
     place %0 @3:5-3:10
     integer 3: Int @3:13-3:14
   expression
-    call builtin "print(_: Int)": Void @4:5-4:17
-      value: Int @4:11-4:16
-        place %0 @4:11-4:16
+    call builtin "print(_: &Int)": Void @4:5-4:17
+      &
+        value: Int @4:11-4:16
+          place %0 @4:11-4:16
   bind %1 @5:9-5:13
     copy: Int @5:16-5:26
       place %0 @5:21-5:26
   expression
-    call builtin "print(_: Int)": Void @6:5-6:22
-      call "next(_: Int)": Int @6:11-6:21
-        value: Int @6:16-6:20
-          place %1 @6:16-6:20
+    call builtin "print(_: &Int)": Void @6:5-6:22
+      &
+        call "next(_: Int)": Int @6:11-6:21
+          value: Int @6:16-6:20
+            place %1 @6:16-6:20
   expression
-    call builtin "print(_: Int)": Void @7:5-7:18
-      call "sum(_: Int)": Int @7:11-7:17
-        integer 3: Int @7:15-7:16
+    call builtin "print(_: &Int)": Void @7:5-7:18
+      &
+        call "sum(_: Int)": Int @7:11-7:17
+          integer 3: Int @7:15-7:16
   expression
     call "show(print: Int)": Void @8:5-8:19
       integer 7: Int @8:17-8:18
@@ -38,9 +41,10 @@ func "main()"() -> Void {
     integer 2: Int @9:13-9:14
   bind %3 @10:9-10:10
   expression
-    call builtin "print(_: Int)": Void @11:5-11:13
-      value: Int @11:11-11:12
-        place %2 @11:11-11:12
+    call builtin "print(_: &Int)": Void @11:5-11:13
+      &
+        value: Int @11:11-11:12
+          place %2 @11:11-11:12
 }
 
 func "next(_: Int)"(_: Int) -> Int {
@@ -78,7 +82,8 @@ func "sum(_: Int)"(_: Int) -> Int {
 func "show(print: Int)"(print: Int) -> Void {
   param %0 print: Int @18:11-18:16
   return
-    call builtin "print(_: Int)": Void @18:25-18:37
-      value: Int @18:31-18:36
-        place %0 @18:31-18:36
+    call builtin "print(_: &Int)": Void @18:25-18:37
+      &
+        value: Int @18:31-18:36
+          place %0 @18:31-18:36
 }

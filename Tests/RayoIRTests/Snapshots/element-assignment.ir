@@ -38,7 +38,8 @@ bb0:
   %1.0[%6] @7:5-7:21 = operand move %2 @7:24-7:33 @7:24-7:33
   declare %8
   %8 @8:11-8:28 = add checked read %0[0] @8:11-8:15, read %1.0[1] @8:18-8:28 @8:11-8:28
-  _ = call builtin "print(_: Int)"(read %8 @8:11-8:28) @8:5-8:29
+  begin a0 read %8 @8:11-8:28
+  _ = call builtin "print(_: &Int)"(a0) @8:5-8:29
   return
 }
 

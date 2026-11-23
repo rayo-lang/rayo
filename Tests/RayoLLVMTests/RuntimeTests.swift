@@ -33,7 +33,7 @@ struct RuntimeTests {
               temp %0: Int
             bb0:
               %0 @1:1-1:2 = call "answer()"() @1:1-1:2
-              _ = call builtin "print(_: Int)"(read %0 @1:1-1:2) @1:1-1:2
+              _ = call builtin "print(_: &Int)"(read %0 @1:1-1:2) @1:1-1:2
               return
             }
             func "answer()"() -> Int {
@@ -53,8 +53,8 @@ struct RuntimeTests {
             main "main()"
             func "main()"() -> Void {
             bb0:
-              _ = call builtin "print(_: Int)"(1) @1:1-1:2
-              _ = call builtin "print(_: Int)"(2) @1:1-1:2
+              _ = call builtin "print(_: &Int)"(1) @1:1-1:2
+              _ = call builtin "print(_: &Int)"(2) @1:1-1:2
               return
             }
             """)

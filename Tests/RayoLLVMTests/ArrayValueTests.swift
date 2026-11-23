@@ -75,7 +75,7 @@ struct ArrayLiteralTests {
               var %0 a: [0 of Int] @1:1-1:1
             bb0:
               %0 @1:1-1:2 = array of Int() @1:1-1:2
-              _ = call builtin "print(_: Int)"(1) @1:1-1:2
+              _ = call builtin "print(_: &Int)"(1) @1:1-1:2
               return
             }
             """
@@ -149,7 +149,7 @@ struct FilledArrayTests {
               var %0 a: [0 of Int] @1:1-1:1
             bb0:
               %0 @1:1-1:2 = fill 0 of 7 @1:1-1:2
-              _ = call builtin "print(_: Int)"(1) @1:1-1:2
+              _ = call builtin "print(_: &Int)"(1) @1:1-1:2
               return
             }
             """

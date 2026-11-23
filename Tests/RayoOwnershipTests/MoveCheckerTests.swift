@@ -46,7 +46,7 @@ struct MoveCheckerTests {
             bb0:
               %2 @1:1-1:1 = operand read %0 @2:1-2:1 @1:1-1:1
               _ = operand move %2 @2:2-2:2 @1:1-1:1
-              _ = call builtin "print(_: Int)"(read %1.0 @2:3-2:3) @1:1-1:1
+              _ = call builtin "print(_: &Int)"(read %1.0 @2:3-2:3) @1:1-1:1
               return
             """
         #expect(try checked(takingIntAndShot(blocks)).errors == [])
@@ -98,7 +98,7 @@ struct MoveCheckerTests {
         let blocks = """
             bb0:
               %3 @1:1-1:1 = fill 2 of read %1.1 @1:1-1:1 @1:1-1:1
-              _ = call builtin "print(_: Int)"(read %3[0].0 @2:1-2:1) @1:1-1:1
+              _ = call builtin "print(_: &Int)"(read %3[0].0 @2:1-2:1) @1:1-1:1
               _ = operand move %3 @2:2-2:2 @1:1-1:1
               return
             """

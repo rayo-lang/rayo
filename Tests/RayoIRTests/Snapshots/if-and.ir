@@ -18,7 +18,7 @@ bb1:
 bb2:
   branch read %2 @4:4-4:10, bb3, bb4
 bb3:
-  _ = call builtin "print(_: Int)"(1) @4:13-4:21
+  _ = call builtin "print(_: &Int)"(1) @4:13-4:21
   goto bb5
 bb4:
   goto bb5

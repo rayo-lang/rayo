@@ -162,7 +162,7 @@ private let replacingOneArray = """
     bb3:
       retire %1
       retire %2
-      _ = call builtin "print(_: Int)"(read %0[2] @16:11-16:15) @16:5-16:16
+      _ = call builtin "print(_: &Int)"(read %0[2] @16:11-16:15) @16:5-16:16
       retire %0
       return
     }
@@ -316,7 +316,7 @@ private let summingTwoTemporaries = """
       %0 @16:11-16:25 = call "sum(_: &[100000 of Int])"(a0) @16:11-16:25
       end a0
       retire %1
-      _ = call builtin "print(_: Int)"(read %0 @16:11-16:25) @16:5-16:26
+      _ = call builtin "print(_: &Int)"(read %0 @16:11-16:25) @16:5-16:26
       retire %0
       declare %2
       declare %3
@@ -325,7 +325,7 @@ private let summingTwoTemporaries = """
       %2 @17:11-17:25 = call "sum(_: &[100000 of Int])"(a1) @17:11-17:25
       end a1
       retire %3
-      _ = call builtin "print(_: Int)"(read %2 @17:11-17:25) @17:5-17:26
+      _ = call builtin "print(_: &Int)"(read %2 @17:11-17:25) @17:5-17:26
       retire %2
       return
     }

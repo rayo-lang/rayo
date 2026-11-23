@@ -14,9 +14,9 @@ struct ElementTests {
             bb0:
               %0 @1:1-1:2 = array of Int(1, 2, 3) @1:1-1:2
               %1 @1:1-1:2 = operand UInt 3 @1:1-1:2
-              _ = call builtin "print(_: Int)"(1) @1:1-1:2
+              _ = call builtin "print(_: &Int)"(1) @1:1-1:2
               %2 @1:1-1:2 = index read %1 @1:1-1:2 below 3 @5:19-5:20
-              _ = call builtin "print(_: Int)"(read %0[%2] @1:1-1:2) @1:1-1:2
+              _ = call builtin "print(_: &Int)"(read %0[%2] @1:1-1:2) @1:1-1:2
               return
             }
             """

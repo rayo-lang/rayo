@@ -23,13 +23,13 @@ struct LocalLifeTests {
 
     @Test func `a local declared again after its retirement may be used, and retired again`() throws {
         let program = try IRParser.program(from: assigningThreeLocals("""
-              _ = call builtin "print(_: Int)"(read %0 @1:1-1:2) @1:1-1:2
+              _ = call builtin "print(_: &Int)"(read %0 @1:1-1:2) @1:1-1:2
               retire %0
               goto bb1
             bb1:
               declare %0
               %0 @1:1-1:2 = operand 2 @1:1-1:2
-              _ = call builtin "print(_: Int)"(read %0 @1:1-1:2) @1:1-1:2
+              _ = call builtin "print(_: &Int)"(read %0 @1:1-1:2) @1:1-1:2
               retire %0
               goto bb1
             """))
@@ -42,7 +42,7 @@ private let retiredUses = [
         testDescription: "a use after a retirement in the same block",
         blocks: """
               retire %0
-              _ = call builtin "print(_: Int)"(read %0 @1:1-1:2) @1:1-1:2
+              _ = call builtin "print(_: &Int)"(read %0 @1:1-1:2) @1:1-1:2
               return
             """,
         message: "the IR uses %0 at bb0, where it is retired",
@@ -55,7 +55,7 @@ private let retiredUses = [
               retire %0
               goto bb2
             bb2:
-              _ = call builtin "print(_: Int)"(read %0 @1:1-1:2) @1:1-1:2
+              _ = call builtin "print(_: &Int)"(read %0 @1:1-1:2) @1:1-1:2
               return
             """,
         message: "the IR uses %0 at bb2, where it is retired",
@@ -65,7 +65,7 @@ private let retiredUses = [
         blocks: """
               goto bb1
             bb1:
-              _ = call builtin "print(_: Int)"(read %0 @1:1-1:2) @1:1-1:2
+              _ = call builtin "print(_: &Int)"(read %0 @1:1-1:2) @1:1-1:2
               retire %0
               goto bb1
             """,

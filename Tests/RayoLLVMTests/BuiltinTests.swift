@@ -8,8 +8,8 @@ struct PrintTests {
             main "main()"
             func "main()"() -> Void {
             bb0:
-              _ = call builtin "print(_: Int)"(42) @1:1-1:2
-              _ = call builtin "print(_: Int)"(-9223372036854775808) @1:1-1:2
+              _ = call builtin "print(_: &Int)"(42) @1:1-1:2
+              _ = call builtin "print(_: &Int)"(-9223372036854775808) @1:1-1:2
               return
             }
             """
@@ -21,8 +21,8 @@ struct PrintTests {
             main "main()"
             func "main()"() -> Void {
             bb0:
-              _ = call builtin "print(_: UInt)"(UInt 7) @1:1-1:2
-              _ = call builtin "print(_: UInt)"(UInt 18446744073709551615) @1:1-1:2
+              _ = call builtin "print(_: &UInt)"(UInt 7) @1:1-1:2
+              _ = call builtin "print(_: &UInt)"(UInt 18446744073709551615) @1:1-1:2
               return
             }
             """
@@ -34,8 +34,8 @@ struct PrintTests {
             main "main()"
             func "main()"() -> Void {
             bb0:
-              _ = call builtin "print(_: Bool)"(true) @1:1-1:2
-              _ = call builtin "print(_: Bool)"(false) @1:1-1:2
+              _ = call builtin "print(_: &Bool)"(true) @1:1-1:2
+              _ = call builtin "print(_: &Bool)"(false) @1:1-1:2
               return
             }
             """

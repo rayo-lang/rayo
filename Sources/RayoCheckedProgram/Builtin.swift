@@ -1,8 +1,8 @@
 /// A function of the prelude whose code the compiler gives, in place of a body written in Rayo. Each built-in takes
 /// scalar types, so a new scalar type gets its built-ins from `allCases` with no new case.
 public enum Builtin: CaseIterable, Hashable, Sendable {
-    /// `print(_: T)`, which writes the value and a newline to standard output: an integer in decimal, and a Bool as
-    /// `true` or `false`.
+    /// `print(_: &T)`, which writes the value it borrows and a newline to standard output: an integer in decimal, and
+    /// a Bool as `true` or `false`.
     case print(ScalarType)
     /// `T(_: U)`, which gives a value of the type `from`, `U`, as a value of the type `to`, `T`. A value that `to`
     /// can't hold panics where overflow checks are on, and keeps the low bits that fit where they are off.
@@ -33,10 +33,13 @@ public enum Builtin: CaseIterable, Hashable, Sendable {
         return type
     }
 
-    /// The parameters, in order. Each owns a scalar, a copy of the argument a call passes with no label.
+    /// The parameters, in order, each a scalar that a call passes with no label. A print only reads its argument, so
+    /// it borrows it; a conversion owns a copy of its argument.
     public var parameters: [FunctionParameter] {
         switch self {
-        case .print(let scalar), .conversion(let scalar, _):
+        case .print(let scalar):
+            [FunctionParameter(label: nil, convention: .borrowed, type: .scalar(scalar))]
+        case .conversion(let scalar, _):
             [FunctionParameter(label: nil, convention: .owned, type: .scalar(scalar))]
         }
     }

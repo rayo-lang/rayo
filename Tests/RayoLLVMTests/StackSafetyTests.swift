@@ -12,7 +12,7 @@ struct StackSafetyTests {
               temp %0: Int
             bb0:
               %0 @1:1-1:2 = call "answer()"() @1:1-1:2
-              _ = call builtin "print(_: Int)"(read %0 @1:1-1:2) @1:1-1:2
+              _ = call builtin "print(_: &Int)"(read %0 @1:1-1:2) @1:1-1:2
               return
             }
             func "answer()"() -> Int {

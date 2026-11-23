@@ -136,7 +136,7 @@ private let diamond = """
 
 /// Prints `x`, which the source names at `column` of line 2.
 private func printing(_ column: Int) -> String {
-    "_ = call builtin \"print(_: Int)\"(read %0 @2:\(column)-2:\(column)) @1:1-1:1"
+    "_ = call builtin \"print(_: &Int)\"(read %0 @2:\(column)-2:\(column)) @1:1-1:1"
 }
 
 /// The source columns of the operands that a function may evaluate before a point going forward, or after it going

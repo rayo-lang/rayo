@@ -46,6 +46,26 @@ struct ParameterTests {
         #expect(run(source) == CommandResult(exitCode: 0, output: "7\n9\n3\n", errors: ""))
     }
 
+    @Test func `'print' is lent a place or a value that no local holds, and prints what it is lent`() {
+        let source = """
+            func main() {
+                let hp = 7
+                let e = Enemy(hp: 2)
+                let alive = true
+                print(hp)
+                print(&hp)
+                print(e.hp)
+                print(hitsToFell(e, by: 1))
+                print(Enemy(hp: 4).hp)
+                print(alive)
+                print(UInt(hp))
+            }
+            struct Enemy(var hp: Int)
+            func hitsToFell(_ e: &Enemy, by damage: Int) -> Int { e.hp / damage }
+            """
+        #expect(run(source) == CommandResult(exitCode: 0, output: "7\n7\n2\n2\n4\ntrue\n7\n", errors: ""))
+    }
+
     @Test func `a bare argument that every overload borrows tells none of them apart`() {
         let source = """
             func main() {

@@ -27,7 +27,7 @@ struct ObjectCodeTests {
                 bb0:
                   %0 @1:1-1:2 = operand 42 @1:1-1:2
                   %1 @1:1-1:2 = operand \(taking) %0 @1:1-1:2 @1:1-1:2
-                  _ = call builtin "print(_: Int)"(read %1 @1:1-1:2) @1:1-1:2
+                  _ = call builtin "print(_: &Int)"(read %1 @1:1-1:2) @1:1-1:2
                   return
                 }
                 """)

@@ -11,7 +11,7 @@ struct InitializationCheckerTests {
             bb0:
               %0 @1:1-1:1 = operand 1 @1:1-1:1
               %1 @1:1-1:1 = operand move %0 @2:1-2:1 @1:1-1:1
-              _ = call builtin "print(_: Int)"(read %0 @2:2-2:2) @1:1-1:1
+              _ = call builtin "print(_: &Int)"(read %0 @2:2-2:2) @1:1-1:1
               return
             """
         #expect(try checked(function(blocks)).errors == [
@@ -38,11 +38,11 @@ struct InitializationCheckerTests {
             bb0:
               declare %2
               %2 @2:2-2:2 = operand move %2 @2:1-2:1 @1:1-1:1
-              _ = call builtin "print(_: Int)"(read %2 @2:3-2:3) @1:1-1:1
+              _ = call builtin "print(_: &Int)"(read %2 @2:3-2:3) @1:1-1:1
               %0 @1:1-1:1 = operand 1 @1:1-1:1
               %1 @1:1-1:1 = operand move %0 @2:4-2:4 @1:1-1:1
               %1 @1:1-1:1 = operand move %0 @2:5-2:5 @1:1-1:1
-              _ = call builtin "print(_: Int)"(read %0 @2:6-2:6) @1:1-1:1
+              _ = call builtin "print(_: &Int)"(read %0 @2:6-2:6) @1:1-1:1
               return
             """
         #expect(try checked(function(blocks)).errors == [
@@ -57,8 +57,8 @@ struct InitializationCheckerTests {
               %0 @1:1-1:1 = operand 1 @1:1-1:1
               %1 @1:1-1:1 = operand move %0 @2:1-2:1 @1:1-1:1
               %0 @1:1-1:1 = operand 2 @1:1-1:1
-              _ = call builtin "print(_: Int)"(read %0 @2:2-2:2) @1:1-1:1
-              _ = call builtin "print(_: Int)"(read %1 @1:1-1:1) @1:1-1:1
+              _ = call builtin "print(_: &Int)"(read %0 @2:2-2:2) @1:1-1:1
+              _ = call builtin "print(_: &Int)"(read %1 @1:1-1:1) @1:1-1:1
               return
             """
         #expect(try checked(function(blocks)).errors == [])
@@ -70,7 +70,7 @@ struct InitializationCheckerTests {
             func "f(_: Int)"(_: \(parameter)) -> Void {
               param %0 n: \(parameter) @1:1-1:1
             bb0:
-              _ = call builtin "print(_: Int)"(read %0 @2:1-2:1) @1:1-1:1
+              _ = call builtin "print(_: &Int)"(read %0 @2:1-2:1) @1:1-1:1
               return
             }
             """)
@@ -95,7 +95,7 @@ struct InitializationCheckerTests {
               \(otherwise)
               goto bb3
             bb3:
-              _ = call builtin "print(_: Int)"(read %0 @2:3-2:3) @1:1-1:1
+              _ = call builtin "print(_: &Int)"(read %0 @2:3-2:3) @1:1-1:1
               return
             """
         #expect(try checked(function(blocks)).errors == [
@@ -149,7 +149,7 @@ struct InitializationCheckerTests {
               %0 @1:1-1:1 = operand 1 @1:1-1:1
               return move %0 @2:1-2:1
             bb1:
-              _ = call builtin "print(_: Int)"(read %0 @2:2-2:2) @1:1-1:1
+              _ = call builtin "print(_: &Int)"(read %0 @2:2-2:2) @1:1-1:1
               return 0
             """
         #expect(try checked(function(blocks, result: "Int")).errors == [])
@@ -161,7 +161,7 @@ struct InitializationCheckerTests {
               %0 @1:1-1:1 = operand 1 @1:1-1:1
               %1 @1:1-1:1 = operand move %0 @2:1-2:1 @1:1-1:1
               %1 @1:1-1:1 = add checked read %0 @2:3-2:3, read %0 @2:2-2:2 @1:1-1:1
-              _ = call builtin "print(_: Int)"(read %0 @2:4-2:4) @1:1-1:1
+              _ = call builtin "print(_: &Int)"(read %0 @2:4-2:4) @1:1-1:1
               return
             """
         #expect(try checked(function(blocks)).errors == [
@@ -180,11 +180,11 @@ struct InitializationCheckerTests {
             bb2:
               goto bb3
             bb3:
-              _ = call builtin "print(_: Int)"(read %0 @2:2-2:2) @1:1-1:1
+              _ = call builtin "print(_: &Int)"(read %0 @2:2-2:2) @1:1-1:1
               %0 @1:1-1:1 = operand 2 @1:1-1:1
               %1 @1:1-1:1 = operand move %0 @2:3-2:3 @1:1-1:1
-              _ = call builtin "print(_: Int)"(read %0 @2:4-2:4) @1:1-1:1
-              _ = call builtin "print(_: Int)"(read %0 @2:5-2:5) @1:1-1:1
+              _ = call builtin "print(_: &Int)"(read %0 @2:4-2:4) @1:1-1:1
+              _ = call builtin "print(_: &Int)"(read %0 @2:5-2:5) @1:1-1:1
               return
             """
         #expect(try checked(function(blocks)).errors == [
@@ -198,9 +198,9 @@ struct InitializationCheckerTests {
         let blocks = """
             bb0:
               declare %0
-              _ = call builtin "print(_: Int)"(read %0 @2:1-2:1) @1:1-1:1
+              _ = call builtin "print(_: &Int)"(read %0 @2:1-2:1) @1:1-1:1
               %0 @1:1-1:1 = operand 1 @1:1-1:1
-              _ = call builtin "print(_: Int)"(read %0 @2:2-2:2) @1:1-1:1
+              _ = call builtin "print(_: &Int)"(read %0 @2:2-2:2) @1:1-1:1
               return
             """
         #expect(try checked(function(blocks)).errors == [Diagnostic(.usedUninitialized(name: "x"), at: at(1))])
@@ -222,7 +222,7 @@ struct InitializationCheckerTests {
               \(otherwise)
               goto bb3
             bb3:
-              _ = call builtin "print(_: Int)"(read %0 @2:3-2:3) @1:1-1:1
+              _ = call builtin "print(_: &Int)"(read %0 @2:3-2:3) @1:1-1:1
               return
             """
         #expect(try checked(function(blocks)).errors == expected)
@@ -238,7 +238,7 @@ struct InitializationCheckerTests {
               %1 @1:1-1:1 = operand move %0 @2:1-2:1 @1:1-1:1
               goto bb2
             bb2:
-              _ = call builtin "print(_: Int)"(read %0 @2:2-2:2) @1:1-1:1
+              _ = call builtin "print(_: &Int)"(read %0 @2:2-2:2) @1:1-1:1
               return
             """
         #expect(try checked(function(blocks)).errors == [
@@ -257,7 +257,7 @@ struct InitializationCheckerTests {
               declare %2
               %2 @2:1-2:1 = operand 1 @1:1-1:1
               declare %0
-              _ = call builtin "print(_: Int)"(read %0 @2:2-2:2) @1:1-1:1
+              _ = call builtin "print(_: &Int)"(read %0 @2:2-2:2) @1:1-1:1
               %0 @1:1-1:1 = operand 1 @1:1-1:1
               goto bb1
             bb3:
@@ -329,9 +329,9 @@ struct InitializationCheckerTests {
             bb0:
               declare %0
               declare %1
-              _ = call builtin "print(_: Int)"(read %0 @2:1-2:1) @1:1-1:1
-              _ = call builtin "print(_: Int)"(read %0 @2:2-2:2) @1:1-1:1
-              _ = call builtin "print(_: Int)"(read %1 @2:3-2:3) @1:1-1:1
+              _ = call builtin "print(_: &Int)"(read %0 @2:1-2:1) @1:1-1:1
+              _ = call builtin "print(_: &Int)"(read %0 @2:2-2:2) @1:1-1:1
+              _ = call builtin "print(_: &Int)"(read %1 @2:3-2:3) @1:1-1:1
               return
             """
         #expect(try checked(function(blocks)).errors == [
@@ -413,7 +413,7 @@ struct InitializationCheckerTests {
               _ = operand move %0 @2:1-2:1 @1:1-1:1
               goto bb3
             bb3:
-              _ = call builtin "print(_: Int)"(read %0 @2:3-2:3) @1:1-1:1
+              _ = call builtin "print(_: &Int)"(read %0 @2:3-2:3) @1:1-1:1
               return
             """
         #expect(try checked(function(blocks)).errors == [
@@ -438,7 +438,7 @@ struct InitializationCheckerTests {
             bb2:
               goto bb3
             bb3:
-              _ = call builtin "print(_: Int)"(read %0 @2:1-2:1) @1:1-1:1
+              _ = call builtin "print(_: &Int)"(read %0 @2:1-2:1) @1:1-1:1
               return
             bb4:
               goto bb3
@@ -458,7 +458,7 @@ struct InitializationCheckerTests {
         bb2:
           return
         bb3:
-          _ = call builtin "print(_: Int)"(read %0 @2:1-2:1) @1:1-1:1
+          _ = call builtin "print(_: &Int)"(read %0 @2:1-2:1) @1:1-1:1
           return
         """,
         // As `while true { if c { x = 1; break } }`, then a use of `x`.
@@ -476,7 +476,7 @@ struct InitializationCheckerTests {
         bb4:
           goto bb1
         bb5:
-          _ = call builtin "print(_: Int)"(read %0 @2:1-2:1) @1:1-1:1
+          _ = call builtin "print(_: &Int)"(read %0 @2:1-2:1) @1:1-1:1
           return
         """,
     ])
@@ -529,7 +529,7 @@ struct InitializationCheckerTests {
               goto bb1
             \(loop)
             \(exit):
-              _ = call builtin "print(_: Int)"(read %0 @2:1-2:1) @1:1-1:1
+              _ = call builtin "print(_: &Int)"(read %0 @2:1-2:1) @1:1-1:1
               return
             """
         #expect(try checked(function(blocks)).errors == [
@@ -549,7 +549,7 @@ struct InitializationCheckerTests {
               %2 @2:2-2:2 = operand 2 @1:1-1:1
               goto bb3
             bb3:
-              _ = call builtin "print(_: Int)"(read %2 @2:3-2:3) @1:1-1:1
+              _ = call builtin "print(_: &Int)"(read %2 @2:3-2:3) @1:1-1:1
               return
             """
         #expect(try checked(function(blocks)).errors == [])
@@ -572,7 +572,7 @@ struct InitializationCheckerTests {
               _ = operand move %0 @2:1-2:1 @1:1-1:1
               goto bb3
             bb3:
-              _ = call builtin "print(_: Int)"(read %0 @2:2-2:2) @1:1-1:1
+              _ = call builtin "print(_: &Int)"(read %0 @2:2-2:2) @1:1-1:1
               return
             bb4:
               goto bb1
@@ -596,7 +596,7 @@ struct InitializationCheckerTests {
             bb1:
               branch true, bb2, bb5
             bb2:
-              _ = call builtin "print(_: Int)"(read %0 @2:1-2:1) @1:1-1:1
+              _ = call builtin "print(_: &Int)"(read %0 @2:1-2:1) @1:1-1:1
               branch true, bb3, bb4
             bb3:
               _ = operand move %0 @2:2-2:2 @1:1-1:1
@@ -639,8 +639,8 @@ struct FieldMoveTests {
             bb0:
             \(storeShot())
               %4 @1:1-1:1 = operand move %5.1 @2:1-2:1 @1:1-1:1
-              _ = call builtin "print(_: Int)"(read %5.0 @2:2-2:2) @1:1-1:1
-              _ = call builtin "print(_: Int)"(read %5.1.0 @2:3-2:3) @1:1-1:1
+              _ = call builtin "print(_: &Int)"(read %5.0 @2:2-2:2) @1:1-1:1
+              _ = call builtin "print(_: &Int)"(read %5.1.0 @2:3-2:3) @1:1-1:1
               _ = operand read %4 @2:4-2:4 @1:1-1:1
               return
             """
@@ -707,7 +707,7 @@ struct FieldMoveTests {
               %7 @1:1-1:1 = fill 2 of read %4 @1:1-1:1 @1:1-1:1
               \(emptying)
               %7[0] @2:2-2:2 = call "Hit(damage: Int)"(9) @1:1-1:1
-              _ = call builtin "print(_: Int)"(read %7[0].0 @2:3-2:3) @1:1-1:1
+              _ = call builtin "print(_: &Int)"(read %7[0].0 @2:3-2:3) @1:1-1:1
               return
             """
         // The read after the store has the same cause, so the store alone is reported.
@@ -720,7 +720,7 @@ struct FieldMoveTests {
             bb0:
               declare %7
               %7[0].0 @2:1-2:1 = add checked read %7[0].0 @2:1-2:1, 1 @1:1-1:1
-              _ = call builtin "print(_: Int)"(read %7[0].0 @2:2-2:2) @1:1-1:1
+              _ = call builtin "print(_: &Int)"(read %7[0].0 @2:2-2:2) @1:1-1:1
               return
             """
         // The use, the store and the read after them have the same cause, so the use alone is reported.
@@ -740,7 +740,7 @@ struct FieldMoveTests {
               %7 @1:1-1:1 = fill 2 of read %4 @1:1-1:1 @1:1-1:1
             \(storeShot())
               _ = operand move \(local) @2:1-2:1 @1:1-1:1
-              _ = call builtin "print(_: Int)"(read \(part) @2:2-2:2) @1:1-1:1
+              _ = call builtin "print(_: &Int)"(read \(part) @2:2-2:2) @1:1-1:1
               return
             """
         #expect(try checked(function(blocks)).errors == [
@@ -783,7 +783,7 @@ struct FieldMoveTests {
               goto bb2
             bb2:
               %2 @2:1-2:1 = add checked read %2 @2:1-2:1, 1 @1:1-1:1
-              _ = call builtin "print(_: Int)"(read %2 @1:1-1:1) @1:1-1:1
+              _ = call builtin "print(_: &Int)"(read %2 @1:1-1:1) @1:1-1:1
               return
             """
         #expect(try checked(function(blocks)).errors == [
@@ -798,7 +798,7 @@ struct FieldMoveTests {
             \(storeShot())
               _ = operand move %5.1 @2:1-2:1 @1:1-1:1
               %5.1.0 @2:2-2:2 = operand 3 @1:1-1:1
-              _ = call builtin "print(_: Int)"(read %5.1.0 @2:3-2:3) @1:1-1:1
+              _ = call builtin "print(_: &Int)"(read %5.1.0 @2:3-2:3) @1:1-1:1
               return
             """
         // The read has the same cause as the store, so the store alone is reported.
@@ -813,7 +813,7 @@ struct FieldMoveTests {
             \(storeShot())
               _ = operand move %5.1 @2:1-2:1 @1:1-1:1
             \(storeShot(at: 2))
-              _ = call builtin "print(_: Int)"(read %5.1.0 @2:3-2:3) @1:1-1:1
+              _ = call builtin "print(_: &Int)"(read %5.1.0 @2:3-2:3) @1:1-1:1
               return
             """
         #expect(try checked(function(blocks)).errors == [])
@@ -854,7 +854,7 @@ struct FieldMoveTests {
               _ = operand move %5.1 @2:2-2:2 @1:1-1:1
               goto bb3
             bb3:
-              _ = call builtin "print(_: Int)"(read %5.1.0 @2:3-2:3) @1:1-1:1
+              _ = call builtin "print(_: &Int)"(read %5.1.0 @2:3-2:3) @1:1-1:1
               return
             """
         #expect(try checked(function(blocks)).errors == [

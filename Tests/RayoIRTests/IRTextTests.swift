@@ -92,7 +92,7 @@ struct IRTextTests {
               %0 @1:1-1:2 = operand 1 @1:1-1:2
               begin a0 read %0 @2:3-2:4
               begin a1 modify %0 @2:6-2:7
-              _ = call builtin "print(_: Int)"(a0, 2) @1:1-1:2
+              _ = call builtin "print(_: &Int)"(a0, 2) @1:1-1:2
               %1 @1:1-1:2 = operand 3 @1:1-1:2
               end a1
               end a0
@@ -123,11 +123,11 @@ struct IRTextTests {
             bb0:
               declare %0
               %0 @1:1-1:2 = operand 1 @1:1-1:2
-              _ = call builtin "print(_: Int)"(read %0 @1:1-1:2) @1:1-1:2
+              _ = call builtin "print(_: &Int)"(read %0 @1:1-1:2) @1:1-1:2
               retire %0
               declare %0
               %0 @1:1-1:2 = operand 2 @1:1-1:2
-              _ = call builtin "print(_: Int)"(read %0 @1:1-1:2) @1:1-1:2
+              _ = call builtin "print(_: &Int)"(read %0 @1:1-1:2) @1:1-1:2
               retire %0
               return
             }

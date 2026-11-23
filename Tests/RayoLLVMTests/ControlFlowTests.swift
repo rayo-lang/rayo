@@ -8,13 +8,13 @@ struct ControlFlowTests {
             main "main()"
             func "main()"() -> Void {
             bb0:
-              _ = call builtin "print(_: Int)"(1) @1:1-1:2
+              _ = call builtin "print(_: &Int)"(1) @1:1-1:2
               goto bb2
             bb1:
-              _ = call builtin "print(_: Int)"(2) @1:1-1:2
+              _ = call builtin "print(_: &Int)"(2) @1:1-1:2
               return
             bb2:
-              _ = call builtin "print(_: Int)"(3) @1:1-1:2
+              _ = call builtin "print(_: &Int)"(3) @1:1-1:2
               return
             }
             """
@@ -33,10 +33,10 @@ struct ControlFlowTests {
               %0 @1:1-1:2 = operand \(condition) @1:1-1:2
               branch read %0 @1:1-1:2, bb1, bb2
             bb1:
-              _ = call builtin "print(_: Int)"(1) @1:1-1:2
+              _ = call builtin "print(_: &Int)"(1) @1:1-1:2
               return
             bb2:
-              _ = call builtin "print(_: Int)"(2) @1:1-1:2
+              _ = call builtin "print(_: &Int)"(2) @1:1-1:2
               return
             }
             """
@@ -76,10 +76,10 @@ struct ControlFlowTests {
             bb0:
               branch false, bb1, bb2
             bb1:
-              _ = call builtin "print(_: Int)"(1) @1:1-1:2
+              _ = call builtin "print(_: &Int)"(1) @1:1-1:2
               return
             bb2:
-              _ = call builtin "print(_: Int)"(2) @1:1-1:2
+              _ = call builtin "print(_: &Int)"(2) @1:1-1:2
               return
             }
             """
@@ -125,15 +125,15 @@ struct ReturnTests {
             func "main()"() -> Void {
             bb0:
               _ = call "say()"() @1:1-1:2
-              _ = call builtin "print(_: Int)"(3) @1:1-1:2
+              _ = call builtin "print(_: &Int)"(3) @1:1-1:2
               return
             }
             func "say()"() -> Void {
             bb0:
-              _ = call builtin "print(_: Int)"(1) @1:1-1:2
+              _ = call builtin "print(_: &Int)"(1) @1:1-1:2
               return
             bb1:
-              _ = call builtin "print(_: Int)"(2) @1:1-1:2
+              _ = call builtin "print(_: &Int)"(2) @1:1-1:2
               return
             }
             """

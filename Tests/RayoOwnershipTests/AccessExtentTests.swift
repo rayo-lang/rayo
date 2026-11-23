@@ -153,7 +153,7 @@ struct AccessExtentTests {
               %0 @1:1-1:1 = operand 1 @1:1-1:1
               begin a0 read %0 @2:3-2:3
               %0 @2:5-2:5 = call "double(_: Int)"(a0) @1:1-1:1
-              _ = call builtin "print(_: Int)"(read %0 @1:1-1:1) @1:1-1:1
+              _ = call builtin "print(_: &Int)"(read %0 @1:1-1:1) @1:1-1:1
               %0 @2:6-2:6 = operand 2 @1:1-1:1
               _ = call "g(_: Int, _: Int)"(read %0 @1:1-1:1, 2) @1:1-1:1
               return

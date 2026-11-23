@@ -73,6 +73,16 @@ struct ReferenceParameterTests {
         #expect(messages(of: statement) == [])
     }
 
+    // `print` borrows its argument, and is lent any value, as a temporary that lives to the end of its statement.
+    @Test(arguments: [
+        "print(a)", "print(&a)", "print(e.stats.hp)", "print(&g[i].slots[0])", "print(i)", "print(c)", "print(1)",
+        "print(a + 1)", "print(copy a)", "print(makeEnemy().stats.hp)", "print(&makeEnemy().stats.hp)",
+        "print(e.slots.count)", "print(if c { a } else { 1 })", "print(UInt(a))",
+    ])
+    func `'print' is lent a place, and a value that no local holds`(statement: String) {
+        #expect(messages(of: statement) == [])
+    }
+
     @Test func `a 'ref let' given to a '&T' parameter without '&' passes the place it refers to`() {
         #expect(messages(of: "ref let s = &e.stats\n    showStats(s)\n    read(s.hp)") == [])
     }
@@ -86,8 +96,8 @@ struct ReferenceParameterTests {
     }
 
     @Test(arguments: [
-        ("take(&a)", 10, "take", "an Int"), ("print(&a)", 11, "print", "an Int"),
-        ("_ = UInt(&a)", 14, "UInt", "an Int"), ("_ = Stats(hp: &a)", 19, "Stats", "an Int"),
+        ("take(&a)", 10, "take", "an Int"), ("_ = UInt(&a)", 14, "UInt", "an Int"),
+        ("_ = Stats(hp: &a)", 19, "Stats", "an Int"),
         ("take(if c { &a } else { 1 })", 17, "take", "an Int"),
         ("let s: [2 of Int] = .init(repeating: &a)", 42, ".init", "an Int"),
     ])

@@ -20,7 +20,7 @@ extension ExpressionChecker {
     func reportUnlent(_ value: CheckedExpr, to recipient: Recipient?) {
         switch recipient {
         case .parameter(let parameter)? where parameter.convention == .borrowed:
-            reportUnlendable(value)
+            reportUnlendable(value, to: parameter)
         case .declaration(.refLet)?:
             reportUnreferenced(value)
         default:
@@ -28,13 +28,13 @@ extension ExpressionChecker {
         }
     }
 
-    /// Reports `value`, given to a parameter that borrows its argument, where the call can't lend it. A place rooted
+    /// Reports `value`, given to `parameter`, which borrows its argument, where the call can't lend it. A place rooted
     /// in a local is lent with nothing written, as `&` lends it, even where its type is implicitly copyable, since
-    /// the parameter takes the place, not a copy. Any other value, such as a call's result or a copy, is reported as
-    /// unsupported, since rayoc lends no value that no local holds.
-    private func reportUnlendable(_ value: CheckedExpr) {
+    /// the parameter takes the place, not a copy. Any other value, such as a call's result or a copy, is lent as a
+    /// temporary where the parameter borrows one, and is reported as unsupported elsewhere.
+    private func reportUnlendable(_ value: CheckedExpr, to parameter: ArgumentParameter) {
         // A value that stands here is no `if`, since each branch of an `if` stands in its place on its own.
-        guard value.handedPlaces.isEmpty else { return }
+        guard value.handedPlaces.isEmpty, !parameter.borrowsTemporaries else { return }
         file.errors.report(.unsupportedLentValue, at: value.range)
     }
 
@@ -77,10 +77,12 @@ extension ExpressionChecker {
     }
 
     /// `lent`, a `&` of a place, as the argument of `parameter`, of the type `expected` names. A parameter that
-    /// borrows takes the place itself, where a local holds it. One that owns its argument reports the `&`, since
-    /// nothing written says whether the call copies the place's value or moves it.
+    /// borrows takes the place itself, where a local holds it or the parameter borrows a temporary. One that owns its
+    /// argument reports the `&`, since nothing written says whether the call copies the place's value or moves it.
     private func lent(_ lent: LentPlace, to parameter: ArgumentParameter, _ expected: Expectation) -> CheckedExpr? {
         switch parameter.convention {
+        case .borrowed where parameter.borrowsTemporaries:
+            typeFitted(lent.placeExpression, to: expected)
         case .borrowed:
             heldPlace(of: lent, fitting: expected)
         case .owned:
