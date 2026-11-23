@@ -1,8 +1,8 @@
 import RayoCheckedProgram
 
 /// A value checked on its own that waits for the position it stands in: an untyped value, an array literal or an
-/// implicit member, whose type the position settles, a `&` of a place, which only the argument of a parameter that
-/// borrows takes, or an `if` whose branches end in such values.
+/// implicit member, whose type the position settles, a `&` or a `mutable &` of a place, which only some positions
+/// take, or an `if` whose branches end in such values.
 protocol WaitingValue {
     /// The type a part of the value fixes, whatever position it stands in, such as the type of an `if`'s typed
     /// branch; nil where only its position can give it one.
@@ -27,6 +27,11 @@ protocol WaitingValue {
     /// error `expected` gives.
     func settled(expecting expected: Expectation, by expressions: ExpressionChecker) -> CheckedExpr?
 
+    /// Settles the value where its position gives no type, and `recipient` takes it, as a declaration takes its value
+    /// where no annotation gives its type. Reports each part of it that the recipient can't take as the source writes
+    /// it.
+    func settled(takenBy recipient: Recipient, by expressions: ExpressionChecker) -> CheckedExpr?
+
     /// Reports the errors the value's parts give on their own, where the expression that holds it fails for another
     /// reason and so never settles it.
     func reportErrors(by expressions: ExpressionChecker)
@@ -46,5 +51,12 @@ extension WaitingValue {
         // A value that failed to settle was reported.
         guard let settled = settled(toward: expected.type, by: expressions) else { return nil }
         return expressions.fitted(settled, to: expected)
+    }
+
+    /// Settles the value as it would where its position gives no type, then hands the whole value to `recipient`.
+    func settled(takenBy recipient: Recipient, by expressions: ExpressionChecker) -> CheckedExpr? {
+        // A value that failed to settle was reported.
+        guard let settled = settled(toward: nil, by: expressions) else { return nil }
+        return expressions.taken(settled, by: recipient)
     }
 }

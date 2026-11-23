@@ -1,5 +1,6 @@
 import RayoCheckedProgram
 import RayoDiagnostics
+import RayoSource
 
 extension ExpressionChecker {
     /// Reports each place rooted in a local that `value` hands its position to, with the error `code` gives for the
@@ -13,13 +14,25 @@ extension ExpressionChecker {
         }
     }
 
-    /// Reports `value` where `expected` names a parameter that borrows its argument, since a call lends such a
-    /// parameter a place with `&`. A place rooted in a local is reported with the `&` to write, even where its type
-    /// is implicitly copyable, since a copy is a value, and the parameter takes the place; the call still lends the
-    /// place, so that error leaves the body's meaning whole. Any other value, such as a call's result or a copy, is
-    /// reported as unsupported, since rayoc lends no value that no local holds.
-    func reportUnlent(_ value: CheckedExpr, to expected: Expectation) {
-        guard let parameter = expected.parameter, parameter.convention == .borrowed else { return }
+    /// Reports `value`, which the source writes without a `&`, where `recipient` takes a reference: a parameter that
+    /// borrows its argument, or a `ref let`. A value of any other recipient is written as it should be.
+    func reportUnlent(_ value: CheckedExpr, to recipient: Recipient?) {
+        switch recipient {
+        case .parameter(let parameter)? where parameter.convention == .borrowed:
+            reportUnlent(value, to: parameter)
+        case .declaration(.refLet)?:
+            reportUnreferenced(value)
+        default:
+            break
+        }
+    }
+
+    /// Reports `value`, given to `parameter`, which borrows its argument, since a call lends such a parameter a place
+    /// with `&`. A place rooted in a local is reported with the `&` to write, even where its type is implicitly
+    /// copyable, since a copy is a value, and the parameter takes the place; the call still lends the place, so that
+    /// error leaves the body's meaning whole. Any other value, such as a call's result or a copy, is reported as
+    /// unsupported, since rayoc lends no value that no local holds.
+    private func reportUnlent(_ value: CheckedExpr, to parameter: ArgumentParameter) {
         // A value that stands here is no `if`, since each branch of an `if` stands in its place on its own.
         guard let handed = value.handedPlaces.first else {
             file.errors.report(.unsupportedLentValue, at: value.range)
@@ -30,33 +43,71 @@ extension ExpressionChecker {
         file.errors.reportKeepingMeaning(code, at: handed.place.range)
     }
 
-    /// `lent`, a `&` of a place, as it stands where a position expects what `expected` names. The argument of a
-    /// parameter that borrows takes the place itself, and checks its type as it would the value's. Reports the `&`
-    /// anywhere else.
-    func lent(_ lent: LentPlace, to expected: Expectation) -> CheckedExpr? {
-        // Only a call's argument takes a reference.
-        guard let parameter = expected.parameter else {
-            file.errors.report(.unsupportedReference, at: lent.range)
-            return nil
-        }
+    /// Reports `value`, given to a `ref let`, where it is a place rooted in a local, with the `&` to write, even where
+    /// its type is implicitly copyable, since a copy is a value, and the `ref let` refers to the place. The `ref let`
+    /// still refers to the place, so the error leaves the body's meaning whole. Any other value gives the `ref let` a
+    /// value of its own, which the declaration reports where no branch of it gives a place.
+    private func reportUnreferenced(_ value: CheckedExpr) {
+        // A value that stands here is no `if`, since each branch of an `if` stands in its place on its own.
+        guard let handed = value.handedPlaces.first else { return }
+        file.errors.reportKeepingMeaning(.unreferencedPlace(place: sourceName(of: handed)), at: handed.place.range)
+    }
 
-        let place = CheckedExpr(kind: .place(lent.place), type: lent.placeType, range: lent.range)
-        return switch parameter.convention {
-        case .borrowed: typeFitted(place, to: expected)
-        case .owned: reportReference(lent, toOwning: parameter, expected)
-        // Checking leaves a `mutable &` parameter that the source writes without a type, and no built-in or
-        // initializer takes its argument for change, so no argument stands where one is expected.
-        case .mutable: preconditionFailure("no parameter that checking declares borrows its argument for change")
+    /// `lent`, a `&` of a place, as it stands where a position expects what `expected` names. The argument of a
+    /// parameter that borrows, and a `ref let`'s value, take the place itself, and check its type as they would the
+    /// value's. Reports the `&` anywhere else.
+    func lent(_ lent: LentPlace, to expected: Expectation) -> CheckedExpr? {
+        switch expected.recipient {
+        case .parameter(let parameter)?:
+            self.lent(lent, to: parameter, expected)
+
+        // A `ref var`, which is reported as unsupported, takes a `&` as a `ref let` does, so it reports nothing more.
+        case .declaration(.refLet)?, .declaration(.refVar)?:
+            typeFitted(lent.placeExpression, to: expected)
+
+        // A `let` or a `var` would hold the reference as a value.
+        case .declaration(let kind)?:
+            refused(.unsupportedHeldReference(keyword: kind.rawValue), at: lent.range)
+
+        // No other position takes a reference.
+        case nil:
+            refused(.unsupportedReference, at: lent.range)
         }
     }
 
-    /// Reports `lent`, given to `parameter`, which owns its argument of the type `expected` names, and returns nil.
-    /// Nothing written says whether the call copies the place's value or moves it, so the argument fails.
-    private func reportReference(
-        _ lent: LentPlace, toOwning parameter: ArgumentParameter, _ expected: Expectation,
-    ) -> CheckedExpr? {
-        file.errors.report(.referenceToOwnedParameter(name: parameter.callee, type: typeName(of: expected.type)),
-                           at: lent.range)
+    /// `lent`, a `&` of a place, as the argument of `parameter`, of the type `expected` names. A parameter that
+    /// borrows takes the place itself. One that owns its argument reports the `&`, since nothing written says whether
+    /// the call copies the place's value or moves it.
+    private func lent(_ lent: LentPlace, to parameter: ArgumentParameter, _ expected: Expectation) -> CheckedExpr? {
+        switch parameter.convention {
+        case .borrowed:
+            typeFitted(lent.placeExpression, to: expected)
+        case .owned:
+            refused(.referenceToOwnedParameter(name: parameter.callee, type: typeName(of: expected.type)),
+                    at: lent.range)
+        // Checking leaves a `mutable &` parameter that the source writes without a type, and no built-in or
+        // initializer takes its argument for change, so no argument stands where one is expected.
+        case .mutable:
+            preconditionFailure("no parameter that checking declares borrows its argument for change")
+        }
+    }
+
+    /// `lent`, a `mutable &` of a place, as it stands where a position expects what `expected` names. A `ref var`
+    /// takes the place itself, checking its type as it would the value's, and reports nothing more, since the
+    /// `ref var` is reported as unsupported. Reports the `mutable &` anywhere else.
+    func mutablyLent(_ lent: MutablyLentPlace, to expected: Expectation) -> CheckedExpr? {
+        switch expected.recipient {
+        case .declaration(.refVar)?: typeFitted(lent.placeExpression, to: expected)
+        // A `ref let` is read-only, so the fix is to declare the `ref var` that the `mutable &` asks for.
+        case .declaration(.refLet)?: refused(.mutableReferenceToReferenceLet, at: lent.range)
+        default: refused(.unsupportedMutableReference, at: lent.range)
+        }
+    }
+
+    /// Reports `code` at `range`, where a position refuses the value the source writes there, and returns nil in its
+    /// place.
+    private func refused(_ code: ErrorCode, at range: SourceRange) -> CheckedExpr? {
+        file.errors.report(code, at: range)
         return nil
     }
 

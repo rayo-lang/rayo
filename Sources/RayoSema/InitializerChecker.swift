@@ -120,7 +120,7 @@ struct InitializerChecker {
                 argument.reportErrors(by: expressions)
                 continue
             }
-            let expected = Expectation(fields[field].type, parameter: owner) {
+            let expected = Expectation(fields[field].type, recipient: .parameter(owner)) {
                 .fieldTypeMismatch(field: fields[field].name, expected: $0, found: $1)
             }
             // A value that failed, or that has another type than its field's, was reported.

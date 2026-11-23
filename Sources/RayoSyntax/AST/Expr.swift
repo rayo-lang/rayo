@@ -32,6 +32,9 @@ public indirect enum ExprKind: Sendable {
     /// `&place`: a shared reference to a local, or to a part of one at any depth, which borrows the place. `place` is
     /// a name, a member of a place, or an element of one.
     case reference(Expr)
+    /// `mutable &place`: a mutable reference to a local, or to a part of one at any depth, which borrows the place
+    /// for change. `place` is a name, a member of a place, or an element of one.
+    case mutableReference(Expr)
     /// An `if` whose value is that of the branch that runs.
     case `if`(IfExpr)
     /// `[elements]`: an array literal, whose elements are in the order the source writes them.

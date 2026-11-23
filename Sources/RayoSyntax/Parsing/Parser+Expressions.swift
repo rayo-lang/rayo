@@ -19,7 +19,7 @@ extension Parser {
         return left
     }
 
-    /// `'-' int-literal`, `('copy' | 'consume' | '&') identifier ('.' member | '[' expression ']')*`,
+    /// `'-' int-literal`, `('copy' | 'consume' | 'mutable'? '&') identifier ('.' member | '[' expression ']')*`,
     /// `('-' | '!') unary`, or a postfix expression.
     private mutating func parseUnary() throws(ParseFailure) -> Expr {
         let start = current.range
@@ -47,6 +47,15 @@ extension Parser {
         if consume(.ampersand) {
             let place = try parseNamedPlace(else: ErrorCode.missingLentName)
             return Expr(kind: .reference(place), range: range(from: start))
+        }
+
+        // So does a `mutable &`, which lends it for change. A `mutable` without a `&` after it starts no expression,
+        // and is reported as such.
+        if current.isKeyword(.mutable), peek().isPunct(.ampersand) {
+            advance()
+            advance()
+            let place = try parseNamedPlace(else: ErrorCode.missingLentName)
+            return Expr(kind: .mutableReference(place), range: range(from: start))
         }
 
         // An expression without a `-` or `!` in front is a postfix one.

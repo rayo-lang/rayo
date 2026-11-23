@@ -98,13 +98,23 @@ struct ReferenceParameterTests {
     }
 
     @Test(arguments: [
-        ("let x = &a", [13]), ("var x = &a + 1", [13]), ("a = &a", [9]), ("_ = &e", [9]), ("if &c {}", [8]),
-        ("ref let x = &a", [17]), ("let x = if c { &a } else { &a }", [20, 32]),
+        ("var x = &a + 1", [13]), ("a = &a", [9]), ("_ = &e", [9]), ("if &c {}", [8]),
+        ("a = if c { &a } else { &a }", [16, 28]), ("let s: [1 of Int] = [&a]", [26]),
     ])
-    func `'&' outside a call's arguments is reported as unsupported`(statement: String, columns: [Int]) {
+    func `'&' outside a call's arguments and a 'ref let' is reported as unsupported`(
+        statement: String, columns: [Int],
+    ) {
         #expect(messages(of: statement) == columns.map {
-            "\($0): error[E0285]: '&' isn't supported outside a call's arguments"
+            "\($0): error[E0285]: '&' isn't supported outside a call's arguments and a 'ref let'"
         })
+    }
+
+    @Test(arguments: [
+        ("show(mutable &e)", 10), ("read(mutable &e.stats.hp)", 10), ("take(mutable &a)", 10), ("_ = mutable &a", 9),
+        ("let x = mutable &a", 13), ("a = mutable &a", 9),
+    ])
+    func `'mutable &' outside a 'ref let' or 'ref var' is reported as unsupported`(statement: String, column: Int) {
+        #expect(messages(of: statement) == ["\(column): error[E0290]: 'mutable &' isn't supported"])
     }
 
     @Test func `a call that fails for its arguments' count reports nothing of a '&' among them`() {

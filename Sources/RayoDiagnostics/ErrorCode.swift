@@ -351,7 +351,8 @@ public enum ErrorCode: Sendable, Hashable {
     @Code(276, error: "{type.withArticle} is too large to hold on the stack")
     case tooLargeForStack(type: TypeName)
 
-    @Code(277, error: "a '{keyword}' can't borrow '{place}'; write 'copy' or 'consume' before it, or declare 'ref let'")
+    @Code(277, error:
+        "a '{keyword}' can't borrow '{place}'; write 'copy' or 'consume' before it, or '&' and declare 'ref let'")
     case ownerBorrowsPlace(keyword: String, place: String)
 
     @Code(278, error:
@@ -377,11 +378,23 @@ public enum ErrorCode: Sendable, Hashable {
     @Code(284, error: "'{name}' takes {type.withArticle}, not a reference; remove the '&'")
     case referenceToOwnedParameter(name: String, type: TypeName)
 
-    @Code(285, error: "'&' isn't supported outside a call's arguments")
+    @Code(285, error: "'&' isn't supported outside a call's arguments and a 'ref let'")
     case unsupportedReference
 
     @Code(286, error: "lending a value that no local holds isn't supported; put it in a 'let' and lend that")
     case unsupportedLentValue
+
+    @Code(287, error: "a 'ref let' takes a reference; write '&{place}'")
+    case unreferencedPlace(place: String)
+
+    @Code(288, error: "a '{keyword}' holding a reference isn't supported; declare 'ref let', or remove the '&'")
+    case unsupportedHeldReference(keyword: String)
+
+    @Code(289, error: "'mutable &' lends for change, and a 'ref let' is read-only; declare 'ref var'")
+    case mutableReferenceToReferenceLet
+
+    @Code(290, error: "'mutable &' isn't supported")
+    case unsupportedMutableReference
 
     // MARK: Ownership
 

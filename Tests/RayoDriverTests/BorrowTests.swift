@@ -8,17 +8,17 @@ struct BorrowTests {
         let source = """
             func main() {
                 var e = Enemy(stats: Stats(hp: 5), slots: [6, 7])
-                ref let hp = e.stats.hp
-                ref let slot = e.slots[1]
+                ref let hp = &e.stats.hp
+                ref let slot = &e.slots[1]
                 let c = true
-                ref let either = if c { e.slots[0] } else { hp }
+                ref let either = if c { &e.slots[0] } else { &hp }
                 print(hp + slot + either)
                 e.stats.hp = 1
                 print(e.stats.hp + e.slots[1])
                 print(stats(of: &e))
             }
             func stats(of e: &Enemy) -> Int {
-                ref let s = e.stats
+                ref let s = &e.stats
                 return s.hp * 10
             }
             struct Enemy(var stats: Stats, var slots: [2 of Int])
@@ -35,9 +35,9 @@ struct BorrowTests {
             func main() {
                 var e = Enemy(stats: Stats(hp: 5))
                 let c = false
-                ref let st = e.stats
-                ref let deep = if c { st.hp } else { 4 }
-                ref let other = if !c { st.hp } else { 4 }
+                ref let st = &e.stats
+                ref let deep = if c { &st.hp } else { 4 }
+                ref let other = if !c { &st.hp } else { 4 }
                 print(deep + other)
                 e.stats.hp = 2
                 print(e.stats.hp)
