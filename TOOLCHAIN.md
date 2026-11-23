@@ -161,38 +161,40 @@ LLD is the default because it is the same linker, from the same LLVM, on every m
 
 ## Layout
 
+Each row says what a module or test target holds, and changes only when one is added, removed or given another role.
+
 | Path | Holds |
 | --- | --- |
-| `Sources/RayoSource` | Positions and spans in a source file, which diagnostics, Rayo IR and panics point at |
-| `Sources/RayoDiagnostics` | Diagnostics, and the `@Diagnostics` and `@Code` macros, which give each diagnostic code a number and a message |
+| `Sources/RayoSource` | Positions and spans in a source file |
+| `Sources/RayoDiagnostics` | Diagnostics, and the macros that build the table of diagnostic codes |
 | `Sources/RayoDiagnosticsMacros` | Those macros' implementation |
-| `Sources/RayoSyntax` | The lexer, the parser and the syntax tree |
-| `Sources/RayoCheckedProgram` | The checked program, which the checker gives and every later stage reads: its types; the type table, which says how a value of each type lies in memory; its functions and built-ins; and its bodies' locals, statements, expressions and places |
-| `Sources/RayoSema` | The checker, which resolves names and checks types, giving a checked program, and the printer that writes a checked program as text |
-| `Sources/RayoIR` | Rayo IR, a checked program as a control-flow graph, the lowering to it, the verifier that checks it keeps its types, and its text, which a printer writes and a parser reads back |
-| `Sources/RayoOwnership` | The initialization checker, which follows what each local holds through Rayo IR's control flow, and reports the uses of locals that may hold no value, and the assignments to `let`s that may already have been assigned; the checker that reports each move out of a borrowed parameter; the checker that reports each value no code reads; and the exclusivity checker, which works out where each access ends, reports the accesses that conflict, and writes each access's ends into the IR the emitter receives |
+| `Sources/RayoSyntax` | The parsing of source text into a syntax tree |
+| `Sources/RayoCheckedProgram` | The checked program, which semantic checking gives and every later stage reads |
+| `Sources/RayoSema` | The semantic checking of a syntax tree, which gives the checked program |
+| `Sources/RayoIR` | Rayo IR, and the lowering of a checked program to it |
+| `Sources/RayoOwnership` | The ownership checks over Rayo IR |
 | `Sources/CLLVM` | The module map that imports LLVM's C API into Swift |
-| `Sources/LLVM` | The Swift binding of LLVM's C API: the context, modules, builders, target machine and JIT that own LLVM's handles, and the types and values they make, each integer typed by its width |
+| `Sources/LLVM` | The Swift binding of LLVM's C API |
 | `Sources/RayoRuntime` | The program runtime, as LLVM IR files that `rayoc` embeds |
-| `Sources/RayoLLVM` | The compiler of Rayo IR to object code through LLVM, which links the program runtime into each program |
-| `Sources/RayoCompiler` | What `rayoc` does, given its arguments and a way to read and write files: the pipeline that reads, checks and compiles a source file, and writes its object code or prints what a stage made of it |
-| `Sources/rayoc` | The compiler's executable: reads and writes files, and writes the compiler's output and errors |
-| `Sources/CLLVMInstall` | The LLVM install that `Package.swift` found, as C constants that include no LLVM header: its major release, and the directories of its clang and of the LLD found with it |
-| `Sources/RayoLLVMInstall` | The LLVM install the toolchain was built against, whose clang and LLD link programs |
-| `Sources/RayoDriver` | What each `rayo` command does, given its arguments and the `rayoc` to run: the `rayoc` it runs out of process, and the clang and linker it links a program with |
-| `Sources/rayo` | The driver's executable: finds `rayoc` beside itself, and writes the driver's output and errors |
-| `Tests/RayoSourceTests` | When two source positions are the same, and how they order |
-| `Tests/RayoDiagnosticsTests` | The messages and numbers the macros give a table of codes |
-| `Tests/RayoDiagnosticsMacrosTests` | The errors the macros give a table written wrong |
-| `Tests/RayoSyntaxTests` | The lexer's and the parser's tests |
-| `Tests/RayoSemaTests` | The tests of the errors and warnings checking reports, of the type table's layouts, of which kind of declaration each top-level name belongs to, and of the checked program each construct makes, as snapshots of its text, over parsed files |
-| `Tests/RayoCompilerTests` | The tests of `rayoc`'s command line, of which stages its pipeline runs, and of where the program's errors end the compile, over files held in memory |
-| `Tests/RayoDriverTests` | The commands' tests, which run each command with the built `rayoc` on files in a temporary directory, and check its exit code, output and errors: its command line, the tools it finds and links with, the files it writes and the streams it passes on; for each feature, one program that it builds and runs; and the proof programs |
-| `Tests/ToolStandIn` | What a stand-in for a tool `rayo` runs does in the driver tests, and how a test installs one: a few steps, such as writing to standard error, then an exit, a signal, or a hand-off to the real tool |
-| `Tests/tool-stand-in` | The executable that acts as the stand-in installed at the path it was started as, in the driver tests |
-| `Tests/LLVMTests` | The binding's tests, which build small functions with it, run some through its JIT, and check what they return and what LLVM prints and reports |
-| `Tests/RayoIRTests` | The tests of the Rayo IR that lowering gives each construct, as snapshots of its text that read back into the same IR, over programs the front end parses and checks; of the verifier, over Rayo IR written as text; and of the errors the IR's parser reports |
-| `Tests/RayoOwnershipTests` | The ownership stage's tests, over Rayo IR written as text: of the errors it reports and the ends of accesses it writes, through the interface the pipeline runs it by, and of its dataflow solver |
-| `Tests/RayoLLVMTests` | The tests of the object code Rayo IR compiles to, read with the LLVM install's own tools; of the code each operator emits, and of programs written as Rayo IR, run in the test process through the binding's JIT; of the LLVM types a program's values, functions and stack slots get; and of how each argument and result is passed |
-| `Tests/SnapshotTesting` | What a snapshot test does: compares a test's text with a file kept beside the test, shows a diff where they differ, and rewrites the file when `RAYO_UPDATE_SNAPSHOTS=1` asks it to |
-| `Tests/RayoLLVMTestSupport` | The C code that stands in for the runtime's panic and print functions in the LLVM tests: a panic ends the call that panicked instead of the process, and a print adds to the call's output |
+| `Sources/RayoLLVM` | The compiling of Rayo IR to object code through LLVM |
+| `Sources/RayoCompiler` | What `rayoc` does: the pipeline from a source file to what it writes or prints |
+| `Sources/rayoc` | The compiler's executable |
+| `Sources/CLLVMInstall` | The LLVM install that `Package.swift` found, as C constants |
+| `Sources/RayoLLVMInstall` | That install, as Swift, whose clang and LLD link programs |
+| `Sources/RayoDriver` | What each `rayo` command does |
+| `Sources/rayo` | The driver's executable |
+| `Tests/RayoSourceTests` | Tests of source positions |
+| `Tests/RayoDiagnosticsTests` | Tests of diagnostics and the table of codes the macros build |
+| `Tests/RayoDiagnosticsMacrosTests` | Tests of the macros' implementation |
+| `Tests/RayoSyntaxTests` | Tests of parsing |
+| `Tests/RayoSemaTests` | Tests of semantic checking |
+| `Tests/RayoCompilerTests` | Tests of `rayoc`'s command line and pipeline |
+| `Tests/RayoDriverTests` | Tests of the `rayo` commands, and of the whole programs they build and run |
+| `Tests/ToolStandIn` | Stand-ins for the tools `rayo` runs, for the driver tests |
+| `Tests/tool-stand-in` | The executable a stand-in runs as |
+| `Tests/LLVMTests` | Tests of the LLVM binding |
+| `Tests/RayoIRTests` | Tests of Rayo IR and lowering |
+| `Tests/RayoOwnershipTests` | Tests of the ownership checks |
+| `Tests/RayoLLVMTests` | Tests of the code Rayo IR compiles to |
+| `Tests/SnapshotTesting` | Snapshot testing for other test targets: comparing a test's text with a file kept beside it |
+| `Tests/RayoLLVMTestSupport` | C stand-ins for the runtime's functions in the LLVM tests |
