@@ -161,7 +161,7 @@ let p = Pair.construct { … }          // any other such type is named through 
 
 ```swift
 let picked: (&Enemy)? = nil               // an optional reference
-let slot: &Enemy? = world.enemies[h]      // a reference to an optional element
+let slot: &Enemy? = spare                 // a reference to an optional: 'spare' is a local Enemy?
 let name: (static &Text)? = nil           // an optional static reference to text
 ```
 

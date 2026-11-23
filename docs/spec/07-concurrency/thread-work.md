@@ -20,7 +20,7 @@ particles.forEachInParallel { p in                          // @sendable (mutabl
     - a non-`mutating` one by any number of threads at once, since it only reads its captures;
     - a `mutating` one by one thread at a time, each call happening before the next, since calling it changes the closure itself;
     - a `consuming` one once, since the call consumes it.
-- **Exclusivity holds across a call's arguments**, closures included, since a closure literal borrows what it captures for as long as the call has it. So the second `join` at the top of this chapter is rejected, as `f(mutable &x, x)` is.
+- **Exclusivity holds across a call's arguments**, closures included, since a closure literal borrows what it captures for as long as the call has it. So the second `join` at the top of this chapter is rejected, as `f(mutable &x, x)` is, for an `f` whose second parameter is a `&Int` ([01](../01-values-and-ownership/parameters.md#evaluation-order-and-when-a-calls-borrows-begin)).
 - **What a call begins ends with it**, since rule 5 lets no function return or store a view of what it owns or began ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-5-the-callee-side)). A lock guard is released on the thread that took it ([Locks: `Mutex` and `RwLock`](synchronization.md#locks-mutex-and-rwlock)). So nothing a closure began on one thread is left for another.
 
 **Writing a shared place from a parallel loop's body is a type error:**

@@ -17,7 +17,7 @@ let pickMax: (Int, Int) -> Int = max            // a named function to a functio
 
 **An implicit conversion makes a value of the type its context expects, with no conversion written.** Numbers widen along their fixed order ([04](../04-types/numbers-and-math.md#conversions)). Otherwise there are nine kinds of implicit conversion, each decided by the expected type alone, so type checking stays local ([11](../11-compilation-model.md#type-checking-is-local)). All are free except two: moving a closure into a `Closure`, which may allocate, and an error's `@converts` initializer, which runs. The nine are:
 
-- **A place to a shared reference to it.** Where a `&T` is expected, a place whose own type doesn't fit is lent shared, as `&` written before it would lend it ([below](#places-lent-where-a-reference-is-expected)).
+- **A place to a shared reference to it.** A place given where a reference is expected, and whose own type doesn't fit, is lent shared, as `&` written before it would lend it ([below](#places-lent-where-a-reference-is-expected)).
 - **`T` → `T?` and `T` → `T!E`.** Where a `U?` or a `U!E` is expected, a value that converts to `U` (below) converts and is then wrapped, as `.some` or `.success`, in the same local step, as a named `@c func` passed for a nullable C callback is. It takes the value ([01](../01-values-and-ownership/bindings.md#conversions)). So `return v` in a function that can fail returns `.success(v)` ([10](../10-errors-and-safety/typed-errors.md#propagating-errors-with-try)). No conversion goes the other way: a `Result` value gives up its success value only to `try` or a `.success` pattern. A call or an `await` that can't fail has its success type to begin with ([10](../10-errors-and-safety/typed-errors.md#what-a-failure-type-names)).
 - **References to existentials** ([`any P`: explicit dynamic dispatch](protocols-and-generics.md#any-p-explicit-dynamic-dispatch)):
     - A `&T`, for a `T` that meets every protocol of the composition, converts to a `&any P`, and a `mutable &T` to a `mutable &any P`. The new reference refers to the same place, and borrows it as the first one did ([01](../01-values-and-ownership/bindings.md#conversions)).
@@ -64,15 +64,24 @@ lines.append(name)                // 'append' takes an Element, here a '&Text', 
 show(makeEnemy())                 // lends a temporary, which lives to the end of the statement
 ```
 
-**A `&T` is expected in these positions:**
+**A place is lent where a `&T` is expected, or an optional, a result or a static type of one**, such as `(&T)?`, `&T!E` or `static &[T]`. There the reference it makes is wrapped or made static in the same local step, as the conversions above do for any value. Such a type is expected in these positions:
 
-- an argument whose parameter's type is a `&T`, given to a function, a method, a subscript, an initializer or an enum case, so a struct's `&T` field takes one too;
-- the initializer of a `let` or `var` annotated with a `&T`;
-- the right side of `=`, where the place it assigns is of type `&T`;
-- an element of a tuple or array literal whose expected element type is a `&T`, as a `[&T]`'s is;
-- the operand of `return`, in a function whose result type is a `&T`.
+- an argument whose parameter's type is one, given to a function, a method, a subscript, an initializer or an enum case, so a struct's field of such a type takes one too;
+- the initializer of a `let` or `var` annotated with one;
+- the right side of `=`, where the place it assigns is of such a type;
+- an element of a tuple or array literal whose expected element type is one, as a `[&T]`'s is;
+- the operand of `return`, or a single-expression body, of a function, closure or `get` whose result type is one.
 
-A type parameter stands for a `&T` there once it is bound, as `List<&Text>`'s `Element` does for `append(name)` above.
+**A type parameter stands for a `&T` there when the receiver's type or the call's written generic arguments bind it**, as `List<&Text>`'s `Element` does for `append(name)` above. A type parameter that only the call's arguments bind is bound by a bare place to the place's own type (below), so the place isn't lent:
+
+```swift
+func push<T>(_ list: mutable &List<T>, _ x: T) { … }
+var picks = alloc List<&Enemy>()
+
+push(mutable &picks, boss)        // error: 'picks' binds T to '&Enemy', and 'boss' binds it to Enemy
+push(mutable &picks, &boss)       // T is '&Enemy', and 'boss' is lent
+picks.append(boss)                // the receiver binds Element to '&Enemy', so 'boss' is lent
+```
 
 **The conversion lends only a place whose own type doesn't fit.** A place whose type is the expected one, or converts to it implicitly, is given as it is. So a place that holds a `&Enemy`, given where a `&Enemy` is expected, passes a copy of its reference, since a shared reference is implicitly copyable ([01](../01-values-and-ownership/references.md#making-a-reference)).
 
@@ -80,7 +89,6 @@ A type parameter stands for a `&T` there once it is bound, as `List<&Text>`'s `E
 
 - a `Circle` place reaches a `&any Drawable` where `Circle` conforms to `Drawable`, as `seen` above does;
 - a `List<Int>` place reaches a `&[Int]`, and a `String` place a `&Text`;
-- where a `(&T)?` or a `&T!E` is expected, the reference is wrapped, as `T` → `T?` wraps any value;
 - a place that holds a `mutable &T` reborrows through it, as `&r` does, and a place that holds any reference is lent itself only where a reference to a reference is expected ([01](../01-values-and-ownership/references.md#reborrowing)).
 
 **A value that isn't a place converts the same way, lending a temporary**, as `&makeEnemy()` does ([01](../01-values-and-ownership/references.md#making-a-reference)). So `show(makeEnemy())` above lends an enemy that its statement then destroys, and `let top: &Enemy = makeEnemy()` is the compile error for a binding given a reference to a temporary ([01](../01-values-and-ownership/bindings.md#bindings-that-refer-to-a-place)).
@@ -88,10 +96,12 @@ A type parameter stands for a `&T` there once it is bound, as `List<&Text>`'s `E
 **The conversion has three limits, each where lending would hide what the code does:**
 
 - **It never lends for change.** A `mutable &T` is expected only where code may change the place, and `mutable &` is what shows a reader that it may. So a bare place given to a `mutable &T` parameter is a compile error that says to write `mutable &` ([01](../01-values-and-ownership/references.md#places-given-to-a-position)).
-- **It applies only where a `&T` is expected.** A `let` or `var` with no annotation, a `ref let`, and a loop's or a `when`'s subject expect no type, so each writes `&` to lend a place ([01](../01-values-and-ownership/bindings.md#bindings)). A function type is no reference either, so a closure in a place given where one is expected writes the mark its kind needs ([below](#function-values-of-closures-in-places)).
+- **It applies only where a reference is expected.** A `let` or `var` with no annotation, a `ref let`, and a loop's or a `when`'s subject expect no type, so each writes `&` to lend a place ([01](../01-values-and-ownership/bindings.md#bindings)). A function type is no reference either, so a closure in a place given where one is expected writes the mark its kind needs ([below](#function-values-of-closures-in-places)).
 - **It never moves or copies the place.** It makes the borrow `&p` makes, which the law of exclusivity checks as it checks any other, so `f(mutable &x, x)` is a compile error, as `f(mutable &x, &x)` is ([01](../01-values-and-ownership/exclusivity.md#the-law-of-exclusivity)).
 
-**A bare place given for a parameter whose type is a type parameter binds the type parameter to the place's own type**, since nothing expects a `&T` until the type parameter is bound. A `some P` parameter counts, since it is an anonymous type parameter ([Protocols and generics](protocols-and-generics.md#protocols-and-generics)). Such a parameter owns its argument, so the place writes `consume` or `copy`, unless its type is implicitly copyable. Written with `&`, the place binds the type parameter to a reference. A parameter that is a reference to a type parameter, such as `&T` or `&some P`, expects a reference, so a bare place given to it is lent, and binds the type parameter to the place's type:
+**A bare place given for a parameter whose type is a type parameter binds the type parameter to the place's own type**, since nothing expects a `&T` until the type parameter is bound. A `some P` parameter counts, since it is an anonymous type parameter ([Protocols and generics](protocols-and-generics.md#protocols-and-generics)). Such a parameter owns its argument, so the place writes `consume` or `copy`, unless its type is implicitly copyable. Written with `&`, the place binds the type parameter to a reference.
+
+**A parameter that is a reference to a type parameter, such as `&T` or `&some P`, expects a reference.** So a bare place given to it is lent, binding the type parameter to the place's type, unless its own type already fits, as a place that holds a `&Stats` does, binding `T` to `Stats` ([above](#places-lent-where-a-reference-is-expected)):
 
 ```swift
 func remember<T>(_ x: T) { … }                       // owns its argument
@@ -105,7 +115,7 @@ print(name)                       // the parameter is a reference, so 'name' is 
 let best = largest(scores)        // the parameter is a reference, so 'scores' is lent, binding T to Int
 ```
 
-**Among overloads, the one that takes each argument as written wins over one this conversion lends it to** ([Functions and closures](functions-and-closures.md#functions-and-closures)).
+[Functions and closures](functions-and-closures.md#functions-and-closures) says how overloads that differ in whether they take an argument by reference choose between them.
 
 ## Conversions through a mutable reference
 

@@ -80,10 +80,10 @@ target.hp = 0
 
 **A `let` or `var` declaration owns the value it holds**, as a binding of a call's result does, and a reference is a value like any other. So it can move its value on, and a `let` still can't change it. A condition's `let` or `var` owns an optional's payload by the same rules ([below](#conditions)).
 
-- **A `let` or `var` given a place writes a mark before it** ([above](#bindings)). Leaving it out is a compile error that names the marks that fit, since the place's value already has an owner, unless the binding's annotation is a `&T`, which lends the place ([05](../05-protocols-generics-and-closures/implicit-conversions.md#places-lent-where-a-reference-is-expected)). That holds as well for an expression the initializer hands its position to: the last expression of an `if` or `when` arm or of an `unsafe` block ([below](#if-and-when-as-values)), or an operand of `??` ([04](../04-types/enums.md#optionals)).
+- **A `let` or `var` given a place writes a mark before it** ([above](#bindings)). Leaving it out is a compile error that names the marks that fit, since the place's value already has an owner. An annotation that is a `&T`, or an optional, a result or a static type of one, is the exception, and lends the place ([05](../05-protocols-generics-and-closures/implicit-conversions.md#places-lent-where-a-reference-is-expected)). That holds as well for an expression the initializer hands its position to: the last expression of an `if` or `when` arm or of an `unsafe` block ([below](#if-and-when-as-values)), or an operand of `??` ([04](../04-types/enums.md#optionals)).
 - **A `let` or `var` given `&p` or `mutable &p` holds the reference**, which borrows `p` as its kind says until the binding's last use ([References](references.md#making-a-reference)).
 - **Writing through a reference that a `let` or `var` holds follows the rule for writing through any reference**, which only a `var` holding a `mutable &T` meets ([References](references.md#forwarding-through-a-reference)).
-- **An assignment from a place writes a mark**, as every position does, unless it assigns a place of type `&T`, which lends it ([Moves](moves-copies-destruction.md#moves)).
+- **An assignment from a place writes a mark**, as every position does, unless the place it assigns holds a `&T`, or an optional, a result or a static type of one, which lends it ([Moves](moves-copies-destruction.md#moves), [05](../05-protocols-generics-and-closures/implicit-conversions.md#places-lent-where-a-reference-is-expected)).
 
 **Assigning to a `var` that holds a reference points it elsewhere.** `best = e` makes `best` refer to `e`, and the place it referred to is free once nothing else depends on it. What the `var` depends on from then on follows the dependency rules ([02](../02-views-and-dependencies.md#dependencies)):
 
@@ -250,7 +250,7 @@ when &state {
 
 ### `for` and `when` names
 
-**A `for` name and a `when` payload name are bare, and what each one is follows from the subject.** A loop or a match binds all its names from one subject, so the subject says once what they all are. A subject is `&s`, `mutable &s`, `consume s`, or a value, such as a call's result or a range. A bare place is a compile error, unless its type is implicitly copyable, in which case the loop or the `when` takes a copy, since a subject expects no type that would lend it ([References](references.md#places-given-to-a-position)).
+**A `for` name and a `when` payload name are bare, and what each one is follows from the subject.** A loop or a match binds all its names from one subject, so the subject says once what they all are. A subject is `&s`, `mutable &s`, `consume s`, or a value, such as a call's result or a range. A bare place is a compile error, unless its type is implicitly copyable, in which case the loop or the `when` takes a copy ([References](references.md#places-given-to-a-position), [05](../05-protocols-generics-and-closures/implicit-conversions.md#places-lent-where-a-reference-is-expected)).
 
 | Subject | Each name |
 | --- | --- |
@@ -368,7 +368,8 @@ The hidden local is declared where the binding is, and destroyed with it if its 
 **A converted value is a new value.** When a binding's declared type differs from its initializer's, the conversion says what it does with a place ([05](../05-protocols-generics-and-closures/implicit-conversions.md#implicit-conversions)):
 
 - **A numeric widening, and a copyable value's conversion to or from its [static type](../02-views-and-dependencies/scoped-values.md#converting-to-and-from-a-static-type), read the place** and make a new value, which the binding owns. A move-only value's conversion to or from its static type takes it, as the conversions below do.
-- **These conversions take the value**, so a place given to them writes `consume` or `copy` before it, as every position does. A place of an implicitly copyable type is copied instead, as `h` is below ([Implicit copies](moves-copies-destruction.md#implicit-copies)):
+- **A place given where a reference is expected is lent**, and the binding holds the reference, as `all` below holds one to the elements of `enemies` ([05](../05-protocols-generics-and-closures/implicit-conversions.md#places-lent-where-a-reference-is-expected)). The conversions below then apply to that reference, never to the place.
+- **These conversions take the value**, so a place given to them writes `consume` or `copy` before it, as every position does. A place of an implicitly copyable type is copied, as `h` is below ([Implicit copies](moves-copies-destruction.md#implicit-copies)). A place lent where a `(&T)?` is expected is the exception: wrapping takes the reference the lend makes, and the place is only borrowed. The conversions that take the value are:
     - wrapping it in an optional or an error union, or as a `Result`'s `.success`;
     - making a `Box<T>` or an object pointer into one of an existential;
     - moving a closure into a `Closure`.

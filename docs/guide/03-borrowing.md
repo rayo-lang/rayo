@@ -169,7 +169,7 @@ ref var first = &hits[0]            // error: write 'mutable &hits[0]'
 ref let first = mutable &hits[0]    // error: 'mutable &' lends for change; declare 'ref var'
 ```
 
-Every borrow that changes a value says so with `mutable &`, in a declaration as at a call. A `ref let` changes nothing, so it takes `&`. A declaration has no parameter type to say that it borrows, so the `&` is written there, and `ref let first = hits[0]` is an error that asks for it.
+Every borrow that changes a value says so with `mutable &`, in a declaration as at a call. A `ref let` changes nothing, so it takes `&`. A `ref let`, like a `let` with no type written, has no type to say that it borrows, so the `&` is written there, and `ref let first = hits[0]` is an error that asks for it.
 
 A `var` that holds a reference is different from a `ref var`: it is a variable of its own, so assigning it a new reference points it somewhere else ([01](../spec/01-values-and-ownership/bindings.md#bindings-that-own-a-value)):
 

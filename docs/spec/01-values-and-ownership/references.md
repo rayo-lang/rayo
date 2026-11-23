@@ -137,12 +137,12 @@ let run: [Int] = hits.span          // error: '[Int]' is unsized; declare 'run' 
 - `consume p` moves its value out ([Moving values out](moving-values-out.md#moving-values-out));
 - `copy p` makes a second value ([Copies](moves-copies-destruction.md#copies)).
 
-**A bare place is taken in one of two ways, which the type the position expects decides:**
+**A bare place is taken in one of two ways:**
 
-- **Where a `&T` is expected, it is lent shared**, as `&p` would lend it, unless its own type fits ([05](../05-protocols-generics-and-closures/implicit-conversions.md#places-lent-where-a-reference-is-expected)). So a `&T` parameter takes `boss` or `&boss` alike.
-- **A place of an implicitly copyable type is copied** with nothing written ([Implicit copies](moves-copies-destruction.md#implicit-copies)).
+- **Where a `&T` is expected, it is lent shared**, as `&p` would lend it, unless its own type fits ([05](../05-protocols-generics-and-closures/implicit-conversions.md#places-lent-where-a-reference-is-expected)). So a `&T` parameter takes `boss` or `&boss` alike, and a place of an implicitly copyable type is lent there too, not copied.
+- **Anywhere else, a place of an implicitly copyable type is copied** with nothing written, as its own type decides ([Implicit copies](moves-copies-destruction.md#implicit-copies)).
 
-**Any other bare place is a compile error that names the marks that fit**, except in the cases [below](#unmarked-places). To lend a place where no `&T` is expected, code writes `&`, as a `let` or `var` with no `&T` annotation, a `ref let`, and a loop's or a `when`'s subject do ([Bindings](bindings.md#bindings)). The last expression of an `if` or `when` arm or of an `unsafe` block stands in its position, and writes its mark there, as does each operand of `??` ([Bindings](bindings.md#if-and-when-as-values)).
+**Any other bare place is a compile error that names the marks that fit**, except in the cases [below](#unmarked-places). Where no `&T` is expected, code writes `&` to lend a place ([05](../05-protocols-generics-and-closures/implicit-conversions.md#places-lent-where-a-reference-is-expected)). The last expression of an `if` or `when` arm or of an `unsafe` block stands in its position, and writes its mark there, as does each operand of `??` ([Bindings](bindings.md#if-and-when-as-values)).
 
 **The value a position takes has the type it expects, so a mark that doesn't fit is a compile error.** A `&T` parameter takes a shared reference, a `mutable &T` parameter a mutable one, and a `T` parameter a `T` ([Parameters](parameters.md#parameters)). So `&boss` given to an owning parameter is a compile error, and so is a bare `boss` given to a `mutable &T` one, since a borrow for change is always written. A value given to a `&T` parameter is lent as a temporary, as `&makeEnemy()` lends one ([above](#making-a-reference)):
 

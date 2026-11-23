@@ -77,7 +77,7 @@ let label = when &hit {
 }
 ```
 
-**A `when`'s subject writes its mark, since it expects no type that would lend it**: `when &e`, `when mutable &e`, `when consume e`, or a value, such as a call's result ([01](../01-values-and-ownership/bindings.md#for-and-when-names)).
+**A `when`'s subject writes its mark, as a loop's does**: `when &e`, `when mutable &e`, `when consume e`, or a value, such as a call's result ([01](../01-values-and-ownership/bindings.md#for-and-when-names)).
 
 **The subject holds still while arms are tested.** A `when` borrows its subject from when it is evaluated until an arm is chosen: shared, or exclusively when it is marked `mutable &`. It holds a dynamic place's access as any borrow does ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-6-dynamic-accesses)). Patterns and guards run under that borrow, so a guard sees the value its arm then binds. A guard can't change or consume the subject, every part is a shared view inside a guard, and a part of a consumed subject, or of any value subject, takes its value only once its arm is chosen ([01](../01-values-and-ownership/bindings.md#for-and-when-names)).
 

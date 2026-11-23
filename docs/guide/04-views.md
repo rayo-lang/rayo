@@ -45,7 +45,7 @@ The compiler never looked inside `splitLines`. Its signature alone tells the cal
 - `[T]`, a run of elements, such as the hits in a list;
 - `Text`, a run of UTF-8 text, such as the characters in a string.
 
-**A reference to either holds an address and a count.** A `&[T]` reads the elements and a `mutable &[T]` can also change them, and a `&Text` reads the text:
+**A reference to either holds an address and a count.** A `&[T]` reads the elements and a `mutable &[T]` can also change them, and a `&Text` reads the text. A `&` type written on a `let` says that it borrows, as a parameter's type does, so the `let` borrows the place it is given with no mark written, while a `let` with no type writes `&`:
 
 ```swift
 let all: &[Int] = hits                   // the hit list's elements, read-only

@@ -33,7 +33,7 @@ func f<T>(_ x: T) { … }     // needs no conversion either, but declares T
 ```swift
 func g(_ x: Int) { … }      // g(a) calls this one: it takes 'a' as written
 func g(_ x: &Int) { … }     // g(&a) calls this one, since '&a' is a '&Int'
-func h(_ e: Enemy) { … }    // h(boss) calls this one, and is an error: write 'consume boss' or 'copy boss'
+func h(_ e: Enemy) { … }    // h(boss) calls this one, and is an error: write 'consume boss', 'copy boss' or '&boss'
 func h(_ e: &Enemy) { … }   // h(&boss) calls this one
 ```
 
