@@ -66,7 +66,7 @@ let all = consume enemies            // a move: 'enemies' can't be used until it
 
 **A place reached through a reference that a temporary holds lies outside the temporary**, as `rows()[0]` does where `rows()` returns a `&[Row]`. So does a place that a `where return outlives self` place property hands out from a temporary. So a `ref let` can name either, depending on what the temporary carries ([02](../02-views-and-dependencies/dependency-projection-and-results.md#temporaries)).
 
-**`ref var t = mutable r`, where `r` is a changeable place holding a `mutable &T`, reborrows through `r`** ([References](references.md#reborrowing)). `t` names what `r` refers to, and `r` stays borrowed exclusively while `t` is used, so it isn't moved. `ref let e = &r`, where `r` holds a `mutable &T`, reborrows it shared, and `ref let e = r`, where `r` holds a `&T`, names what `r` refers to with no mark ([References](references.md#unmarked-places)).
+**`ref var t = mutable r`, where `r` is a changeable place holding a `mutable &T`, reborrows through `r`** ([References](references.md#reborrowing)). `t` names what `r` refers to, and `r` stays borrowed exclusively while `t` is used, so it isn't moved. A `ref let` reborrows through a place that holds a reference as [References](references.md#unmarked-places) says.
 
 ```swift
 ref var lead = mutable enemies[0]
