@@ -1,6 +1,6 @@
 /// Where a built-in's name lives in the prelude.
 package enum BuiltinName: Hashable {
-    /// A free function of the prelude, such as `print(_: Int)`.
+    /// A free function of the prelude, such as `print(_: &Int)`.
     case function(String)
     /// An initializer of a prelude type, such as `Int(_: Float)`.
     case initializer(of: RayoType)

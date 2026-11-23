@@ -162,7 +162,9 @@ private let replacingOneArray = """
     bb3:
       retire %1
       retire %2
-      _ = call builtin "print(_: Int)"(read %0[2] @16:11-16:15) @16:5-16:16
+      begin a4 read %0[2] @16:11-16:15
+      _ = call builtin "print(_: &Int)"(a4) @16:5-16:16
+      end a4
       retire %0
       return
     }
@@ -218,13 +220,13 @@ private let passingOwnedCopies = """
       %0 @1:1-1:2 = fill 100000 of 1 @1:1-1:2
       declare %1
       %1 @1:1-1:2 = call "bumpedSum(_: [100000 of Int], _: UInt)"(read %0 @1:1-1:2, UInt 3) @1:1-1:2
-      \(printInt("%1"))
+      \(printInt("%1", through: 0))
       retire %1
       declare %2
       %2 @1:1-1:2 = call "bumpedSum(_: [100000 of Int], _: UInt)"(read %0 @1:1-1:2, UInt 5) @1:1-1:2
-      \(printInt("%2"))
+      \(printInt("%2", through: 1))
       retire %2
-      \(printInt("%0[3]"))
+      \(printInt("%0[3]", through: 2))
       retire %0
       return
     }
@@ -316,16 +318,20 @@ private let summingTwoTemporaries = """
       %0 @16:11-16:25 = call "sum(_: &[100000 of Int])"(a0) @16:11-16:25
       end a0
       retire %1
-      _ = call builtin "print(_: Int)"(read %0 @16:11-16:25) @16:5-16:26
+      begin a1 read %0 @16:11-16:25
+      _ = call builtin "print(_: &Int)"(a1) @16:5-16:26
+      end a1
       retire %0
       declare %2
       declare %3
       %3 @17:15-17:24 = call "filled(_: UInt)"(UInt 5) @17:15-17:24
-      begin a1 read %3 @17:15-17:24
-      %2 @17:11-17:25 = call "sum(_: &[100000 of Int])"(a1) @17:11-17:25
-      end a1
+      begin a2 read %3 @17:15-17:24
+      %2 @17:11-17:25 = call "sum(_: &[100000 of Int])"(a2) @17:11-17:25
+      end a2
       retire %3
-      _ = call builtin "print(_: Int)"(read %2 @17:11-17:25) @17:5-17:26
+      begin a3 read %2 @17:11-17:25
+      _ = call builtin "print(_: &Int)"(a3) @17:5-17:26
+      end a3
       retire %2
       return
     }

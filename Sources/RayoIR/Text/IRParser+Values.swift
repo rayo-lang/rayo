@@ -123,7 +123,7 @@ extension IRParser {
         guard current.kind == .word("builtin") else { return .function(try functionReference()) }
         advance()
 
-        // A built-in is named as a call names it, such as `print(_: Int)`.
+        // A built-in is named as a call names it, such as `print(_: &Int)`.
         let token = current
         guard case .string(let name) = token.kind else { throw expected("a built-in's quoted name") }
         let builtin = Builtin.allCases.first { Callee.builtin($0).name(in: FunctionTable()) == name }

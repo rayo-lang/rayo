@@ -15,6 +15,8 @@ private let declarations = """
     func pair(_ n: &Int, with m: Int) {}
     func pass(_ e: &Enemy) { show(&e) }
     func passStats(_ e: &Enemy) { showStats(&e.stats) }
+    func relay(_ e: &Enemy) { show(e) }
+    func relayStats(_ e: &Enemy) { showStats(e.stats) }
     """
 
 /// The locals the tests' bodies start from.
@@ -53,7 +55,8 @@ struct ReferenceParameterTests {
         ("read(makeEnemy().stats.hp)", [10]), ("show(if c { makeEnemy() } else { copy e })", [17, 38]),
         ("show(if c { &e } else { makeEnemy() })", [29]), ("count(&e.slots.count)", [11]),
         ("count(if c { &i } else { &g[0].slots.count })", [30]), ("show(&makeEnemy())", [10]),
-        ("read(&makeEnemy().stats.hp)", [10]),
+        ("read(&makeEnemy().stats.hp)", [10]), ("print(&makeEnemy().stats.hp)", [11]),
+        ("print(&e.slots.count)", [11]),
     ])
     func `lending a value that no local or parameter holds to a '&T' parameter is reported as unsupported`(
         statement: String, columns: [Int],
@@ -64,18 +67,25 @@ struct ReferenceParameterTests {
     }
 
     @Test(arguments: [
-        ("show(e)", 10, "an Enemy", "e"), ("read(a)", 10, "an Int", "a"),
-        ("read(e.stats.hp)", 10, "an Int", "e.stats.hp"), ("show(g[i])", 10, "an Enemy", "g[i]"),
-        ("showStats(e.stats)", 15, "a Stats", "e.stats"), ("pair(a, with: a)", 10, "an Int", "a"),
-        ("show(if c { e } else { &g[0] })", 17, "an Enemy", "e"),
+        "show(e)", "read(a)", "read(e.stats.hp)", "show(g[i])", "showStats(e.stats)", "pair(a, with: a)",
+        "show(if c { e } else { &g[0] })", "relay(e)", "relayStats(e)",
     ])
-    func `a place given to a '&T' parameter without '&' names the place with '&'`(
-        statement: String, column: Int, type: String, place: String,
-    ) {
-        let callee = statement.prefix { $0 != "(" }
-        #expect(messages(of: statement) == [
-            "\(column): error[E0283]: '\(callee)' takes a reference to \(type); write '&\(place)'",
-        ])
+    func `a place given to a '&T' parameter without '&' is lent, as '&' lends it`(statement: String) {
+        #expect(messages(of: statement) == [])
+    }
+
+    // `print` is lent any bare value as a temporary, but a `&` of a temporary is unsupported.
+    @Test(arguments: [
+        "print(a)", "print(&a)", "print(e.stats.hp)", "print(&g[i].slots[0])", "print(i)", "print(c)", "print(1)",
+        "print(a + 1)", "print(copy a)", "print(makeEnemy().stats.hp)", "print(e.slots.count)",
+        "print(if c { a } else { 1 })", "print(UInt(a))",
+    ])
+    func `'print' is lent a place, and a value that no local holds written with no '&'`(statement: String) {
+        #expect(messages(of: statement) == [])
+    }
+
+    @Test func `a 'ref let' given to a '&T' parameter without '&' passes the place it refers to`() {
+        #expect(messages(of: "ref let s = &e.stats\n    showStats(s)\n    read(s.hp)") == [])
     }
 
     @Test(arguments: [("read(&c)", "10: error[E0213]: expected Int, found Bool"),
@@ -87,8 +97,8 @@ struct ReferenceParameterTests {
     }
 
     @Test(arguments: [
-        ("take(&a)", 10, "take", "an Int"), ("print(&a)", 11, "print", "an Int"),
-        ("_ = UInt(&a)", 14, "UInt", "an Int"), ("_ = Stats(hp: &a)", 19, "Stats", "an Int"),
+        ("take(&a)", 10, "take", "an Int"), ("_ = UInt(&a)", 14, "UInt", "an Int"),
+        ("_ = Stats(hp: &a)", 19, "Stats", "an Int"),
         ("take(if c { &a } else { 1 })", 17, "take", "an Int"),
         ("let s: [2 of Int] = .init(repeating: &a)", 42, ".init", "an Int"),
     ])

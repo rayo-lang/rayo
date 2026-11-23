@@ -92,7 +92,7 @@ struct IRTextTests {
               %0 @1:1-1:2 = operand 1 @1:1-1:2
               begin a0 read %0 @2:3-2:4
               begin a1 modify %0 @2:6-2:7
-              _ = call builtin "print(_: Int)"(a0, 2) @1:1-1:2
+              _ = call builtin "print(_: &Int)"(a0, 2) @1:1-1:2
               %1 @1:1-1:2 = operand 3 @1:1-1:2
               end a1
               end a0
@@ -123,11 +123,15 @@ struct IRTextTests {
             bb0:
               declare %0
               %0 @1:1-1:2 = operand 1 @1:1-1:2
-              _ = call builtin "print(_: Int)"(read %0 @1:1-1:2) @1:1-1:2
+              begin a0 read %0 @1:1-1:2
+              _ = call builtin "print(_: &Int)"(a0) @1:1-1:2
+              end a0
               retire %0
               declare %0
               %0 @1:1-1:2 = operand 2 @1:1-1:2
-              _ = call builtin "print(_: Int)"(read %0 @1:1-1:2) @1:1-1:2
+              begin a1 read %0 @1:1-1:2
+              _ = call builtin "print(_: &Int)"(a1) @1:1-1:2
+              end a1
               retire %0
               return
             }
@@ -138,8 +142,8 @@ struct IRTextTests {
 
         // Each retirement names the local it ends the life of.
         let statements = try #require(program.bodies[FunctionID(index: 0)]).blocks[0].statements
-        #expect(statements[3] == .retire(LocalID(index: 0)))
-        #expect(statements[7] == .retire(LocalID(index: 0)))
+        #expect(statements[5] == .retire(LocalID(index: 0)))
+        #expect(statements[11] == .retire(LocalID(index: 0)))
     }
 
     @Test func `a struct's 'var' and 'let' fields read back the same`() throws {

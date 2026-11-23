@@ -105,6 +105,11 @@ extension IfValue: WaitingValue {
         return !reached.isEmpty && reached.allSatisfy { $0.value?.lendsPlace ?? false }
     }
 
+    /// Whether any branch that runs to its end ends in a `&` of a place.
+    var mayLendPlace: Bool {
+        ends.contains { $0.isReached && ($0.value?.mayLendPlace ?? false) }
+    }
+
     func settled(toward type: RayoType?, by expressions: ExpressionChecker) -> CheckedExpr? {
         IfChecker(expressions: expressions).settled(self, toward: type, takenBy: nil)
     }

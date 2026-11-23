@@ -35,6 +35,12 @@ struct IllTypedIRTests {
         #expect(IRVerifier.verify(program, from: .lowering) == nil)
     }
 
+    // A constant has no place to begin an access to.
+    @Test func `a constant passed to a borrowed parameter has no violation`() throws {
+        let program = try IRParser.program(from: passing("", "1", to: "&Int"))
+        #expect(IRVerifier.verify(program, from: .lowering) == nil)
+    }
+
     @Test func `a retirement of a parameter, whose place the call keeps until it returns, is a violation`() throws {
         let program = try IRParser.program(from: main("bb0:\n  return", after: """
             func "f(_: Int)"(_: &Int) -> Void {
@@ -245,11 +251,12 @@ private let illTypedIR = [
         text: main("""
               temp %0: Bool
             bb0:
-              _ = call builtin "print(_: Int)"(read %0 @1:1-1:2) @1:1-1:2
+              begin a0 read %0 @1:1-1:2
+              _ = call builtin "print(_: &Int)"(a0) @1:1-1:2
               return
             """),
         function: "main()",
-        message: "the IR passes 'print(_: Int)' an argument of type Bool, where it takes Int",
+        message: "the IR passes 'print(_: &Int)' an argument of type Bool, where it takes Int",
     ),
     IllTypedIR(
         testDescription: "a call given an access to a place of a type its function doesn't take",
@@ -257,11 +264,11 @@ private let illTypedIR = [
               temp %0: Bool
             bb0:
               begin a0 read %0 @1:1-1:2
-              _ = call builtin "print(_: Int)"(a0) @1:1-1:2
+              _ = call builtin "print(_: &Int)"(a0) @1:1-1:2
               return
             """),
         function: "main()",
-        message: "the IR passes 'print(_: Int)' an argument of type Bool, where it takes Int",
+        message: "the IR passes 'print(_: &Int)' an argument of type Bool, where it takes Int",
     ),
     IllTypedIR(
         testDescription: "an access to a field that its place's value doesn't have",
@@ -276,21 +283,21 @@ private let illTypedIR = [
     ),
     IllTypedIR(
         testDescription: "a call of the Bool print given an Int",
-        text: main("bb0:\n  _ = call builtin \"print(_: Bool)\"(1) @1:1-1:2\n  return"),
+        text: main("bb0:\n  _ = call builtin \"print(_: &Bool)\"(1) @1:1-1:2\n  return"),
         function: "main()",
-        message: "the IR passes 'print(_: Bool)' an argument of type Int, where it takes Bool",
+        message: "the IR passes 'print(_: &Bool)' an argument of type Int, where it takes Bool",
     ),
     IllTypedIR(
         testDescription: "a call given too few arguments",
-        text: main("bb0:\n  _ = call builtin \"print(_: Int)\"() @1:1-1:2\n  return"),
+        text: main("bb0:\n  _ = call builtin \"print(_: &Int)\"() @1:1-1:2\n  return"),
         function: "main()",
-        message: "the IR passes 'print(_: Int)' 0 arguments, where it takes 1",
+        message: "the IR passes 'print(_: &Int)' 0 arguments, where it takes 1",
     ),
     IllTypedIR(
         testDescription: "a call given too many arguments",
-        text: main("bb0:\n  _ = call builtin \"print(_: Int)\"(1, 2) @1:1-1:2\n  return"),
+        text: main("bb0:\n  _ = call builtin \"print(_: &Int)\"(1, 2) @1:1-1:2\n  return"),
         function: "main()",
-        message: "the IR passes 'print(_: Int)' 2 arguments, where it takes 1",
+        message: "the IR passes 'print(_: &Int)' 2 arguments, where it takes 1",
     ),
     IllTypedIR(
         testDescription: "a call given one argument too few",
@@ -411,7 +418,7 @@ private let illTypedIR = [
         testDescription: "a call that passes an access to an owned parameter",
         text: passing("begin a0 read %0 @1:1-1:2", "a0", to: "Int"),
         function: "main()",
-        message: "the IR passes 'f(_: Int)' a read access, where it takes a value",
+        message: "the IR passes 'f(_: Int)' a read access, where it takes a constant or a value",
     ),
     IllTypedIR(
         testDescription: "a call that passes a value to a mutable parameter",
@@ -423,7 +430,19 @@ private let illTypedIR = [
         testDescription: "a call that passes a modify access to a borrowed parameter",
         text: passing("begin a0 modify %0 @1:1-1:2", "a0", to: "&Int"),
         function: "main()",
-        message: "the IR passes 'f(_: Int)' a modify access, where it takes a value or a read access",
+        message: "the IR passes 'f(_: Int)' a modify access, where it takes a constant or a read access",
+    ),
+    IllTypedIR(
+        testDescription: "a call that passes a place's value to a borrowed parameter, with no access to the place",
+        text: passing("", "read %0 @1:1-1:2", to: "&Int"),
+        function: "main()",
+        message: "the IR passes 'f(_: Int)' a value, where it takes a constant or a read access",
+    ),
+    IllTypedIR(
+        testDescription: "a call that moves a place's value into a borrowed parameter",
+        text: passing("", "move %0 @1:1-1:2", to: "&Int"),
+        function: "main()",
+        message: "the IR passes 'f(_: Int)' a value, where it takes a constant or a read access",
     ),
     IllTypedIR(
         testDescription: "a run that starts at a primary initializer",

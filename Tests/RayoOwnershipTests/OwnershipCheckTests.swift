@@ -11,7 +11,8 @@ struct OwnershipCheckTests {
         let blocks = """
             bb0:
               _ = operand move %0 @2:1-2:1 @1:1-1:1
-              _ = call builtin "print(_: Int)"(read %0 @2:2-2:2) @1:1-1:1
+              begin a0 read %0 @2:2-2:2
+              _ = call builtin "print(_: &Int)"(a0) @1:1-1:1
               return
             """
         #expect(try checked(takingInt(blocks)).errors == [Diagnostic(.moveFromParameter(name: "n"), at: at(1))])
@@ -23,7 +24,8 @@ struct OwnershipCheckTests {
               declare %2
               %2 @2:1-2:1 = operand 1 @1:1-1:1
               %2 @2:2-2:2 = operand 2 @1:1-1:1
-              _ = call builtin "print(_: Int)"(read %2 @2:3-2:3) @1:1-1:1
+              begin a0 read %2 @2:3-2:3
+              _ = call builtin "print(_: &Int)"(a0) @1:1-1:1
               return
             """
         #expect(try checked(function(blocks)).errors == [Diagnostic(.letAssignedTwice(name: "k"), at: at(2))])
@@ -162,7 +164,8 @@ private func longFunction(rounds: Int) -> (name: String, text: String) {
         bb0:
           %0 @1:1-1:1 = operand 0 @1:1-1:1
         \(statements.joined(separator: "\n"))
-          _ = call builtin "print(_: Int)"(read %0 @1:1-1:1) @1:1-1:1
+          begin a\(rounds) read %0 @1:1-1:1
+          _ = call builtin "print(_: &Int)"(a\(rounds)) @1:1-1:1
           return
         }
         """

@@ -8,8 +8,8 @@ struct PrintTests {
             main "main()"
             func "main()"() -> Void {
             bb0:
-              _ = call builtin "print(_: Int)"(42) @1:1-1:2
-              _ = call builtin "print(_: Int)"(-9223372036854775808) @1:1-1:2
+              _ = call builtin "print(_: &Int)"(42) @1:1-1:2
+              _ = call builtin "print(_: &Int)"(-9223372036854775808) @1:1-1:2
               return
             }
             """
@@ -21,8 +21,8 @@ struct PrintTests {
             main "main()"
             func "main()"() -> Void {
             bb0:
-              _ = call builtin "print(_: UInt)"(UInt 7) @1:1-1:2
-              _ = call builtin "print(_: UInt)"(UInt 18446744073709551615) @1:1-1:2
+              _ = call builtin "print(_: &UInt)"(UInt 7) @1:1-1:2
+              _ = call builtin "print(_: &UInt)"(UInt 18446744073709551615) @1:1-1:2
               return
             }
             """
@@ -34,8 +34,8 @@ struct PrintTests {
             main "main()"
             func "main()"() -> Void {
             bb0:
-              _ = call builtin "print(_: Bool)"(true) @1:1-1:2
-              _ = call builtin "print(_: Bool)"(false) @1:1-1:2
+              _ = call builtin "print(_: &Bool)"(true) @1:1-1:2
+              _ = call builtin "print(_: &Bool)"(false) @1:1-1:2
               return
             }
             """
@@ -57,8 +57,8 @@ struct ConversionTests {
               %0 @1:1-1:2 = operand UInt 7 @1:1-1:2
               %1 @1:1-1:2 = call builtin "Int(_: UInt)"(read %0 @1:1-1:2) @1:1-1:2
               %2 @1:1-1:2 = call builtin "UInt(_: Int)"(read %1 @1:1-1:2) @1:1-1:2
-              \(printInt("%1"))
-              \(printUInt("%2"))
+              \(printInt("%1", through: 0))
+              \(printUInt("%2", through: 1))
               return
             }
             """
@@ -74,7 +74,7 @@ struct ConversionTests {
             bb0:
               %0 @1:1-1:2 = operand -1 @1:1-1:2
               %1 @1:1-1:2 = call builtin "UInt(_: Int)"(read %0 @1:1-1:2) @3:9-3:20
-              \(printUInt("%1"))
+              \(printUInt("%1", through: 0))
               return
             }
             """
@@ -90,7 +90,7 @@ struct ConversionTests {
             bb0:
               %0 @1:1-1:2 = operand UInt 18446744073709551615 @1:1-1:2
               %1 @1:1-1:2 = call builtin "Int(_: UInt)"(read %0 @1:1-1:2) @3:9-3:20
-              \(printInt("%1"))
+              \(printInt("%1", through: 0))
               return
             }
             """

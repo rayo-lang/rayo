@@ -29,16 +29,16 @@ struct DataflowTests {
     ) throws {
         let blocks = """
             bb0:
-              \(printing(1))
+              \(reading(1))
               goto bb1
             bb1:
-              \(printing(2))
+              \(reading(2))
               branch true, bb2, bb3
             bb2:
-              \(printing(3))
+              \(reading(3))
               goto bb1
             bb3:
-              \(printing(4))
+              \(reading(4))
               return
             """
         let results = try solve(EvaluatedOperands(direction: direction), blocks)
@@ -48,10 +48,10 @@ struct DataflowTests {
     @Test func `going backward, a loop that no path leaves starts from the start state`() throws {
         let blocks = """
             bb0:
-              \(printing(1))
+              \(reading(1))
               goto bb1
             bb1:
-              \(printing(2))
+              \(reading(2))
               goto bb1
             """
         let results = try solve(EvaluatedOperands(direction: .backward), blocks)
@@ -67,10 +67,10 @@ struct DataflowTests {
     ) throws {
         let blocks = """
             bb0:
-              \(printing(1))
+              \(reading(1))
               return
             bb1:
-              \(printing(2))
+              \(reading(2))
               goto bb0
             """
         let results = try solve(EvaluatedOperands(direction: direction), blocks)
@@ -86,8 +86,8 @@ struct DataflowTests {
     ) throws {
         let blocks = """
             bb0:
-              \(printing(1))
-              \(printing(2))
+              \(reading(1))
+              \(reading(2))
               return read %0 @2:3-2:3
             """
         let results = try solve(EvaluatedOperands(direction: direction), blocks, result: "Int")
@@ -102,12 +102,12 @@ struct DataflowTests {
         await #expect(processExitsWith: .failure) {
             let blocks = """
                 bb0:
-                  \(printing(1))
+                  \(reading(1))
                   goto bb1
                 bb1:
                   branch true, bb2, bb3
                 bb2:
-                  \(printing(2))
+                  \(reading(2))
                   goto bb1
                 bb3:
                   return
@@ -118,25 +118,25 @@ struct DataflowTests {
 }
 
 /// Blocks that branch from the first to the second or the third, both of which go on to the fourth, which returns `x`.
-/// Each block prints `x`, at the column of line 2 that is its number, and the return reads it at column 5.
+/// Block N reads `x` at column N of line 2, and the return at column 5.
 private let diamond = """
     bb0:
-      \(printing(1))
+      \(reading(1))
       branch true, bb1, bb2
     bb1:
-      \(printing(2))
+      \(reading(2))
       goto bb3
     bb2:
-      \(printing(3))
+      \(reading(3))
       goto bb3
     bb3:
-      \(printing(4))
+      \(reading(4))
       return read %0 @2:5-2:5
     """
 
-/// Prints `x`, which the source names at `column` of line 2.
-private func printing(_ column: Int) -> String {
-    "_ = call builtin \"print(_: Int)\"(read %0 @2:\(column)-2:\(column)) @1:1-1:1"
+/// Reads `x` at `column` of line 2, and drops its value.
+private func reading(_ column: Int) -> String {
+    "_ = operand read %0 @2:\(column)-2:\(column) @1:1-1:1"
 }
 
 /// The source columns of the operands that a function may evaluate before a point going forward, or after it going

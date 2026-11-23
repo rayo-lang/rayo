@@ -12,7 +12,9 @@ struct StackSafetyTests {
               temp %0: Int
             bb0:
               %0 @1:1-1:2 = call "answer()"() @1:1-1:2
-              _ = call builtin "print(_: Int)"(read %0 @1:1-1:2) @1:1-1:2
+              begin a0 read %0 @1:1-1:2
+              _ = call builtin "print(_: &Int)"(a0) @1:1-1:2
+              end a0
               return
             }
             func "answer()"() -> Int {
@@ -50,7 +52,7 @@ struct StackSafetyTests {
               var %0 a: [4000000 of Int] @1:1-1:1
             bb0:
               %0 @1:1-1:2 = fill 4000000 of 1 @1:1-1:2
-              \(printInt("%0[3999999]"))
+              \(printInt("%0[3999999]", through: 0))
               return
             }
             """)
@@ -103,9 +105,9 @@ struct StackSafetyTests {
           %0 @1:1-1:2 = fill 268435455 of 1 @1:1-1:2
           %1 @1:1-1:2 = fill 268435455 of 2 @1:1-1:2
           %2 @1:1-1:2 = fill 268435455 of 3 @1:1-1:2
-          \(printInt("%0[268435454]"))
-          \(printInt("%1[0]"))
-          \(printInt("%2[0]"))
+          \(printInt("%0[268435454]", through: 0))
+          \(printInt("%1[0]", through: 1))
+          \(printInt("%2[0]", through: 2))
           return
         }
         """

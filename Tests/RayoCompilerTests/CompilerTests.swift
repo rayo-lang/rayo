@@ -63,7 +63,7 @@ struct CompilerTests {
 
             func "main()"() -> Void {
             bb0:
-              _ = call builtin "print(_: Int)"(1) @2:5-2:13
+              _ = call builtin "print(_: &Int)"(1) @2:5-2:13
               return
             }
 
@@ -105,8 +105,9 @@ struct CompilerTests {
 
             func "main()"() -> Void {
               expression
-                call builtin "print(_: Int)": Void @2:5-2:13
-                  integer 1: Int @2:11-2:12
+                call builtin "print(_: &Int)": Void @2:5-2:13
+                  &
+                    integer 1: Int @2:11-2:12
             }
 
             """))

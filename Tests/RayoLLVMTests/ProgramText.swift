@@ -20,17 +20,23 @@ let programStructs = """
 
     """
 
-/// The IR statement that prints the Int that `place` holds, such as `%0.1`.
-func printInt(_ place: String) -> String {
-    #"_ = call builtin "print(_: Int)"(read \#(place) @1:1-1:2) @1:1-1:2"#
+/// The IR statements that print the Int that `place` holds, through an access no other statement begins.
+func printInt(_ place: String, through access: Int) -> String {
+    printStatements(of: "Int", at: place, through: access)
 }
 
-/// The IR statement that prints the UInt that `place` holds.
-func printUInt(_ place: String) -> String {
-    #"_ = call builtin "print(_: UInt)"(read \#(place) @1:1-1:2) @1:1-1:2"#
+/// The IR statements that print the UInt that `place` holds.
+func printUInt(_ place: String, through access: Int) -> String {
+    printStatements(of: "UInt", at: place, through: access)
 }
 
-/// The IR statement that prints the Bool that `place` holds.
-func printBool(_ place: String) -> String {
-    #"_ = call builtin "print(_: Bool)"(read \#(place) @1:1-1:2) @1:1-1:2"#
+/// The IR statements that print the Bool that `place` holds.
+func printBool(_ place: String, through access: Int) -> String {
+    printStatements(of: "Bool", at: place, through: access)
+}
+
+/// A print of `place` through a read access, begun before the call and ended after it, as the ownership stage gives it.
+private func printStatements(of type: String, at place: String, through access: Int) -> String {
+    let call = #"_ = call builtin "print(_: &\#(type))"(a\#(access)) @1:1-1:2"#
+    return "begin a\(access) read \(place) @1:1-1:2\n\(call)\nend a\(access)"
 }

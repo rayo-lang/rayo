@@ -15,8 +15,11 @@ protocol WaitingValue {
     /// Whether the value can settle to `type`, where `declarations` gives the members an implicit member names.
     func fits(_ type: RayoType, in declarations: Declarations) -> Bool
 
-    /// Whether the source writes the value as a `&` of a place, which a parameter that borrows its argument takes.
+    /// Whether the source writes the value as a `&` of a place.
     var lendsPlace: Bool { get }
+
+    /// Whether the value, or any branch of it that runs to its end, is written as a `&` of a place.
+    var mayLendPlace: Bool { get }
 
     /// Settles the value toward `type`: to `type` where it can, and otherwise as it would where its position gives
     /// no type. Reports what keeps it from settling, and returns nil then. An error that still leaves the value a
@@ -40,6 +43,8 @@ protocol WaitingValue {
 extension WaitingValue {
     /// No value but a `&` of a place, or an `if` whose branches end in one, is written as a `&`.
     var lendsPlace: Bool { false }
+
+    var mayLendPlace: Bool { lendsPlace }
 
     /// Reports the errors that settling the value where its position gives no type reports.
     func reportErrors(by expressions: ExpressionChecker) {

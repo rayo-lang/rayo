@@ -46,7 +46,8 @@ bb9:
   depend %2 on a0
   goto bb10
 bb10:
-  _ = call builtin "print(_: Int)"(read %2 @7:15-7:19) @7:9-7:20
+  begin a1 read %2 @7:15-7:19
+  _ = call builtin "print(_: &Int)"(a1) @7:9-7:20
   goto bb1
 bb11:
   goto bb10
@@ -87,7 +88,7 @@ func "pick(_: Bool)"(_: Bool) -> Int {
   param %0 c: Bool @14:13-14:14
   temp %1: Int
 bb0:
-  _ = call builtin "print(_: Int)"(0) @15:5-15:13
+  _ = call builtin "print(_: &Int)"(0) @15:5-15:13
   declare %1
   branch read %0 @16:13-16:14, bb1, bb2
 bb1:

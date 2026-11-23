@@ -40,12 +40,12 @@ struct BuiltinTests {
         #expect(declarations.functions(named: "Int").isEmpty)
     }
 
-    @Test func `'print' takes each scalar type`() {
+    @Test func `'print' borrows each scalar type`() {
         var declarations = Declarations(names: TopLevelNames(of: Parser.parse("").file))
         declarations.declarePrelude()
 
         let prints = declarations.functions(named: "print").map(\.description)
-        #expect(prints == ["print(_: Int)", "print(_: UInt)", "print(_: Bool)"])
+        #expect(prints == ["print(_: &Int)", "print(_: &UInt)", "print(_: &Bool)"])
     }
 
     @Test(arguments: ["func Int() {}", "struct Int"])

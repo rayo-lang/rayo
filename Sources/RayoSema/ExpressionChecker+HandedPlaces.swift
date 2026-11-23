@@ -14,12 +14,11 @@ extension ExpressionChecker {
         }
     }
 
-    /// Reports `value`, which the source writes without a `&`, where `recipient` takes a reference: a parameter that
-    /// borrows its argument, or a `ref let`. A value of any other recipient is written as it should be.
+    /// Reports `value`, written without a `&`, where `recipient` borrows it and can't take it so.
     func reportUnlent(_ value: CheckedExpr, to recipient: Recipient?) {
         switch recipient {
         case .parameter(let parameter)? where parameter.convention == .borrowed:
-            reportUnlent(value, to: parameter)
+            reportUnlendable(value, to: parameter)
         case .declaration(.refLet)?:
             reportUnreferenced(value)
         default:
@@ -27,20 +26,11 @@ extension ExpressionChecker {
         }
     }
 
-    /// Reports `value`, given to `parameter`, which borrows its argument, since a call lends such a parameter a place
-    /// with `&`. A place rooted in a local is reported with the `&` to write, even where its type is implicitly
-    /// copyable, since a copy is a value, and the parameter takes the place; the call still lends the place, so that
-    /// error leaves the body's meaning whole. Any other value, such as a call's result or a copy, is reported as
-    /// unsupported, since rayoc lends no value that no local holds.
-    private func reportUnlent(_ value: CheckedExpr, to parameter: ArgumentParameter) {
+    /// Reports a temporary given to a borrowing parameter that takes none.
+    private func reportUnlendable(_ value: CheckedExpr, to parameter: ArgumentParameter) {
         // A value that stands here is no `if`, since each branch of an `if` stands in its place on its own.
-        guard let handed = value.handedPlaces.first else {
-            file.errors.report(.unsupportedLentValue, at: value.range)
-            return
-        }
-        let code = ErrorCode.unlentPlace(name: parameter.callee, type: typeName(of: value.type),
-                                         place: sourceName(of: handed))
-        file.errors.reportKeepingMeaning(code, at: handed.place.range)
+        guard value.handedPlaces.isEmpty, !parameter.borrowsTemporaries else { return }
+        file.errors.report(.unsupportedLentValue, at: value.range)
     }
 
     /// Reports `value`, given to a `ref let`, which the source writes without a `&`. A place rooted in a local is
@@ -108,9 +98,8 @@ extension ExpressionChecker {
         }
     }
 
-    /// The place that `lent` lends, as a value of the type `expected` names, where a local holds it. A place in a
-    /// temporary, such as the one that holds `e.slots.count`, is reported as unsupported, since rayoc lends no value
-    /// that no local holds.
+    /// The place that `lent` lends, as a value of the type `expected` names, where a local holds it. A `&` of a
+    /// temporary is reported as unsupported.
     private func heldPlace(of lent: LentPlace, fitting expected: Expectation) -> CheckedExpr? {
         guard lent.place.local != nil else { return refused(.unsupportedLentValue, at: lent.range) }
         return typeFitted(lent.placeExpression, to: expected)

@@ -14,9 +14,11 @@ struct ElementTests {
             bb0:
               %0 @1:1-1:2 = array of Int(1, 2, 3) @1:1-1:2
               %1 @1:1-1:2 = operand UInt 3 @1:1-1:2
-              _ = call builtin "print(_: Int)"(1) @1:1-1:2
+              _ = call builtin "print(_: &Int)"(1) @1:1-1:2
               %2 @1:1-1:2 = index read %1 @1:1-1:2 below 3 @5:19-5:20
-              _ = call builtin "print(_: Int)"(read %0[%2] @1:1-1:2) @1:1-1:2
+              begin a0 read %0[%2] @1:1-1:2
+              _ = call builtin "print(_: &Int)"(a0) @1:1-1:2
+              end a0
               return
             }
             """
@@ -35,9 +37,9 @@ struct ElementTests {
               %0 @1:1-1:2 = array of Int(1, 2, 3) @1:1-1:2
               %1 @1:1-1:2 = operand UInt 2 @1:1-1:2
               %2 @1:1-1:2 = index read %1 @1:1-1:2 below 3 @1:1-1:2
-              \(printInt("%0[%2]"))
+              \(printInt("%0[%2]", through: 0))
               %0[%2] @1:1-1:2 = operand 9 @1:1-1:2
-              \(printInt("%0[2]"))
+              \(printInt("%0[2]", through: 1))
               return
             }
             """
@@ -62,11 +64,13 @@ struct ElementTests {
               %2 @1:1-1:2 = index UInt 1 below 2 @1:1-1:2
               %0[%2] @1:1-1:2 = operand 7 @1:1-1:2
               %0[%2] @1:1-1:2 = add checked read %0[%2] @1:1-1:2, 10 @1:1-1:2
-              %3 @1:1-1:2 = call "total(_: [2 of Int])"(read %0 @1:1-1:2) @1:1-1:2
-              \(printInt("%3"))
+              begin a0 read %0 @1:1-1:2
+              %3 @1:1-1:2 = call "total(_: [2 of Int])"(a0) @1:1-1:2
+              end a0
+              \(printInt("%3", through: 1))
               %1 @1:1-1:2 = operand move %0 @1:1-1:2 @1:1-1:2
-              \(printInt("%1[0]"))
-              \(printInt("%1[1]"))
+              \(printInt("%1[0]", through: 2))
+              \(printInt("%1[1]", through: 3))
               return
             }
             func "total(_: [2 of Int])"(_: &[2 of Int]) -> Int {
@@ -95,7 +99,7 @@ struct ElementTests {
               %1 @1:1-1:2 = operand UInt 3 @1:1-1:2
               %2 @1:1-1:2 = index read %1 @1:1-1:2 below 3 @4:5-4:6
               %0[%2] @1:1-1:2 = operand 9 @1:1-1:2
-              \(printInt("%0[0]"))
+              \(printInt("%0[0]", through: 0))
               return
             }
             """

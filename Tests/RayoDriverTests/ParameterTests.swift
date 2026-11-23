@@ -28,6 +28,80 @@ struct ParameterTests {
         #expect(run(source) == CommandResult(exitCode: 0, output: "11\n21\n", errors: ""))
     }
 
+    // An `if` that ends in a shared reference, or has a branch written `&`, reaches it too; a bare value doesn't.
+    @Test func `a place that holds a reference, given bare, reaches the function that borrows it`() {
+        let source = """
+            func main() {
+                let a = 1
+                let c = true
+                ref let r = &a
+                ref let s = &a
+                show(a)
+                show(r)
+                relay(a)
+                show(if c { r } else { s })
+                show(if c { r } else { a })
+                show(if c { a } else { &a })
+                show(if c { r } else { &a })
+            }
+            func relay(_ n: &Int) { show(n) }
+            func show(_ n: Int) { print(n + 10) }
+            func show(_ n: &Int) { print(n + 20) }
+            """
+        #expect(run(source) == CommandResult(exitCode: 0, output: "11\n21\n21\n21\n11\n21\n21\n", errors: ""))
+    }
+
+    @Test func `a place given to a '&T' parameter without '&' is lent, and stays its caller's`() {
+        let source = """
+            func main() {
+                var boss = Enemy(stats: Stats(hp: 7), slots: [1, 2])
+                show(boss)
+                boss.stats.hp = 9
+                show(boss)
+                print(total(boss.slots))
+            }
+            struct Enemy(var stats: Stats, var slots: [2 of Int])
+            struct Stats(var hp: Int)
+            func show(_ e: &Enemy) { print(hpOf(e.stats)) }
+            func hpOf(_ s: &Stats) -> Int { s.hp }
+            func total(_ a: &[2 of Int]) -> Int { a[0] + a[1] }
+            """
+        #expect(run(source) == CommandResult(exitCode: 0, output: "7\n9\n3\n", errors: ""))
+    }
+
+    @Test func `'print' is lent a place or a value that no local holds, and prints what it is lent`() {
+        let source = """
+            func main() {
+                let hp = 7
+                let e = Enemy(hp: 2)
+                let alive = true
+                print(hp)
+                print(&hp)
+                print(e.hp)
+                print(hitsToFell(e, by: 1))
+                print(Enemy(hp: 4).hp)
+                print(alive)
+                print(UInt(hp))
+            }
+            struct Enemy(var hp: Int)
+            func hitsToFell(_ e: &Enemy, by damage: Int) -> Int { e.hp / damage }
+            """
+        #expect(run(source) == CommandResult(exitCode: 0, output: "7\n7\n2\n2\n4\ntrue\n7\n", errors: ""))
+    }
+
+    @Test func `a bare argument that every overload borrows tells none of them apart`() {
+        let source = """
+            func main() {
+                let a = 1
+                show(a, a)
+                show(a, &a)
+            }
+            func show(_ n: &Int, _ m: Int) { print(n + m + 10) }
+            func show(_ n: &Int, _ m: &Int) { print(n + m + 20) }
+            """
+        #expect(run(source) == CommandResult(exitCode: 0, output: "12\n22\n", errors: ""))
+    }
+
     @Test("functions recurse, directly and through each other, in debug and in release",
           arguments: [["--debug"], ["--release"]])
     func recursion(mode: [String]) {

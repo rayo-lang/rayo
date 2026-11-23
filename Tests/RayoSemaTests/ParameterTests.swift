@@ -1,4 +1,5 @@
 import Testing
+import RayoCheckedProgram
 import RayoDiagnostics
 
 struct ParameterTests {
@@ -57,17 +58,16 @@ struct ParameterTests {
         ])
     }
 
-    // An argument written with a `&` reaches the function that borrows it, and one written without reaches the one
-    // that owns it. Where none takes an argument as it is written, the one its type fits reports how to write it.
-    // Where its type fits several, each of which takes each argument the same way, the argument reports what any of
-    // them would, and where they take the arguments in different ways, the call fits none of them as written.
+    // A `&` argument picks the borrowing overload, and a bare one the owning one. A bare argument that every
+    // candidate borrows counts as a `&`, since lending it tells none apart.
     @Test(arguments: [
-        ("f(&a)", [ErrorCode]()), ("f(a)", []), ("f(1)", []),
-        ("g(a)", [.unlentPlace(name: "g", type: "Int", place: "a")]),
+        ("f(&a)", [ErrorCode]()), ("f(a)", []), ("f(1)", []), ("g(a)", []), ("k(a, a)", []), ("k(a, &a)", []),
+        ("ref let r = &a\n    h(r)", []), ("f(if a > 0 { a } else { &a })", []),
         ("h(&a)", [.referenceToOwnedParameter(name: "h", type: "Int")]),
-        ("u(1)", [.unsupportedLentValue]),
-        ("v(1, 2)", [.noMatchingFunction(name: "v", arguments: "Int, Int")]),
-    ])
+        ("u(1)", [.ambiguousCall(name: "u")]), ("v(1, 2)", [.ambiguousCall(name: "v")]),
+        ("w(&a, &a)", [.noMatchingFunction(name: "w", arguments: "&Int, &Int")]),
+        ("g(&b)", [.noMatchingFunction(name: "g", arguments: "&UInt")]),
+    ] as [(String, [ErrorCode])])
     func `an overload is picked by how each argument is written, where its type fits several`(
         call: String, expected: [ErrorCode],
     ) {
@@ -82,8 +82,24 @@ struct ParameterTests {
             func u(_ x: &UInt) {}
             func v(_ x: &Int, _ y: Int) {}
             func v(_ x: UInt, _ y: &UInt) {}
+            func k(_ x: &Int, _ y: Int) {}
+            func k(_ x: &Int, _ y: &Int) {}
+            func w(_ x: Int, _ y: &Int) {}
+            func w(_ x: &Int, _ y: Int) {}
             """
-        #expect(errors("func main() {\n    let a = 1\n    \(call)\n}\n\(declarations)") == expected)
+        let locals = "let a = 1\n    let b: UInt = 1"
+        #expect(errors("func main() {\n    \(locals)\n    \(call)\n}\n\(declarations)") == expected)
+    }
+
+    // A bare `mutable &T` given to a `&T` reborrows, as `&r` does, so it isn't a shared reference.
+    @Test(arguments: [
+        (LocalKind.refLet, true), (.parameter(.borrowed), true), (.parameter(.mutable), false),
+        (.parameter(.owned), false), (.let, false), (.var, false),
+    ])
+    func `a 'ref let' and a parameter that borrows its argument hold a shared reference, and no other local does`(
+        kind: LocalKind, holdsSharedReference: Bool,
+    ) {
+        #expect(kind.holdsSharedReference == holdsSharedReference)
     }
 
     @Test("a function the file declares hides every prelude function of its name")

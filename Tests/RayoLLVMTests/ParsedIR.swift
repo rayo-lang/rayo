@@ -17,7 +17,9 @@ func printing(_ value: String) throws -> IRExecutable {
           temp %0: Int
         bb0:
           %0 @1:1-1:2 = \(value) @1:1-1:2
-          _ = call builtin "print(_: Int)"(read %0 @1:1-1:2) @1:1-1:2
+          begin a0 read %0 @1:1-1:2
+          _ = call builtin "print(_: &Int)"(a0) @1:1-1:2
+          end a0
           return
         }
         """)

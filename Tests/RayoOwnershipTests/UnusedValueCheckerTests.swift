@@ -16,7 +16,8 @@ struct UnusedValueCheckerTests {
             bb0:
               %0 @2:1-2:1 = operand 1 @1:1-1:1
               %0 @2:2-2:2 = operand 2 @1:1-1:1
-              _ = call builtin "print(_: Int)"(read %0 @2:3-2:3) @1:1-1:1
+              begin a0 read %0 @2:3-2:3
+              _ = call builtin "print(_: &Int)"(a0) @1:1-1:1
               return
             """
         #expect(try checked(function(blocks)).errors == [Diagnostic(.unreadValue(name: "x"), at: at(1))])
@@ -28,11 +29,12 @@ struct UnusedValueCheckerTests {
               %0 @2:1-2:1 = operand 1 @1:1-1:1
               branch true, bb1, bb2
             bb1:
-              _ = call builtin "print(_: Int)"(read %0 @2:2-2:2) @1:1-1:1
+              begin a0 read %0 @2:2-2:2
+              _ = call builtin "print(_: &Int)"(a0) @1:1-1:1
               goto bb2
             bb2:
               %0 @2:3-2:3 = operand 2 @1:1-1:1
-              _ = call builtin "print(_: Int)"(move %0 @2:4-2:4) @1:1-1:1
+              _ = operand move %0 @2:4-2:4 @1:1-1:1
               return
             """
         #expect(try checked(function(blocks)).errors == [])
@@ -79,7 +81,8 @@ struct UnusedValueCheckerTests {
               %0 @2:1-2:1 = operand 1 @1:1-1:1
               declare %0
               %0 @1:1-1:1 = operand 2 @1:1-1:1
-              _ = call builtin "print(_: Int)"(read %0 @2:2-2:2) @1:1-1:1
+              begin a0 read %0 @2:2-2:2
+              _ = call builtin "print(_: &Int)"(a0) @1:1-1:1
               return
             """
         #expect(try checked(function(blocks)).errors == [Diagnostic(.unreadValue(name: "x"), at: at(1))])
@@ -115,7 +118,8 @@ struct UnusedValueCheckerTests {
             \(storeShot(at: 1))
               %5.1.0 @2:2-2:2 = operand 9 @1:1-1:1
               _ = operand \(later) @1:1-1:1
-              _ = call builtin "print(_: Int)"(read %5.0 @2:4-2:4) @1:1-1:1
+              begin a0 read %5.0 @2:4-2:4
+              _ = call builtin "print(_: &Int)"(a0) @1:1-1:1
               return
             """
         #expect(try checked(function(blocks)).errors == expected)
@@ -127,8 +131,10 @@ struct UnusedValueCheckerTests {
             bb0:
             \(storeShot(at: 1))
               %5.0 @2:2-2:2 = operand 9 @1:1-1:1
-              _ = call builtin "print(_: Int)"(read %5.1.0 @2:3-2:3) @1:1-1:1
-              _ = call builtin "print(_: Int)"(read %5.0 @2:4-2:4) @1:1-1:1
+              begin a0 read %5.1.0 @2:3-2:3
+              _ = call builtin "print(_: &Int)"(a0) @1:1-1:1
+              begin a1 read %5.0 @2:4-2:4
+              _ = call builtin "print(_: &Int)"(a1) @1:1-1:1
               return
             """
         #expect(try checked(function(blocks)).errors == [])
@@ -159,7 +165,8 @@ struct UnusedValueCheckerTests {
             bb0:
             \(storeShot(at: 1))
               %5.0 @2:2-2:2 = operand 9 @1:1-1:1
-              _ = call builtin "print(_: Int)"(read %5.0 @2:3-2:3) @1:1-1:1
+              begin a0 read %5.0 @2:3-2:3
+              _ = call builtin "print(_: &Int)"(a0) @1:1-1:1
               return
             """
         #expect(try checked(function(blocks)).errors == [Diagnostic(.unreadValue(name: "s"), at: at(1))])
@@ -167,7 +174,7 @@ struct UnusedValueCheckerTests {
 
     @Test(arguments: [
         // A read of the other element reads what the array was filled with there, but not the store.
-        ([#"_ = call builtin "print(_: Int)"(read %7[1].0 @1:1-1:1) @1:1-1:1"#], "a[0]", 2),
+        (["_ = operand read %7[1].0 @1:1-1:1 @1:1-1:1"], "a[0]", 2),
         // A store to the same element replaces the first store's value before any code reads it.
         (
             [#"%7[0] @1:1-1:1 = call "Hit(damage: Int)"(4) @1:1-1:1"#, "_ = operand read %7 @1:1-1:1 @1:1-1:1"],
@@ -203,8 +210,10 @@ struct UnusedValueCheckerTests {
               %7 @2:1-2:1 = fill 2 of read %4 @1:1-1:1 @1:1-1:1
               %7[0] @2:2-2:2 = call "Hit(damage: Int)"(9) @1:1-1:1
               %7[0].0 @2:3-2:3 = add checked read %7[0].0 @1:1-1:1, 1 @1:1-1:1
-              _ = call builtin "print(_: Int)"(read %7[0].0 @1:1-1:1) @1:1-1:1
-              _ = call builtin "print(_: Int)"(read %7[1].0 @1:1-1:1) @1:1-1:1
+              begin a0 read %7[0].0 @1:1-1:1
+              _ = call builtin "print(_: &Int)"(a0) @1:1-1:1
+              begin a1 read %7[1].0 @1:1-1:1
+              _ = call builtin "print(_: &Int)"(a1) @1:1-1:1
               return
             """
         #expect(try checked(function(blocks)).errors == [])
@@ -215,7 +224,8 @@ struct UnusedValueCheckerTests {
         let blocks = """
             bb0:
               %0 @2:1-2:1 = operand 1 @1:1-1:1
-              _ = call builtin "print(_: Int)"(read %0 @1:1-1:1) @1:1-1:1
+              begin a0 read %0 @1:1-1:1
+              _ = call builtin "print(_: &Int)"(a0) @1:1-1:1
               %0 @2:2-2:2 = add checked read %0 @1:1-1:1, 1 @1:1-1:1
               return
             """
@@ -303,7 +313,8 @@ struct UnusedValueCheckerTests {
               %8 @1:1-1:1 = index UInt 0 below 2 @1:1-1:1
               %7[%8] @2:2-2:2 = call "Hit(damage: Int)"(9) @1:1-1:1
               %8 @1:1-1:1 = index UInt 1 below 2 @1:1-1:1
-              _ = call builtin "print(_: Int)"(read %7[%8].0 @2:3-2:3) @1:1-1:1
+              begin a0 read %7[%8].0 @2:3-2:3
+              _ = call builtin "print(_: &Int)"(a0) @1:1-1:1
               return
             """
         #expect(try checked(function(blocks)).errors == [])
@@ -324,7 +335,7 @@ struct UnusedValueCheckerTests {
     }
 
     @Test(arguments: [
-        (#"_ = call builtin "print(_: Int)"(read %0 @1:1-1:1) @1:1-1:1"#, [Diagnostic]()),
+        (#"begin a0 read %0 @1:1-1:1\#n  _ = call builtin "print(_: &Int)"(a0) @1:1-1:1"#, [Diagnostic]()),
         ("_ = operand 1 @1:1-1:1", [Diagnostic(.unreadParameter(name: "n"), at: at(1))]),
     ])
     func `an owned parameter that no code reads is reported where it is declared`(

@@ -16,9 +16,9 @@ struct ValueCopyTests {
               %1 @1:1-1:2 = operand read %0 @1:1-1:2 @1:1-1:2
               %2 @1:1-1:2 = operand move %1 @1:1-1:2 @1:1-1:2
               %3 @1:1-1:2 = operand true @1:1-1:2
-              \(printInt("%0"))
-              \(printInt("%2"))
-              \(printBool("%3"))
+              \(printInt("%0", through: 0))
+              \(printInt("%2", through: 1))
+              \(printBool("%3", through: 2))
               return
             }
             """
@@ -38,9 +38,9 @@ struct ValueCopyTests {
               %1 @1:1-1:2 = operand read %0 @1:1-1:2 @1:1-1:2
               %0.0 @1:1-1:2 = operand 9 @1:1-1:2
               %2 @1:1-1:2 = operand move %1 @1:1-1:2 @1:1-1:2
-              \(printInt("%0.0"))
-              \(printInt("%2.0"))
-              \(printInt("%2.1"))
+              \(printInt("%0.0", through: 0))
+              \(printInt("%2.0", through: 1))
+              \(printInt("%2.1", through: 2))
               return
             }
             """
@@ -60,10 +60,10 @@ struct ValueCopyTests {
               %1 @1:1-1:2 = operand read %0 @1:1-1:2 @1:1-1:2
               %0.1 @1:1-1:2 = operand 9 @1:1-1:2
               %2 @1:1-1:2 = operand move %1 @1:1-1:2 @1:1-1:2
-              \(printInt("%0.1"))
-              \(printInt("%2.0"))
-              \(printInt("%2.1"))
-              \(printBool("%2.2"))
+              \(printInt("%0.1", through: 0))
+              \(printInt("%2.0", through: 1))
+              \(printInt("%2.1", through: 2))
+              \(printBool("%2.2", through: 3))
               return
             }
             """
@@ -79,8 +79,8 @@ struct ValueCopyTests {
             bb0:
               %0.0 @1:1-1:2 = call "Pair(a: Int, b: Int)"(1, 2) @1:1-1:2
               %1 @1:1-1:2 = operand read %0.0 @1:1-1:2 @1:1-1:2
-              \(printInt("%1.0"))
-              \(printInt("%1.1"))
+              \(printInt("%1.0", through: 0))
+              \(printInt("%1.1", through: 1))
               return
             }
             """

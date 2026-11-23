@@ -13,10 +13,11 @@ func "main()"() -> Void {
     value: Int @4:17-4:19
       place %0 @4:18-4:19
   expression
-    call builtin "print(_: Int)": Void @5:5-5:17
-      binary add: Int @5:11-5:16
-        value: Int @5:11-5:12
-          place %1 @5:11-5:12
-        value: Int @5:15-5:16
-          place %2 @5:15-5:16
+    call builtin "print(_: &Int)": Void @5:5-5:17
+      &
+        binary add: Int @5:11-5:16
+          value: Int @5:11-5:12
+            place %1 @5:11-5:12
+          value: Int @5:15-5:16
+            place %2 @5:15-5:16
 }

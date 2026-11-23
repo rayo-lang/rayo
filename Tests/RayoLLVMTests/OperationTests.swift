@@ -12,7 +12,7 @@ struct UnaryOperationTests {
             bb0:
               %0 @1:1-1:2 = operand 5 @1:1-1:2
               %1 @1:1-1:2 = negate checked read %0 @1:1-1:2 @1:1-1:2
-              \(printInt("%1"))
+              \(printInt("%1", through: 0))
               return
             }
             """
@@ -29,7 +29,7 @@ struct UnaryOperationTests {
             bb0:
               %0 @1:1-1:2 = operand UInt 1 @1:1-1:2
               %1 @1:1-1:2 = negate wrapping read %0 @1:1-1:2 @1:1-1:2
-              \(printUInt("%1"))
+              \(printUInt("%1", through: 0))
               return
             }
             """
@@ -48,7 +48,7 @@ struct UnaryOperationTests {
             bb0:
               %0 @1:1-1:2 = operand UInt 1 @1:1-1:2
               %1 @1:1-1:2 = negate checked read %0 @1:1-1:2 @4:9-4:11
-              \(printUInt("%1"))
+              \(printUInt("%1", through: 0))
               return
             }
             """
@@ -69,8 +69,8 @@ struct UnaryOperationTests {
               %0 @1:1-1:2 = operand true @1:1-1:2
               %1 @1:1-1:2 = not read %0 @1:1-1:2 @1:1-1:2
               %2 @1:1-1:2 = not read %1 @1:1-1:2 @1:1-1:2
-              \(printBool("%1"))
-              \(printBool("%2"))
+              \(printBool("%1", through: 0))
+              \(printBool("%2", through: 1))
               return
             }
             """
@@ -91,8 +91,8 @@ struct BinaryOperationTests {
               %0 @1:1-1:2 = operand 7 @1:1-1:2
               %1 @1:1-1:2 = subtract checked read %0 @1:1-1:2, 10 @1:1-1:2
               %2 @1:1-1:2 = multiply checked read %1 @1:1-1:2, read %0 @1:1-1:2 @1:1-1:2
-              \(printInt("%1"))
-              \(printInt("%2"))
+              \(printInt("%1", through: 0))
+              \(printInt("%2", through: 1))
               return
             }
             """
@@ -113,8 +113,8 @@ struct BinaryOperationTests {
               %1 @1:1-1:2 = operand UInt 18446744073709551615 @1:1-1:2
               %2 @1:1-1:2 = less read %0 @1:1-1:2, 1 @1:1-1:2
               %3 @1:1-1:2 = less read %1 @1:1-1:2, UInt 1 @1:1-1:2
-              \(printBool("%2"))
-              \(printBool("%3"))
+              \(printBool("%2", through: 0))
+              \(printBool("%3", through: 1))
               return
             }
             """
@@ -129,9 +129,9 @@ struct BinaryOperationTests {
               temp %1: Int
             bb0:
               %0 @1:1-1:2 = operand 9223372036854775807 @1:1-1:2
-              \(printInt("%0"))
+              \(printInt("%0", through: 0))
               %1 @1:1-1:2 = add checked read %0 @1:1-1:2, 1 @6:11-6:16
-              \(printInt("%1"))
+              \(printInt("%1", through: 1))
               return
             }
             """
@@ -148,7 +148,7 @@ struct BinaryOperationTests {
             bb0:
               %0 @1:1-1:2 = operand 9223372036854775807 @1:1-1:2
               %1 @1:1-1:2 = add checked read %0 @1:1-1:2, 1 @6:11-6:16
-              \(printInt("%1"))
+              \(printInt("%1", through: 0))
               return
             }
             """
@@ -165,7 +165,7 @@ struct BinaryOperationTests {
             bb0:
               %0 @1:1-1:2 = operand 0 @1:1-1:2
               %1 @1:1-1:2 = divide checked 7, read %0 @1:1-1:2 @2:13-2:18
-              \(printInt("%1"))
+              \(printInt("%1", through: 0))
               return
             }
             """

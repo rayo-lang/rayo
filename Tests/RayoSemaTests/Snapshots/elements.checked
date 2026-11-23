@@ -21,12 +21,13 @@ func "main()"() -> Void {
   bind %1 @4:9-4:10
     integer 1: UInt @4:19-4:20
   expression
-    call builtin "print(_: Int)": Void @5:5-5:29
-      value: Int @5:11-5:28
-        place %0 @5:11-5:15 [of 2] @5:11-5:18 [of 1] @5:11-5:21 .0 @5:11-5:28
-          value: UInt @5:16-5:17
-            place %1 @5:16-5:17
-          integer 0: UInt @5:19-5:20
+    call builtin "print(_: &Int)": Void @5:5-5:29
+      &
+        value: Int @5:11-5:28
+          place %0 @5:11-5:15 [of 2] @5:11-5:18 [of 1] @5:11-5:21 .0 @5:11-5:28
+            value: UInt @5:16-5:17
+              place %1 @5:16-5:17
+            integer 0: UInt @5:19-5:20
   bind %2 @6:9-6:10
     copy: Hit @6:13-6:32
       place %0 @6:18-6:22 [of 2] @6:18-6:25 [of 1] @6:18-6:32
@@ -36,7 +37,8 @@ func "main()"() -> Void {
             place %1 @6:26-6:27
           integer 1: UInt @6:30-6:31
   expression
-    call builtin "print(_: Int)": Void @7:5-7:20
-      value: Int @7:11-7:19
-        place %2 @7:11-7:12 .0 @7:11-7:19
+    call builtin "print(_: &Int)": Void @7:5-7:20
+      &
+        value: Int @7:11-7:19
+          place %2 @7:11-7:12 .0 @7:11-7:19
 }

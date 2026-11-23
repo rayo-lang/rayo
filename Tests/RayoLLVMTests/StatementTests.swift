@@ -10,9 +10,9 @@ struct ComputeTests {
               var %0 x: Int @1:1-1:1
             bb0:
               %0 @1:1-1:2 = operand 5 @1:1-1:2
-              \(printInt("%0"))
+              \(printInt("%0", through: 0))
               %0 @1:1-1:2 = operand 6 @1:1-1:2
-              \(printInt("%0"))
+              \(printInt("%0", through: 1))
               return
             }
             """
@@ -27,8 +27,8 @@ struct ComputeTests {
             bb0:
               %0 @1:1-1:2 = call "Pair(a: Int, b: Int)"(1, 2) @1:1-1:2
               %0.1 @1:1-1:2 = operand 7 @1:1-1:2
-              \(printInt("%0.0"))
-              \(printInt("%0.1"))
+              \(printInt("%0.0", through: 0))
+              \(printInt("%0.1", through: 1))
               return
             }
             """
@@ -43,9 +43,9 @@ struct ComputeTests {
             bb0:
               %0 @1:1-1:2 = array of Int(1, 2, 3) @1:1-1:2
               %0[1] @1:1-1:2 = operand 9 @1:1-1:2
-              \(printInt("%0[0]"))
-              \(printInt("%0[1]"))
-              \(printInt("%0[2]"))
+              \(printInt("%0[0]", through: 0))
+              \(printInt("%0[1]", through: 1))
+              \(printInt("%0[2]", through: 2))
               return
             }
             """
@@ -62,9 +62,9 @@ struct ComputeTests {
               %0 @1:1-1:2 = array of Int(1, 2, 3) @1:1-1:2
               %1 @1:1-1:2 = index UInt 2 below 3 @1:1-1:2
               %0[%1] @1:1-1:2 = operand 9 @1:1-1:2
-              \(printInt("%0[0]"))
-              \(printInt("%0[1]"))
-              \(printInt("%0[2]"))
+              \(printInt("%0[0]", through: 0))
+              \(printInt("%0[1]", through: 1))
+              \(printInt("%0[2]", through: 2))
               return
             }
             """
@@ -82,10 +82,10 @@ struct ComputeTests {
               %0.1 @1:1-1:2 = array of Int(3, 4, 5) @1:1-1:2
               %0.0.1 @1:1-1:2 = operand 7 @1:1-1:2
               %0.1[2] @1:1-1:2 = operand 8 @1:1-1:2
-              \(printInt("%0.0.0"))
-              \(printInt("%0.0.1"))
-              \(printInt("%0.1[1]"))
-              \(printInt("%0.1[2]"))
+              \(printInt("%0.0.0", through: 0))
+              \(printInt("%0.0.1", through: 1))
+              \(printInt("%0.1[1]", through: 2))
+              \(printInt("%0.1[2]", through: 3))
               return
             }
             """
@@ -106,7 +106,7 @@ struct DroppedValueTests {
               _ = array of Int(read %0 @1:1-1:2, 6) @1:1-1:2
               _ = fill 2 of read %0 @1:1-1:2 @1:1-1:2
               _ = call "Pair(a: Int, b: Int)"(read %0 @1:1-1:2, 6) @1:1-1:2
-              \(printInt("%0"))
+              \(printInt("%0", through: 0))
               return
             }
             """
@@ -122,7 +122,7 @@ struct DroppedValueTests {
             bb0:
               %0 @1:1-1:2 = operand UInt 5 @1:1-1:2
               _ = index read %0 @1:1-1:2 below 3 @2:3-2:4
-              _ = call builtin "print(_: Int)"(1) @1:1-1:2
+              _ = call builtin "print(_: &Int)"(1) @1:1-1:2
               return
             }
             """
@@ -140,7 +140,7 @@ struct DroppedValueTests {
             bb0:
               %0 @1:1-1:2 = operand -1 @1:1-1:2
               _ = call builtin "UInt(_: Int)"(read %0 @1:1-1:2) @2:3-2:4
-              _ = call builtin "print(_: Int)"(1) @1:1-1:2
+              _ = call builtin "print(_: &Int)"(1) @1:1-1:2
               return
             }
             """
@@ -167,7 +167,7 @@ struct DroppedValueTests {
             bb0:
               %0 @1:1-1:2 = operand \(operand) @1:1-1:2
               _ = \(operation), read %0 @1:1-1:2 @3:7-3:12
-              _ = call builtin "print(_: Int)"(1) @1:1-1:2
+              _ = call builtin "print(_: &Int)"(1) @1:1-1:2
               return
             }
             """
@@ -185,7 +185,7 @@ struct OwnershipStatementTests {
             bb0:
               declare %0
               %0 @1:1-1:2 = operand 4 @1:1-1:2
-              \(printInt("%0"))
+              \(printInt("%0", through: 0))
               return
             }
             """
@@ -211,13 +211,13 @@ struct OwnershipStatementTests {
             func "show(_: &Int)"(_: &Int) -> Void {
               param %0 n: &Int @1:1-1:1
             bb0:
-              \(printInt("%0"))
+              \(printInt("%0", through: 2))
               return
             }
             func "change(_: mutable &Int)"(_: mutable &Int) -> Void {
               param %0 n: mutable &Int @1:1-1:1
             bb0:
-              \(printInt("%0"))
+              \(printInt("%0", through: 3))
               return
             }
             """

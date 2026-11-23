@@ -11,7 +11,7 @@ struct CallTests {
               temp %0: Int
             bb0:
               %0 @1:1-1:2 = call "double(_: Int)"(21) @1:1-1:2
-              \(printInt("%0"))
+              \(printInt("%0", through: 0))
               return
             }
             """
@@ -26,9 +26,11 @@ struct CallTests {
               temp %1: Pair
             bb0:
               %0 @1:1-1:2 = call "Pair(a: Int, b: Int)"(1, 2) @1:1-1:2
-              %1 @1:1-1:2 = call "swapped(_: Pair)"(read %0 @1:1-1:2) @1:1-1:2
-              \(printInt("%1.0"))
-              \(printInt("%1.1"))
+              begin a0 read %0 @1:1-1:2
+              %1 @1:1-1:2 = call "swapped(_: Pair)"(a0) @1:1-1:2
+              end a0
+              \(printInt("%1.0", through: 1))
+              \(printInt("%1.1", through: 2))
               return
             }
             """
@@ -42,35 +44,32 @@ struct CallTests {
               var %0 t: Trio @1:1-1:1
             bb0:
               %0 @1:1-1:2 = call "trio(_: Int)"(5) @1:1-1:2
-              \(printInt("%0.0"))
-              \(printInt("%0.1"))
-              \(printBool("%0.2"))
+              \(printInt("%0.0", through: 0))
+              \(printInt("%0.1", through: 1))
+              \(printBool("%0.2", through: 2))
               return
             }
             """
         #expect(try run(programStructs + text + functions) == .init(printed: "5\n6\ntrue\n"))
     }
 
-    @Test func `a large argument passes the place it is read from, and the place an access reaches`() throws {
+    @Test func `a large argument passes the place an access reaches`() throws {
         // `sum` reads the Trio's two Ints through the pointer it is passed.
         let text = """
             main "main()"
             func "main()"() -> Void {
               var %0 t: Trio @1:1-1:1
               temp %1: Int
-              temp %2: Int
             bb0:
               %0 @1:1-1:2 = call "Trio(a: Int, b: Int, c: Bool)"(3, 4, false) @1:1-1:2
-              %1 @1:1-1:2 = call "sum(_: Trio)"(read %0 @1:1-1:2) @1:1-1:2
               begin a0 read %0 @1:1-1:2
-              %2 @1:1-1:2 = call "sum(_: Trio)"(a0) @1:1-1:2
+              %1 @1:1-1:2 = call "sum(_: Trio)"(a0) @1:1-1:2
               end a0
-              \(printInt("%1"))
-              \(printInt("%2"))
+              \(printInt("%1", through: 1))
               return
             }
             """
-        #expect(try run(programStructs + text + functions) == .init(printed: "7\n7\n"))
+        #expect(try run(programStructs + text + functions) == .init(printed: "7\n"))
     }
 
     @Test(arguments: [Build.debug, .release])
@@ -85,10 +84,12 @@ struct CallTests {
               var %0 t: Trio @1:1-1:1
             bb0:
               %0 @1:1-1:2 = call "Trio(a: Int, b: Int, c: Bool)"(1, 2, true) @1:1-1:2
-              %0 @1:1-1:2 = call "swapped(_: Trio)"(read %0 @1:1-1:2) @1:1-1:2
-              \(printInt("%0.0"))
-              \(printInt("%0.1"))
-              \(printBool("%0.2"))
+              begin a0 read %0 @1:1-1:2
+              %0 @1:1-1:2 = call "swapped(_: Trio)"(a0) @1:1-1:2
+              end a0
+              \(printInt("%0.0", through: 1))
+              \(printInt("%0.1", through: 2))
+              \(printBool("%0.2", through: 3))
               return
             }
             """
@@ -119,7 +120,7 @@ struct CallTests {
           param %0 x: &Int @1:1-1:1
           temp %1: Int
         bb0:
-          \(printInt("%0"))
+          \(printInt("%0", through: 0))
           %1 @1:1-1:2 = add checked read %0 @1:1-1:2, read %0 @1:1-1:2 @1:1-1:2
           return read %1 @1:1-1:2
         }
@@ -165,9 +166,9 @@ struct InitializerCallTests {
               var %0 t: Trio @1:1-1:1
             bb0:
               %0 @1:1-1:2 = call "Trio(a: Int, b: Int, c: Bool)"(1, 2, true) @1:1-1:2
-              \(printInt("%0.0"))
-              \(printInt("%0.1"))
-              \(printBool("%0.2"))
+              \(printInt("%0.0", through: 0))
+              \(printInt("%0.1", through: 1))
+              \(printBool("%0.2", through: 2))
               return
             }
             """
@@ -190,10 +191,10 @@ struct InitializerCallTests {
               %0 @1:1-1:2 = call "Pair(a: Int, b: Int)"(read %0.1 @1:1-1:2, read %0.0 @1:1-1:2) @1:1-1:2
               %1 @1:1-1:2 = call "Trio(a: Int, b: Int, c: Bool)"(3, 4, true) @1:1-1:2
               %1 @1:1-1:2 = \(swapTrio) @1:1-1:2
-              \(printInt("%0.0"))
-              \(printInt("%0.1"))
-              \(printInt("%1.0"))
-              \(printInt("%1.1"))
+              \(printInt("%0.0", through: 0))
+              \(printInt("%0.1", through: 1))
+              \(printInt("%1.0", through: 2))
+              \(printInt("%1.1", through: 3))
               return
             }
             """
