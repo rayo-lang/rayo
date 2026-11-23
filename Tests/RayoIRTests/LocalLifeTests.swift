@@ -43,9 +43,9 @@ struct LocalLifeTests {
 
     @Test func `a block that no path reaches may use a retired local, since it never runs`() throws {
         let program = try IRParser.program(from: assigningThreeLocals("""
-              retire %0
               return
             bb1:
+              retire %0
               begin a0 read %0 @1:1-1:2
               _ = call builtin "print(_: &Int)"(a0) @1:1-1:2
               end a0
@@ -59,7 +59,7 @@ struct LocalLifeTests {
         let long = try IRParser.program(from: retiringLoops(400))
         #expect(IRVerifier.verify(long, from: .ownership) == nil)
 
-        // This check takes about nine times as long, and one that grows with the square up to sixty-four.
+        // Growth in line with the loops takes about eight times as long, and growth with their square up to sixty-four.
         let times = try fastestTimes(over: short, long, runs: 3, measuring: timeToCheckLocalLives)
         #expect(times.long < times.short * 24)
     }
@@ -163,6 +163,24 @@ private let retiredUses = [
               end a0
               retire %0
               goto bb1
+            """,
+        message: "the IR uses %0 at bb1, where it is retired",
+    ),
+    RetiredUse(
+        testDescription: "uses in two blocks, of which the earlier block's is named",
+        blocks: """
+              retire %0
+              branch true, bb1, bb2
+            bb1:
+              begin a0 read %0 @1:1-1:2
+              _ = call builtin "print(_: &Int)"(a0) @1:1-1:2
+              end a0
+              return
+            bb2:
+              begin a1 read %0 @1:1-1:2
+              _ = call builtin "print(_: &Int)"(a1) @1:1-1:2
+              end a1
+              return
             """,
         message: "the IR uses %0 at bb1, where it is retired",
     ),
