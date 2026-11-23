@@ -323,8 +323,7 @@ struct AccessExtentTests {
             """))
     }
 
-    @Test("solving the access states over eight times as many loops in a row reads under twenty-eight times as much")
-    func accessStatesGrowWithTheBody() throws {
+    @Test func `merges over eight times as many loops read under twenty-eight times as much`() throws {
         let short = try mergeReads(solving: loopingFunction(loops: 50))
         let long = try mergeReads(solving: loopingFunction(loops: 400))
 
@@ -338,18 +337,12 @@ struct AccessExtentTests {
 private func mergeReads(solving function: (name: String, text: String)) throws -> Int {
     let program = try program(of: [function] + callees, from: .lowering)
     let body = try #require(program.bodies[FunctionID(index: 0)])
-    let (dependencies, unbegun) = entryStates(of: body)
+    let (dependencies, unbegun) = AccessExtents.entryStates(of: body)
 
     let reads = ReadCount()
     _ = DataflowSolver.solve(from: CountingReads(dependencies, into: reads), through: body, knowing: ())
     _ = DataflowSolver.solve(from: CountingReads(unbegun, into: reads), through: body, knowing: ())
     return reads.count
-}
-
-/// The dependence and unbegun-access states on entry to `body`, as the exclusivity check starts them.
-private func entryStates(of body: IRBody) -> (DependencyState, UnbegunAccessState) {
-    let accessCount = body.begunAccesses.keys.max().map { $0.index + 1 } ?? 0
-    return (DependencyState(entering: body, accessCount: accessCount), UnbegunAccessState(accessCount: accessCount))
 }
 
 /// A count of what merges read; a class, since every copy of a state adds to one count.
@@ -383,15 +376,10 @@ private struct CountingReads<Inner: DataflowState>: DataflowState where Inner.Fu
     }
 }
 
-/// How much of the storage of `first` and `second`, two states of one type, a merge of them reads, summed over the
-/// collections the states hold.
-private func unsharedStorage<State>(of first: State, and second: State) -> Int {
-    let fields = zip(Mirror(reflecting: first).children, Mirror(reflecting: second).children)
-    return fields.reduce(0) { storage, pair in storage + unsharedStorage(of: pair.0.value, and: pair.1.value) }
-}
 
-/// How much of `first` and `second`, one field of two states, a merge reads: the slots of the persistent-array nodes
-/// the two don't share, or the entries of the larger dictionary or set.
+/// How much of `first` and `second`, two values of one type in two states, a merge reads: the slots of the
+/// persistent-array nodes the two don't share, the entries of the larger dictionary or set, or the sum of that over
+/// the fields of any other value.
 private func unsharedStorage(of first: Any, and second: Any) -> Int {
     switch (first, second) {
     case let (first as PersistentArray<Set<AccessID>>, second as PersistentArray<Set<AccessID>>):
@@ -401,6 +389,8 @@ private func unsharedStorage(of first: Any, and second: Any) -> Int {
     case let (first as any Collection, second as any Collection):
         max(first.count, second.count)
     default:
-        0
+        zip(Mirror(reflecting: first).children, Mirror(reflecting: second).children).reduce(0) { storage, fields in
+            storage + unsharedStorage(of: fields.0.value, and: fields.1.value)
+        }
     }
 }
