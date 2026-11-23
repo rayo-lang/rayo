@@ -29,11 +29,11 @@ public indirect enum ExprKind: Sendable {
     /// `consume place`: the value moved out of a local, or out of a part of one at any depth, which then holds no
     /// value until it is assigned again. `place` is a name, a member of a place, or an element of one.
     case consume(Expr)
-    /// `&place`: a shared reference to a local, or to a part of one at any depth, which borrows the place. `place` is
-    /// a postfix expression that starts from a name: a name, a call, or a member or an element of either.
+    /// `&place`: a shared reference to what `place` names, which borrows it. `place` is a postfix expression that
+    /// starts from a name: a name, a call, or a member or an element of either.
     case reference(Expr)
-    /// `mutable &place`: a mutable reference to a local, or to a part of one at any depth, which borrows the place
-    /// for change. `place` is written as a `&`'s is.
+    /// `mutable &place`: a mutable reference to what `place` names, which borrows it for change. `place` is written
+    /// as a `&`'s is.
     case mutableReference(Expr)
     /// An `if` whose value is that of the branch that runs.
     case `if`(IfExpr)
