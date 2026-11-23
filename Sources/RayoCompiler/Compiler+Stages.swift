@@ -100,9 +100,8 @@ extension Compiler {
         case (.debug, _):
             IRVerifier.verify(program, from: stage)
 
-        // The emitter finds an element at an index a local holds with no check of its own, and lets slots share memory
-        // outside their locals' lives, so every build checks the rules it takes as given in the IR it receives. It
-        // makes nothing of where an access ends, and lowering's IR never reaches it, so a release build checks neither.
+        // The emitter trusts its IR's types, blocks, indices and local lives, so every build checks those.
+        // It ignores where an access ends, and never receives lowering's IR, so a release build checks neither.
         case (.release, .ownership):
             IRVerifier.verifyEmitterRules(program)
         case (.release, .lowering):
