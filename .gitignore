@@ -9,3 +9,5 @@ __pycache__/
 # the package root, where none of them belongs.
 /*.ll
 /Info.plist
+# Benchmark baselines are measures of one machine, which each developer and CI job saves for itself.
+/Benchmarks/baselines/

@@ -1,7 +1,7 @@
 import RayoCheckedProgram
 
 /// The locals of a function that some path to a point retired, with no declaration after it to start them again.
-struct RetiredLocals: RetiredLocalSet {
+struct RetiredLocals: DataflowState {
     /// A bit for each local, indexed by `LocalID`, set where it is retired. Blocks change few words, so their states
     /// share the rest.
     private var words: PersistentArray<UInt64>

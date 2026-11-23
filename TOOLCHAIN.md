@@ -61,6 +61,32 @@ Only the directories that `scripts/check_imports.py` allows may import LLVM's C 
 python3 scripts/check_imports.py
 ```
 
+## Benchmark it
+
+The test targets hold functional tests only. How fast `rayoc` is, and how its cost grows with a function's length, is measured from outside by `Benchmarks/benchmark.py`, which builds a release `rayoc` and runs it as a user does. Run it from anywhere:
+
+```sh
+python3 Benchmarks/benchmark.py
+python3 Benchmarks/benchmark.py --filter check/
+```
+
+Each benchmark runs `rayoc` to one stop point over one program, and is named `stop/program-size`, such as `check/loops-800`. `check` runs `rayoc --check`, which runs every check and prints nothing. `emit-checked` and `emit-ir` print the checked program or the IR, and `compile-debug` and `compile-release` compile to object code. What a stop point does past checking costs the difference from `check`, which the script prints as each stage's cost.
+
+- `loops-M` is a `main` of M copies of a block of two loops over an array of eight structs, each copy with names of its own: 16 M + 5 lines.
+- `ref-let-loops-M` is a `main` of M copies of a block that borrows a `var` with a `ref let`, which stays in scope to the end, and loops three times reading it: 7 M + 2 lines.
+- `straight-line-N` is a `main` of one block of N turns, each lending a `var` to a call and storing in it a value worked out from the result through a `let` of its own: 2 N + 6 lines.
+
+M is 200, 400, 800 and 1600 unless `--sizes` names others, and N is five times M. The script measures the instructions `rayoc` retires and its peak memory, as the system reports them for the process, and its wall-clock time, and gives the median of three runs.
+
+A baseline is a saved run to compare later runs with. The script names it for the commit it measured, and records what you say the code at that commit is, the machine and how it was measured:
+
+```sh
+python3 Benchmarks/benchmark.py --save --code 'main, as merged'
+python3 Benchmarks/benchmark.py --compare 2042c3c1
+```
+
+A comparison fails where a benchmark's instructions rise more than 5% over the baseline's. Peak memory and wall-clock time are reported, never compared, since peak memory varies by up to 11% between runs of one `rayoc` and wall-clock time with the machine's load. CI's benchmark job compares each pull request that changes the compiler with its base, both measured in the same job at the three smaller sizes. GitHub's macOS runners are virtual machines that count no instructions, so there the job reports both sides and compares nothing.
+
 ## How rayo and rayoc work together
 
 `rayo check`, `rayo build` and `rayo run` have `rayoc` check or compile the program, in a process of its own, and `rayo build` and `rayo run` link the object code `rayoc` writes with the clang and LLD of the LLVM they were built against. `rayo` runs the `rayoc` beside it, or the one the `RAYOC` environment variable names.

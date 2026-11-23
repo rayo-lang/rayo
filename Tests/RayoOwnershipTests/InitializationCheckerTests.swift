@@ -341,6 +341,10 @@ struct InitializationCheckerTests {
         #expect(try checked(function(blocks)).errors == [Diagnostic(.letMaybeAssignedTwice(name: "k"), at: at(1))])
     }
 
+    @Test func `loops in a row, each with its own locals, use each local only where it holds a value`() throws {
+        #expect(try checked(loopingFunction(loops: 3)).errors.isEmpty)
+    }
+
     @Test func `the uses that no assignment reaches since a declaration are reported once for each local`() throws {
         let blocks = """
             bb0:
@@ -898,35 +902,11 @@ struct FieldMoveTests {
             Diagnostic(.usedAfterMove(name: "s.hit"), at: at(3), labeling: moves(at: [1, 2])),
         ])
     }
-
-    @Test func `checking eight times as many loops in a row takes under thirty-two times as long`() throws {
-        let short = try program(of: [loopingFunction(loops: 50)] + callees, from: .lowering)
-        let long = try program(of: [loopingFunction(loops: 400)] + callees, from: .lowering)
-
-        // Each loop adds blocks and locals. This check takes about eleven times as long: eight, and a little more as
-        // the tree that holds the locals deepens. One that carries every local through every block takes sixty-four.
-        let times = try fastestTimes(over: short, long, runs: 3, measuring: timeToCheckInitialization)
-        #expect(times.long < times.short * 32)
-    }
 }
 
 /// The moves at `columns`, each labeled as a move, as an error notes the moves that caused it.
 private func moves(at columns: [Int]) -> [Diagnostic.LabeledRange] {
     columns.map { Diagnostic.LabeledRange(.moved, at: at($0)) }
-}
-
-/// How long the initialization check takes over the first function of `program`. It requires that the check finds no
-/// error, since one that stops at an error measures only part of the work.
-private func timeToCheckInitialization(_ program: IRProgram) throws -> Duration {
-    let body = try #require(program.bodies[FunctionID(index: 0)])
-    let places = PlaceTypes(body: body, types: program.types)
-    let clock = ContinuousClock()
-    let start = clock.now
-    let errors = InitializationChecker.errors(in: places)
-    let elapsed = clock.now - start
-
-    try #require(errors.isEmpty)
-    return elapsed
 }
 
 /// The function `loops()`, which runs `loops` loops one after another. Each counts its own UInt `c` up to eight, and
