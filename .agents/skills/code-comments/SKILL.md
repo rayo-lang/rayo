@@ -9,7 +9,7 @@ A comment is written for the next person who reads the code, and an error messag
 
 ## Short
 
-A comment is quick reference: its prose is one line by default, and two short sentences at most; an example in a code block of its own sits outside that. It says what the thing is or does, plus the one reason a reader needs to use or change it safely. A function's doc names what it does in a few words; the cases it handles stay in its body, its tests and the spec. A comment that states a rule says it in one sentence, and never restates the spec.
+A comment is quick reference: its prose is one line by default, and two short sentences at most; an example in a code block of its own sits outside that. It says what the thing is or does, plus the one reason a reader needs to use or change it safely. A function's doc names what it does in a few words; the cases it handles stay in its body, its tests and the spec. A comment that states a rule says it in one sentence, as it holds at that line, and leaves the full statement to the spec.
 
 ## Readable
 
@@ -50,4 +50,4 @@ Comments and names describe the code as it is, in the present tense, and state a
 
 ## Before you open a pull request
 
-Audit every comment, name and error message you added or changed, and every comment in code you touched. Each comment and name reads at first glance, is true of the code as it stands, and cites no record of a decision. Each name is spelled out and says what the thing holds or does, and nothing it doesn't. Each comment is short, one line or two short sentences at most, is in words about the things themselves, says the one reason a reader needs to use or change it safely, and tells the reader something the code doesn't (for a block's opening comment, its step; for a type's doc, what it is and holds). Each error message says what is wrong in the fewest plain words, with a reason only where the reader needs it to fix the mistake. A reviewer audits the same.
+Audit every comment, name and error message you added or changed, and every comment in code you touched. Each comment and name reads at first glance, is true of the code as it stands, and cites no record of a decision. Each name is spelled out and says what the thing holds or does, and nothing it doesn't. Each comment is short, its prose one line or two short sentences at most, is in words about the things themselves, says the one reason a reader needs to use or change the code safely, and tells the reader something the code doesn't (for a block's opening comment, its step; for a type's doc, what it is and holds). Each error message says what is wrong in the fewest plain words, with a reason only where the reader needs it to fix the mistake. A reviewer audits the same.
