@@ -29,6 +29,7 @@ jobs:
       code: ${{ steps.paths.outputs.code }}
       test-paths: ${{ steps.paths.outputs.test-paths }}
       docs: ${{ steps.paths.outputs.docs }}
+      benchmarks: ${{ steps.paths.outputs.benchmarks }}
       swift-release: ${{ env.SWIFT_RELEASE }}
     steps:
       # A pull request needs only its merge commit and the merge's parents; a push to main needs the commit main
@@ -51,6 +52,7 @@ jobs:
           else
             echo "code=true" >> "$GITHUB_OUTPUT"
             echo "docs=true" >> "$GITHUB_OUTPUT"
+            echo "benchmarks=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -72,8 +74,13 @@ jobs:
             code=false
           fi
           if grep -q -E "$docs_paths" <<< "$changed" || [ -n "$deleted" ]; then docs=true; else docs=false; fi
+          # The benchmarks measure the rayoc that the compiler's sources and manifest build, with a script of their
+          # own.
+          benchmark_paths='^(Sources|Benchmarks)/|^Package\.swift$'
+          if grep -q -E "$benchmark_paths" <<< "$changed"; then benchmarks=true; else benchmarks=false; fi
           echo "code=$code" >> "$GITHUB_OUTPUT"
           echo "docs=$docs" >> "$GITHUB_OUTPUT"
+          echo "benchmarks=$benchmarks" >> "$GITHUB_OUTPUT"
 
           # A pull request runs only the tests that its test paths reach, which each test job finds from them, and
           # without any, as when it changes only the code jobs' scripts, the jobs only build. A push to main runs
@@ -198,56 +205,13 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Select the Xcode that holds Swift ${{ env.SWIFT_RELEASE }}
-        run: |
-          for xcode in /Applications/Xcode*.app; do
-            developer="$xcode/Contents/Developer"
-            swift=$(DEVELOPER_DIR="$developer" xcrun swift --version 2>/dev/null)
-            release=$(grep -o -E 'Swift version [0-9]+\.[0-9]+' <<< "$swift" | head -n 1)
-            if [ "$release" = "Swift version $SWIFT_RELEASE" ]; then
-              echo "DEVELOPER_DIR=$developer" >> "$GITHUB_ENV"
-              exit 0
-            fi
-          done
-          echo "::error::no Xcode on this runner holds Swift $SWIFT_RELEASE"
-          exit 1
-
-      # Homebrew keeps each bottle it downloads, so a cache keyed on every formula the install pours, LLVM's
-      # dependencies among them, holds those bottles. A new version of any of them gets a cache of its own.
-      - name: Find the formulae Homebrew installs
-        id: brew
-        run: |
-          formulae=("llvm@$LLVM_MAJOR_VERSION" "lld@$LLVM_MAJOR_VERSION")
-          formulae+=($(brew deps "${formulae[@]}"))
-          info=$(brew info --json=v2 "${formulae[@]}")
-          versions=$(jq -r '.formulae[] | .name + "=" + .versions.stable' <<< "$info" | sort)
-          hash=$(git hash-object --stdin <<< "$versions" | cut -c 1-16)
-          echo "key=brew-$hash-$RUNNER_ARCH" >> "$GITHUB_OUTPUT"
-
-          # Homebrew may list llvm@N under its own name, llvm, with llvm@N as an alias.
-          llvm=$(jq -r --arg name "llvm@$LLVM_MAJOR_VERSION" \
-            '.formulae[] | select(.name == $name or (.aliases | index($name))) | .versions.stable' <<< "$info")
-          echo "llvm=$llvm" >> "$GITHUB_OUTPUT"
-      - name: Restore Homebrew's downloads
-        id: bottles
-        uses: actions/cache/restore@v6
-        with:
-          path: ~/Library/Caches/Homebrew/downloads
-          key: ${{ steps.brew.outputs.key }}
-      - name: Install LLVM
-        run: brew install "llvm@$LLVM_MAJOR_VERSION" "lld@$LLVM_MAJOR_VERSION"
-      # Only a push to main saves the bottles, as it does the build, so pull requests share main's one copy.
-      - name: Save Homebrew's downloads
-        if: github.event_name == 'push' && steps.bottles.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v6
-        with:
-          path: ~/Library/Caches/Homebrew/downloads
-          key: ${{ steps.brew.outputs.key }}
+      - uses: ./.github/actions/macos-toolchain
+        id: toolchain
 
       - uses: ./.github/actions/swift-test
         with:
           platform: macos
-          llvm-version: ${{ steps.brew.outputs.llvm }}
+          llvm-version: ${{ steps.toolchain.outputs.llvm-version }}
           changed-paths: ${{ needs.changes.outputs.test-paths }}
 
   windows:
@@ -344,6 +308,89 @@ jobs:
           platform: windows
           llvm-version: ${{ env.LLVM_BUILD }}
           changed-paths: ${{ needs.changes.outputs.test-paths }}
+
+  # The benchmarks build a pull request's rayoc and the rayoc of its base, in one job on one machine, and run each on
+  # the same programs, so a rise in instructions or peak memory past the threshold fails the job. They report
+  # wall-clock time and never compare it. The CI check leaves the job out, since a change may cost more on purpose:
+  # its pull request says why.
+  benchmarks:
+    name: Benchmark on macOS
+    needs: changes
+    if: github.event_name == 'pull_request' && needs.changes.outputs.benchmarks == 'true'
+    runs-on: xcode-27
+    timeout-minutes: 60
+    env:
+      HOMEBREW_NO_AUTO_UPDATE: 1
+      HOMEBREW_NO_INSTALL_CLEANUP: 1
+      # Three sizes show how a cost grows, and leave out the largest, whose release compiles take most of a run.
+      SIZES: 200,400,800
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/macos-toolchain
+        id: toolchain
+
+      # The pull request's script measures both sides, so a base older than the script is measured too. It runs
+      # from a copy, since the checkout moves to the base and back.
+      - name: Test the benchmark script
+        working-directory: Benchmarks
+        run: python3 -m unittest discover -s .
+      - name: Copy the benchmark script
+        run: cp -R Benchmarks "$RUNNER_TEMP/benchmarks"
+
+      # A build is reused only by the same Swift compiler and LLVM, as the test jobs' are. The build of a base is
+      # saved under its commit, so each push to the pull request builds that base again only where it changed.
+      - name: Name the build's cache
+        id: name
+        env:
+          LLVM_VERSION: ${{ steps.toolchain.outputs.llvm-version }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          toolchain=$( (swift --version 2>&1; echo "$LLVM_VERSION") | git hash-object --stdin | cut -c 1-16)
+          prefix="benchmark-build-macos-$RUNNER_ARCH-$toolchain-"
+          echo "prefix=$prefix" >> "$GITHUB_OUTPUT"
+          echo "key=$prefix$BASE" >> "$GITHUB_OUTPUT"
+      - name: Restore the build
+        id: build
+        uses: actions/cache/restore@v6
+        with:
+          path: .build
+          key: ${{ steps.name.outputs.key }}
+          restore-keys: ${{ steps.name.outputs.prefix }}
+
+      # Only the base is fetched. The pull request is then built in the same place, so its build compiles only what
+      # it changed. A base that can't be fetched or built leaves the pull request measured alone.
+      - name: Measure the base
+        id: base
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          head=$(git rev-parse HEAD)
+          echo "head=$head" >> "$GITHUB_OUTPUT"
+          if ! git fetch --depth=1 origin "$BASE"; then
+            echo "::notice::The base '$BASE' couldn't be fetched, so the pull request is measured alone."
+            exit 0
+          fi
+          git checkout --detach FETCH_HEAD
+          if ! python3 "$RUNNER_TEMP/benchmarks/benchmark.py" --package . --sizes "$SIZES" --save --code 'the base'
+          then
+            echo "::notice::The base '$BASE' couldn't be built or measured, so the pull request is measured alone."
+            exit 0
+          fi
+          echo "commit=$(git rev-parse --short=8 HEAD)" >> "$GITHUB_OUTPUT"
+      - name: Save the build
+        if: steps.base.outputs.commit != '' && steps.build.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: .build
+          key: ${{ steps.name.outputs.key }}
+      - name: Measure the pull request and compare it with the base
+        env:
+          HEAD_COMMIT: ${{ steps.base.outputs.head }}
+          BASE_COMMIT: ${{ steps.base.outputs.commit }}
+        run: |
+          git checkout --detach "$HEAD_COMMIT"
+          python3 "$RUNNER_TEMP/benchmarks/benchmark.py" --package . --sizes "$SIZES" --code 'the pull request' \
+            --summary "$GITHUB_STEP_SUMMARY" ${BASE_COMMIT:+--compare "$BASE_COMMIT"}
 
   docs:
     name: Check docs
