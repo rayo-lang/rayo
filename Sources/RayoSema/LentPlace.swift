@@ -22,6 +22,8 @@ extension LentPlace: WaitingValue {
         TypeFit.fits(placeType, type)
     }
 
+    var lendsPlace: Bool { true }
+
     /// Reports the `&`, since a position that expects at most a type is no call's argument.
     func settled(toward type: RayoType?, by expressions: ExpressionChecker) -> CheckedExpr? {
         expressions.file.errors.report(.unsupportedReference, at: range)

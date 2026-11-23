@@ -50,6 +50,34 @@ struct ParameterTests {
         #expect(errors(source) == [.functionDeclaredTwice(signature: "f(_: Int, y: Bool)")])
     }
 
+    @Test func `functions whose parameters differ only in how they take their arguments are declared once each`() {
+        #expect(errors("func main() {}\nfunc f(_ x: &Int) {}\nfunc f(_ x: Int) {}") == [])
+        #expect(errors("func main() {}\nfunc f(_ x: &Int) {}\nfunc f(_ y: &Int) {}") == [
+            .functionDeclaredTwice(signature: "f(_: &Int)"),
+        ])
+    }
+
+    // An argument written with a `&` reaches the function that borrows it, and one written without reaches the one
+    // that owns it. Where none takes an argument as it is written, the one its type fits reports how to write it.
+    @Test(arguments: [
+        ("f(&a)", [ErrorCode]()), ("f(a)", []), ("f(1)", []),
+        ("g(a)", [.unlentPlace(name: "g", type: "Int", place: "a")]),
+        ("h(&a)", [.referenceToOwnedParameter(name: "h", type: "Int")]),
+    ])
+    func `an overload is picked by how each argument is written, where its type fits several`(
+        call: String, expected: [ErrorCode],
+    ) {
+        let declarations = """
+            func f(_ x: &Int) {}
+            func f(_ x: Int) {}
+            func g(_ x: &Int) {}
+            func g(_ x: &Bool) {}
+            func h(_ x: Int) {}
+            func h(_ x: Bool) {}
+            """
+        #expect(errors("func main() {\n    let a = 1\n    \(call)\n}\n\(declarations)") == expected)
+    }
+
     @Test("a function the file declares hides every prelude function of its name")
     func shadowsPrint() {
         #expect(errors("func main() { print(1) }\nfunc print(_ b: Bool) {}") ==

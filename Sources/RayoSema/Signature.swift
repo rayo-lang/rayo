@@ -1,8 +1,8 @@
 import RayoCheckedProgram
 
-/// A function's name, its parameters' labels and types, and its result type: everything a call is checked against,
-/// apart from the function's body. Each function the file declares has one, and so does each struct's primary
-/// initializer, each of the prelude's built-ins, and an array's `init(repeating:)`.
+/// A function's name, its parameters' labels, conventions and types, and its result type: everything a call is
+/// checked against, apart from the function's body. Each function the file declares has one, and so does each
+/// struct's primary initializer, each of the prelude's built-ins, and an array's `init(repeating:)`.
 struct Signature: CustomStringConvertible {
     var name: String
     var target: CallTarget
@@ -20,11 +20,21 @@ struct Signature: CustomStringConvertible {
         parameters.contains { $0.type == nil } || result.hasFailed
     }
 
-    /// Whether the other signature takes arguments with the same labels and types, so no call could tell the two
-    /// apart. A type that isn't known matches none, since its error was already reported where it is written.
+    /// Whether the other signature takes arguments with the same labels and types, and takes each as its own
+    /// parameter does, so no call could tell the two apart. A type that isn't known matches none, since its error was
+    /// already reported where it is written.
     func takesArguments(like other: Signature) -> Bool {
         parameters.count == other.parameters.count && zip(parameters, other.parameters).allSatisfy { mine, theirs in
-            mine.label == theirs.label && mine.type != nil && mine.type == theirs.type
+            mine.label == theirs.label && mine.convention == theirs.convention && mine.type != nil
+                && mine.type == theirs.type
+        }
+    }
+
+    /// Whether each of `arguments` is written as its parameter takes it: with a `&` where the parameter borrows the
+    /// argument, and without one where it owns it.
+    func takesWritten(_ arguments: [CheckedValue]) -> Bool {
+        parameters.count == arguments.count && zip(parameters, arguments).allSatisfy { parameter, argument in
+            (parameter.convention == .borrowed) == argument.lendsPlace
         }
     }
 

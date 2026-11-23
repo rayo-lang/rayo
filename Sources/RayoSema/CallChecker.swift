@@ -314,7 +314,11 @@ struct CallChecker {
         let typedFit = labeled.filter { $0.takes(values, in: declarations, where: { $0.type != nil }) }
         // Each untyped argument takes each remaining candidate's parameter type, and a candidate it doesn't fit drops
         // out.
-        return typedFit.filter { $0.takes(values, in: declarations, where: { $0.type == nil }) }
+        let typesFit = typedFit.filter { $0.takes(values, in: declarations, where: { $0.type == nil }) }
+        // Where some candidates take each argument as it is written, with or without a `&`, the others drop out.
+        // Where none does, those the types fit stay, so the one the call reaches reports how to write its arguments.
+        let writtenFit = typesFit.filter { $0.takesWritten(values) }
+        return writtenFit.isEmpty ? typesFit : writtenFit
     }
 
     /// Reports a call of `name` whose arguments, with `labels` and `values`, fit none of its functions, unless an
