@@ -1,86 +1,184 @@
 import RayoIR
-import RayoSource
 
-/// What each local of a function, and each place moved out of one, holds at a point.
+/// What each place the initialization check follows holds at a point of a function, as facts about the paths that
+/// reach the point, a bit for each fact of each place.
 struct InitializationState: DataflowState {
-    /// Called with a place that a statement or terminator uses, or a part of a local it stores to, where the source
-    /// names it, and why the place, or the value around the part, may hold no value just before it does.
-    typealias UseVisitor = (Place, SourceRange, MissingValue) -> Void
-    /// Called with a whole local that a statement stores to, and what the local holds just before it does.
-    typealias StoreVisitor = (Destination, PlaceState) -> Void
+    typealias Function = InitializationTransfer
 
-    /// Indexed by `LocalID`. Blocks change few locals, so their states share the rest.
-    private var locals: PersistentArray<LocalState>
-
-    /// The state on entry to `body`, where its function's parameters hold their arguments, and its other locals hold
-    /// nothing yet.
-    init(entering body: IRBody) {
-        locals = PersistentArray(body.locals.map { $0.parameterConvention != nil ? .initialized : .declared })
+    /// A fact about what the paths to a point leave in a place.
+    enum Fact: Int, CaseIterable {
+        /// Some path leaves a value in the place.
+        case holdsValue
+        /// Some path assigns nothing to the place after its local's declaration.
+        case unassigned
+        /// Some path leaves no value in the place, because nothing assigned it or a move took its value.
+        case lacksValue
+        /// Some path assigns the place after its local's declaration, though a move may take the value later.
+        case assigned
     }
 
-    func merged(with other: InitializationState) -> InitializationState {
-        var merged = self
-        merged.locals = locals.merged(with: other.locals) { $0.joined(with: $1) }
-        return merged
+    /// What an effect does to one place's facts.
+    enum Change {
+        /// The place holds a value on every path: a store gave it one, or, for a part, its local's value holds it.
+        case assign
+        /// The place holds nothing, as a local does when its life starts or ends.
+        case declare
+        /// A move takes the value the place holds on any path.
+        case move
+
+        /// The facts the change sets, each to its value; the others keep theirs.
+        var facts: [(fact: Fact, value: Bool)] {
+            switch self {
+            case .assign: [(.holdsValue, true), (.unassigned, false), (.lacksValue, false), (.assigned, true)]
+            case .declare: [(.holdsValue, false), (.unassigned, true), (.lacksValue, true), (.assigned, false)]
+            case .move: [(.holdsValue, false), (.lacksValue, true)]
+            }
+        }
+    }
+
+    /// A bit for each fact of each place, laid out as `bit(_:of:placeCount:)` says.
+    private var facts: BitSet
+
+    /// The state on entry to `body`, where its function's parameters, and the parts of every local, hold a value, and
+    /// its other locals hold nothing yet.
+    init(entering body: IRBody, tracking places: TrackedPlaces) {
+        facts = BitSet(count: Self.bitCount(tracking: places))
+        for number in 0..<places.count {
+            let isPart = number >= body.locals.count
+            let isParameter = !isPart && body.locals[number].parameterConvention != nil
+            let change: Change = isPart || isParameter ? .assign : .declare
+            apply([(number, change)], among: places)
+        }
     }
 
     var direction: DataflowDirection { .forward }
 
-    mutating func apply(_ effect: Effect, in function: Void) {
-        apply(effect, use: { _, _, _ in }, store: { _, _ in })
+    func merged(with other: InitializationState) -> InitializationState {
+        var merged = self
+        merged.facts.formUnion(other.facts)
+        return merged
     }
 
-    /// Applies what `effect` does to the locals. On the way, it hands `use` the place that a read, a move or an access
-    /// uses where it may hold no value, and the destination of a store where that lies inside a local that may not hold
-    /// the rest of its value, and hands `store` the destination of a store where that is a whole local.
-    mutating func apply(_ effect: Effect, use: UseVisitor, store: StoreVisitor) {
+    mutating func apply(_ effect: Effect, in transfer: InitializationTransfer) {
+        apply(effect, among: transfer.places)
+    }
+
+    mutating func apply(acrossBlock block: BlockID, effects: [[Effect]], in transfer: InitializationTransfer) {
+        transfer.blocks[block.index].apply(to: &facts)
+    }
+
+    mutating func apply(_ effect: Effect, among places: TrackedPlaces) {
+        apply(Self.changes(of: effect, among: places), among: places)
+    }
+
+    func holds(_ fact: Fact, of number: Int) -> Bool {
+        facts.contains(Self.bit(fact, of: number, placeCount: placeCount))
+    }
+
+    /// The local, or the part of one, that may hold no value where `place` is used, and where it lies.
+    func missingValue(forUseOf place: Place, among places: TrackedPlaces) -> MissingValue? {
+        missingValue(onPathTo: place, through: place.steps.count, among: places)
+            ?? movedPart(inside: place, among: places)
+    }
+
+    /// The local, or the part of one, that may hold no value around `place`, a part of a local that a store changes.
+    func missingValue(forStoreTo place: Place, among places: TrackedPlaces) -> MissingValue? {
+        missingValue(onPathTo: place, through: place.steps.count - 1, among: places)
+    }
+
+    /// The bits of a state that follows `places`.
+    static func bitCount(tracking places: TrackedPlaces) -> Int {
+        Fact.allCases.count * places.count
+    }
+
+    /// The bits `effect` sets, each to its value, in a state that follows `places`.
+    static func bits(changedBy effect: Effect, among places: TrackedPlaces) -> [(index: Int, value: Bool)] {
+        changes(of: effect, among: places).flatMap { number, change in
+            change.facts.map { (fact, value) in (bit(fact, of: number, placeCount: places.count), value) }
+        }
+    }
+
+    /// The local, or one of the places the first `depth` steps to `place` lead to, that may hold no value, outermost
+    /// first.
+    private func missingValue(
+        onPathTo place: Place, through depth: Int, among places: TrackedPlaces,
+    ) -> MissingValue? {
+        // A local that may hold no value holds none of its parts either.
+        let local = Place(root: place.root)
+        if holds(.lacksValue, of: place.root.index) { return missing(.placeOrHolder, local, numbered: place.root.index) }
+
+        // Step down the path, outermost first: the first part a move may have taken leaves the place without it.
+        for length in 0..<depth {
+            let holder = place.prefix(length + 1)
+            guard let number = places.number(of: holder), holds(.lacksValue, of: number) else { continue }
+            return missing(.placeOrHolder, holder, numbered: number)
+        }
+        return nil
+    }
+
+    /// The first part, in the order of its steps, that a move may have taken from inside `place`.
+    private func movedPart(inside place: Place, among places: TrackedPlaces) -> MissingValue? {
+        let inside = places.parts(of: place.root).filter { number in
+            places[number].steps.count > place.steps.count && place.mustContain(places[number])
+                && holds(.lacksValue, of: number)
+        }
+        let first = inside.min { places[$0].steps.lexicographicallyPrecedes(places[$1].steps) }
+        return first.map { missing(.insidePlace, places[$0], numbered: $0) }
+    }
+
+    private func missing(_ kind: MissingValue.Kind, _ place: Place, numbered number: Int) -> MissingValue {
+        MissingValue(
+            kind: kind, place: place, holdsValueOnSomePath: holds(.holdsValue, of: number),
+            isUnassignedOnSomePath: holds(.unassigned, of: number),
+        )
+    }
+
+    private static func bit(_ fact: Fact, of number: Int, placeCount: Int) -> Int {
+        fact.rawValue * placeCount + number
+    }
+
+    /// What `effect` does to each place it changes.
+    private static func changes(of effect: Effect, among places: TrackedPlaces) -> [(number: Int, change: Change)] {
         switch effect {
-        // A read uses the place and leaves its value in it.
-        case .read(let place, let range):
-            visitUse(of: place, at: range, use: use)
+        // A move takes the place's value, and its own facts stand for the parts inside it, which hold theirs again.
+        case .move(let place, _):
+            guard let moved = places.number(of: place) else { preconditionFailure("every moved place is tracked") }
+            let inside = parts(inside: place, among: places).filter { $0 != moved }
+            return inside.map { ($0, .assign) } + [(moved, .move)]
 
-        // A move uses the place and takes its value.
-        case .move(let place, let range):
-            visitUse(of: place, at: range, use: use)
-            locals[place.root.index].move(place, at: range)
-
+        // A store gives the place a value, and replaces the values of the parts inside it.
         case .store(let destination):
-            assign(destination, use: use, store: store)
+            let place = destination.place
+            let whole: [(number: Int, change: Change)] = place.steps.isEmpty ? [(place.root.index, .assign)] : []
+            return whole + parts(inside: place, among: places).map { ($0, .assign) }
 
-        // An access uses its place, whose value it reads or changes, and leaves the value there.
-        case .begin(_, let access):
-            visitUse(of: access.place, at: access.range, use: use)
-
-        // A declaration, or a retirement, leaves the local without a value, even one an earlier pass of a loop gave it.
+        // A declaration, or a retirement, leaves the local holding nothing, even what an earlier pass of a loop gave
+        // it, and its parts hold whatever it holds.
         case .declare(let local), .retire(let local):
-            locals[local.index] = .declared
+            return [(local.index, .declare)] + places.parts(of: local).map { ($0, .assign) }
 
-        // Reaching a place through an access and ending one use only the value that the access's beginning used, a
-        // dependence leaves its place's value as it is, and leaving the function uses none.
-        case .use, .end, .depend, .exit:
-            break
+        // Reading a place, beginning or ending an access, or making a value depend on one, changes no value, and
+        // leaving the function changes none it checks.
+        case .read, .begin, .use, .end, .depend, .exit:
+            return []
         }
     }
 
-    /// Hands `store` the state of `destination` where it is a whole local, or `use` what the part's store may miss
-    /// around it, then gives the place a value.
-    private mutating func assign(_ destination: Destination, use: UseVisitor, store: StoreVisitor) {
-        let place = destination.place
-        let local = locals[place.root.index]
-        if place.steps.isEmpty {
-            // A store to a whole local gives it a value, whatever it held.
-            store(destination, local.whole)
-        } else if let missing = local.missingValue(forStoreTo: place) {
-            // A store to a part changes part of a value that the local must already hold around it.
-            use(place, destination.range, missing)
-        }
-        locals[place.root.index].assign(place)
+    /// The tracked parts that `place` must contain, itself among them where it is tracked.
+    private static func parts(inside place: Place, among places: TrackedPlaces) -> [Int] {
+        places.parts(of: place.root).filter { place.mustContain(places[$0]) }
     }
 
-    /// Hands `use` the place that an effect uses, which the source names at `range`, where it may hold no value.
-    private func visitUse(of place: Place, at range: SourceRange, use: UseVisitor) {
-        // A place that holds its whole value on every path leaves nothing to hand on.
-        guard let missing = locals[place.root.index].missingValue(forUseOf: place) else { return }
-        use(place, range, missing)
+    private var placeCount: Int {
+        facts.count / Fact.allCases.count
+    }
+
+    private mutating func apply(_ changes: [(number: Int, change: Change)], among places: TrackedPlaces) {
+        for (number, change) in changes {
+            for (fact, value) in change.facts {
+                let bit = Self.bit(fact, of: number, placeCount: places.count)
+                if value { facts.insert(bit) } else { facts.remove(bit) }
+            }
+        }
     }
 }

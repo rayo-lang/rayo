@@ -1,4 +1,3 @@
-@testable import RayoOwnership
 import RayoCheckedProgram
 import RayoIR
 import Testing
@@ -203,10 +202,9 @@ private func loopsInARow(_ count: Int) -> String {
 
 /// The number of effects the solver takes the state across, going in `direction` through a function made of `blocks`.
 private func effectsCrossed(solving blocks: String, _ direction: DataflowDirection) throws -> Int {
-    let program = try program(of: [function(blocks)], from: .lowering)
-    let body = try #require(program.bodies[FunctionID(index: 0)])
     let crossings = EffectCount()
-    _ = DataflowSolver.solve(from: CountedOperands(direction: direction), through: body, knowing: crossings)
+    let start = CountedOperands(direction: direction)
+    _ = DataflowSolver.solve(from: start, through: try body(of: blocks), knowing: crossings)
     return crossings.count
 }
 
@@ -241,10 +239,19 @@ private struct CountedOperands: DataflowState {
 private func solve(
     _ start: EvaluatedOperands, _ blocks: String, result: String = "Void",
 ) throws -> DataflowResults<EvaluatedOperands> {
-    let program = try program(of: [function(blocks, result: result)], from: .lowering)
-    // The program's one function has a body.
-    let body = try #require(program.bodies[FunctionID(index: 0)])
-    return DataflowSolver.solve(from: start, through: body, knowing: ())
+    DataflowSolver.solve(from: start, through: try body(of: blocks, result: result), knowing: ())
+}
+
+/// The body of a function made of `blocks` that returns `result`, whose one local is the Int `x` (`%0`).
+private func body(of blocks: String, result: String = "Void") throws -> IRBody {
+    let program = try IRParser.program(from: """
+        main "f()"
+        func "f()"() -> \(result) {
+          var %0 x: Int @1:1-1:1
+        \(blocks)
+        }
+        """)
+    return try #require(program.bodies[FunctionID(index: 0)])
 }
 
 /// The columns at each point of the block at `index`, which `results` settle on, in the order of the points; nil where

@@ -1,8 +1,6 @@
-import RayoIR
-
 /// Carries a dataflow analysis's state through a function's blocks until the state at each block's boundary settles:
 /// at its entry going forward, and at its exit going backward.
-struct DataflowSolver<State: DataflowState> {
+package struct DataflowSolver<State: DataflowState> {
     private let body: IRBody
     /// The effects of each block's statements and terminator, indexed by `BlockID`, as `BasicBlock.effects` gives them.
     private let effects: [[[Effect]]]
@@ -20,7 +18,7 @@ struct DataflowSolver<State: DataflowState> {
     /// function going forward. Going backward, `start` is the state at the exit of every block, which the states of
     /// the paths out of the block merge into: so it is the state at the function's exits, and it must add nothing to
     /// a merge. `function` is what the state needs to know of `body`.
-    static func solve(
+    package static func solve(
         from start: State, through body: IRBody, knowing function: State.Function,
     ) -> DataflowResults<State> {
         var solver = DataflowSolver(from: start, through: body, knowing: function)
@@ -57,7 +55,7 @@ struct DataflowSolver<State: DataflowState> {
         while let block = pending.pop() {
             // A block that no state has reached yet has nothing to hand on.
             guard var state = boundaryStates[block.index] else { continue }
-            state.apply(across: effects[block.index], in: function)
+            state.apply(acrossBlock: block, effects: effects[block.index], in: function)
 
             // Each block the state flows into is pending again where the state adds to its own.
             for next in blocks(after: block) where merge(state, intoBoundaryOf: next) {
@@ -99,17 +97,19 @@ struct DataflowSolver<State: DataflowState> {
 /// Blocks waiting their turn, each at most once at a time, handed out earliest in the solver's order first.
 private struct WorkQueue {
     private let order: [BlockID]
-    /// The position in `order` of each block, indexed by `BlockID`; nil for a block that `order` leaves out.
-    private let positions: [Int?]
+    /// The position in `order` of each block, indexed by `BlockID`; `outsideOrder` for a block it leaves out.
+    private let positions: [Int]
     /// The positions of the waiting blocks, as a binary heap whose root is the earliest.
     private var heap: [Int]
     /// Whether the block at each position is waiting.
     private var isWaiting: [Bool]
 
+    private static var outsideOrder: Int { -1 }
+
     /// A queue of `order`, every block of it waiting, from a function of `blockCount` blocks.
     init(_ order: [BlockID], blockCount: Int) {
         self.order = order
-        var positions: [Int?] = Array(repeating: nil, count: blockCount)
+        var positions = Array(repeating: Self.outsideOrder, count: blockCount)
         for (position, block) in order.enumerated() {
             positions[block.index] = position
         }
@@ -121,9 +121,8 @@ private struct WorkQueue {
 
     /// Adds `block`, unless it is already waiting.
     mutating func push(_ block: BlockID) {
-        guard let position = positions[block.index] else {
-            preconditionFailure("the solver hands on states only to blocks of its order")
-        }
+        let position = positions[block.index]
+        precondition(position != Self.outsideOrder, "the solver hands on states only to blocks of its order")
         guard !isWaiting[position] else { return }
         isWaiting[position] = true
 
@@ -201,11 +200,12 @@ private struct LoopNestOrder {
     private(set) var blocks: [BlockID] = []
     /// Indexed by `BlockID`.
     private let successors: [[BlockID]]
-    /// The part being ordered that each block lies in, indexed by `BlockID`; a search keeps to one part.
-    private var part: [Int?]
+    /// The part being ordered that each block lies in, indexed by `BlockID`; a search keeps to one part. An unreached
+    /// block lies in `unreached`, which no search orders.
+    private var part: [Int]
     private var partCount = 1
-    /// When the search of its part reached each block, indexed by `BlockID`.
-    private var reachedAt: [Int?]
+    /// When the search of its part reached each block, indexed by `BlockID`; `unreached` where it hasn't yet.
+    private var reachedAt: [Int]
     /// The earliest `reachedAt` that each block leads back to through `stack`, indexed by `BlockID`.
     private var earliestReachable: [Int]
     /// The reached blocks not yet in a component, in the order the search reached them.
@@ -213,11 +213,13 @@ private struct LoopNestOrder {
     private var isOnStack: [Bool]
     private var clock = 0
 
+    private static var unreached: Int { -1 }
+
     /// The order of `reached`, the blocks of `body` that some path from its entry reaches, the entry first.
     init(_ body: IRBody, reached: [BlockID]) {
         successors = body.blocks.map(\.terminator.successors)
-        part = Array(repeating: nil, count: body.blocks.count)
-        reachedAt = Array(repeating: nil, count: body.blocks.count)
+        part = Array(repeating: Self.unreached, count: body.blocks.count)
+        reachedAt = Array(repeating: Self.unreached, count: body.blocks.count)
         earliestReachable = Array(repeating: 0, count: body.blocks.count)
         isOnStack = Array(repeating: false, count: body.blocks.count)
         for block in reached {
@@ -240,7 +242,7 @@ private struct LoopNestOrder {
             partCount += 1
             for block in inner {
                 part[block.index] = innerID
-                reachedAt[block.index] = nil
+                reachedAt[block.index] = Self.unreached
             }
             order(inner, inPart: innerID)
         }
@@ -249,7 +251,7 @@ private struct LoopNestOrder {
     /// The strongly connected components of part `id`, in the order their edges run, each in the order it was reached.
     private mutating func components(of members: [BlockID], inPart id: Int) -> [[BlockID]] {
         var found: [[BlockID]] = []
-        for root in members where reachedAt[root.index] == nil {
+        for root in members where reachedAt[root.index] == Self.unreached {
             search(from: root, inPart: id, into: &found)
         }
         // A search finds each component after every component its edges lead to.
@@ -268,12 +270,12 @@ private struct LoopNestOrder {
                 let successor = next[followed]
                 // An edge out of the part, such as one back to the loop's header, is left out.
                 guard part[successor.index] == id else { continue }
-                if let time = reachedAt[successor.index] {
-                    // An edge to a block on the stack leads back to it.
-                    if isOnStack[successor.index] { lowerEarliest(of: block, to: time) }
-                } else {
+                if reachedAt[successor.index] == Self.unreached {
                     reach(successor)
                     path.append((successor, 0))
+                } else if isOnStack[successor.index] {
+                    // An edge to a block on the stack leads back to it.
+                    lowerEarliest(of: block, to: reachedAt[successor.index])
                 }
                 continue
             }

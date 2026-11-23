@@ -1,4 +1,4 @@
-import RayoOwnership
+@testable import RayoOwnership
 import Testing
 import RayoDiagnostics
 import RayoIR
@@ -898,9 +898,77 @@ struct FieldMoveTests {
             Diagnostic(.usedAfterMove(name: "s.hit"), at: at(3), labeling: moves(at: [1, 2])),
         ])
     }
+
+    @Test func `checking eight times as many loops in a row takes well under sixty-four times as long`() throws {
+        let short = try program(of: [loopingFunction(loops: 50)] + callees, from: .lowering)
+        let long = try program(of: [loopingFunction(loops: 400)] + callees, from: .lowering)
+
+        // Each loop adds blocks and locals. This check takes about fourteen times as long, since each block's state
+        // has a bit per local, 64 to a word. One that carries each local through each block takes up to sixty-four.
+        let times = try fastestTimes(over: short, long, runs: 3, measuring: timeToCheckInitialization)
+        #expect(times.long < times.short * 32)
+    }
 }
 
 /// The moves at `columns`, each labeled as a move, as an error notes the moves that caused it.
 private func moves(at columns: [Int]) -> [Diagnostic.LabeledRange] {
     columns.map { Diagnostic.LabeledRange(.moved, at: at($0)) }
+}
+
+/// How long the initialization check takes over the first function of `program`. It requires that the check finds no
+/// error, since one that stops at an error measures only part of the work.
+private func timeToCheckInitialization(_ program: IRProgram) throws -> Duration {
+    let body = try #require(program.bodies[FunctionID(index: 0)])
+    let places = PlaceTypes(body: body, types: program.types)
+    let clock = ContinuousClock()
+    let start = clock.now
+    let errors = InitializationChecker.errors(in: places)
+    let elapsed = clock.now - start
+
+    try #require(errors.isEmpty)
+    return elapsed
+}
+
+/// The function `loops()`, which runs `loops` loops one after another. Each counts its own UInt `c` up to eight, and
+/// on each pass declares its own `let` `v`, gives it the count as an Int, and prints it.
+private func loopingFunction(loops: Int) -> (name: String, text: String) {
+    let locals = (0..<loops).map { loop in
+        let (counter, test, value) = (3 * loop, 3 * loop + 1, 3 * loop + 2)
+        return """
+              var %\(counter) c\(loop): UInt @1:1-1:1
+              temp %\(test): Bool
+              let %\(value) v\(loop): Int @1:1-1:1
+            """
+    }
+    // Each loop starts its count in a block of its own, and declares each local where lowering would.
+    let blocks = (0..<loops).map { loop in
+        let (counter, test, value) = (3 * loop, 3 * loop + 1, 3 * loop + 2)
+        let (start, header, body) = (3 * loop, 3 * loop + 1, 3 * loop + 2)
+        return """
+            bb\(start):
+              declare %\(counter)
+              %\(counter) @1:1-1:1 = operand UInt 0 @1:1-1:1
+              goto bb\(header)
+            bb\(header):
+              declare %\(test)
+              %\(test) @1:1-1:1 = less read %\(counter) @1:1-1:1, UInt 8 @1:1-1:1
+              branch read %\(test) @1:1-1:1, bb\(body), bb\(start + 3)
+            bb\(body):
+              declare %\(value)
+              %\(value) @1:1-1:1 = call builtin "Int(_: UInt)"(read %\(counter) @1:1-1:1) @1:1-1:1
+              begin a\(loop) read %\(value) @1:1-1:1
+              _ = call builtin "print(_: &Int)"(a\(loop)) @1:1-1:1
+              %\(counter) @1:1-1:1 = add checked read %\(counter) @1:1-1:1, UInt 1 @1:1-1:1
+              goto bb\(header)
+            """
+    }
+    let text = """
+        func "loops()"() -> Void {
+        \(locals.joined(separator: "\n"))
+        \(blocks.joined(separator: "\n"))
+        bb\(3 * loops):
+          return
+        }
+        """
+    return ("loops()", text)
 }
