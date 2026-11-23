@@ -32,7 +32,7 @@ struct FunctionLoweringTests {
         let (file, _) = Parser.parse(source)
         var checked = Checker.check(file).program
         let bump = FunctionID(index: 1)
-        checked.functions = checked.functions.changingFirstParameter(of: bump, to: .mutable)
+        checked.functions = checked.functions.changingFirstParameter(of: bump, named: "bump", to: .mutable)
         checked.bodies[bump]?.locals[0].kind = .parameter(.mutable)
         let main = try #require(checked.bodies[FunctionID(index: 0)])
         checked.bodies[FunctionID(index: 0)]?.statements[1] = try passingMutablePlace(main.statements[1])
@@ -162,12 +162,17 @@ private func passingMutablePlace(_ statement: CheckedStmt) throws -> CheckedStmt
 private struct ChangeFailure: Error {}
 
 private extension FunctionTable {
-    /// The table with the first parameter of the function `id` taking its argument as `convention`.
-    func changingFirstParameter(of id: FunctionID, to convention: ParameterConvention) -> FunctionTable {
+    /// The table with the first parameter of the function `id`, called `base`, taking its argument as `convention`, and
+    /// the function's name spelling it so.
+    func changingFirstParameter(of id: FunctionID, named base: String,
+                                to convention: ParameterConvention) -> FunctionTable {
         var changed = FunctionTable()
         for declared in ids {
             var declaration = self[declared]
-            if declared == id { declaration.parameters[0].convention = convention }
+            if declared == id {
+                declaration.parameters[0].convention = convention
+                declaration.name = FunctionDeclaration.name(base, parameters: declaration.parameters)
+            }
             _ = changed.declare(declaration)
         }
         return changed

@@ -37,7 +37,7 @@ struct OwnershipCheckTests {
             bb0:
               begin a0 modify %0 @2:3-2:3
               begin a1 read %0 @2:6-2:6
-              _ = call "change(_: Int, _: Int)"(a0, a1) @1:1-1:1
+              _ = call "change(_: mutable &Int, _: &Int)"(a0, a1) @1:1-1:1
               return
             """
         // Both accesses use `x` with the same cause, so only the first is reported.
@@ -51,7 +51,7 @@ struct OwnershipCheckTests {
               %0 @1:1-1:1 = operand 1 @1:1-1:1
               begin a0 modify %0 @2:3-2:3
               begin a1 read %0 @2:6-2:6
-              _ = call "change(_: Int, _: Int)"(a0, a1) @1:1-1:1
+              _ = call "change(_: mutable &Int, _: &Int)"(a0, a1) @1:1-1:1
               %1 @2:9-2:9 = operand 1 @1:1-1:1
               return
             """
@@ -67,14 +67,14 @@ struct OwnershipCheckTests {
             bb0:
               %0 @1:1-1:1 = operand 1 @1:1-1:1
               begin a0 read %0 @1:1-1:1
-              _ = call "double(_: Int)"(a0) @1:1-1:1
+              _ = call "double(_: &Int)"(a0) @1:1-1:1
               return
             """, named: "passing()")
         let ended = function("""
             bb0:
               %0 @1:1-1:1 = operand 1 @1:1-1:1
               begin a0 read %0 @1:1-1:1
-              _ = call "double(_: Int)"(a0) @1:1-1:1
+              _ = call "double(_: &Int)"(a0) @1:1-1:1
               end a0
               return
             """, named: "passing()")
@@ -152,7 +152,7 @@ private func longFunction(rounds: Int) -> (name: String, text: String) {
         let (value, temporary) = (2 * round + 1, 2 * round + 2)
         return """
               begin a\(round) read %0 @1:1-1:1
-              %\(temporary) @1:1-1:1 = call "double(_: Int)"(a\(round)) @1:1-1:1
+              %\(temporary) @1:1-1:1 = call "double(_: &Int)"(a\(round)) @1:1-1:1
               %\(value) @1:1-1:1 = add checked move %\(temporary) @1:1-1:1, \(round) @1:1-1:1
               %0 @1:1-1:1 = operand move %\(value) @1:1-1:1 @1:1-1:1
             """
@@ -172,13 +172,13 @@ private func longFunction(rounds: Int) -> (name: String, text: String) {
     return ("long()", text)
 }
 
-/// The function `f(_: Int)`, made of `blocks`, whose one local is `n` (`%0`), a borrowed Int parameter.
+/// The function `f(_: &Int)`, made of `blocks`, whose one local is `n` (`%0`), a borrowed Int parameter.
 private func takingInt(_ blocks: String) -> (name: String, text: String) {
     let text = """
-        func "f(_: Int)"(_: &Int) -> Void {
+        func "f(_: &Int)"(_: &Int) -> Void {
           param %0 n: &Int @1:1-1:1
         \(blocks)
         }
         """
-    return ("f(_: Int)", text)
+    return ("f(_: &Int)", text)
 }

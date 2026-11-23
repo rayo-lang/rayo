@@ -71,8 +71,8 @@ struct InitializationCheckerTests {
 
     @Test(arguments: ["&Int", "Int", "mutable &Int"])
     func `a parameter holds its argument from the function's entry, whatever its convention`(parameter: String) throws {
-        let function = (name: "f(_: Int)", text: """
-            func "f(_: Int)"(_: \(parameter)) -> Void {
+        let function = (name: "f(_: \(parameter))", text: """
+            func "f(_: \(parameter))"(_: \(parameter)) -> Void {
               param %0 n: \(parameter) @1:1-1:1
             bb0:
               begin a0 read %0 @2:1-2:1
@@ -396,12 +396,12 @@ struct InitializationCheckerTests {
     @Test(arguments: [
         (
             "%1 @1:1-1:1 = operand move %0 @2:1-2:1 @1:1-1:1",
-            "begin a0 read %0 @2:2-2:2\n  _ = call \"g(_: Int, _: Int)\"(a0, 1) @1:1-1:1",
+            "begin a0 read %0 @2:2-2:2\n  _ = call \"g(_: &Int, _: &Int)\"(a0, 1) @1:1-1:1",
             ErrorCode.usedAfterMove(name: "x"),
         ),
         (
             "_ = operand move %5.1.0 @2:1-2:1 @1:1-1:1",
-            "begin a0 read %5.1 @2:2-2:2\n  _ = call \"take(_: Int, _: Hit)\"(1, a0) @1:1-1:1",
+            "begin a0 read %5.1 @2:2-2:2\n  _ = call \"take(_: &Int, _: &Hit)\"(1, a0) @1:1-1:1",
             .usedPartlyMoved(name: "s.hit", field: "s.hit.damage"),
         ),
     ])

@@ -70,7 +70,7 @@ private let statementEffects = [
         testDescription: "a call uses the accesses it passes after it reads its operands, in any order of arguments",
         text: """
               begin a0 modify %0 @1:1-1:2
-              _ = call "bump(_: Int, _: Int)"(a0, read %0 @1:5-1:6) @1:1-1:7
+              _ = call "bump(_: mutable &Int, _: Int)"(a0, read %0 @1:5-1:6) @1:1-1:7
             """,
         effects: ["read %0 @1:5-1:6", "use a0"],
     ),
@@ -125,7 +125,7 @@ private func mainBody(from blocks: String) throws -> IRBody {
         \(blocks)
         }
 
-        func "bump(_: Int, _: Int)"(_: mutable &Int, _: Int) -> Void {
+        func "bump(_: mutable &Int, _: Int)"(_: mutable &Int, _: Int) -> Void {
           param %0 a: mutable &Int @1:1-1:2
           param %1 b: Int @1:3-1:4
         bb0:

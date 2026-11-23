@@ -1,14 +1,9 @@
 import RayoCheckedProgram
 
-/// Checks the rules of IR that the stages after the one that gave it take as given. In every stage's IR, the IR keeps
-/// its types, no path reaches a block that ends in `unreachable`, and each index it finds an element by was checked
-/// against its array's count. Lowering's IR holds no end of an access and no retirement of a local, since the
-/// ownership stage writes those. The IR the ownership stage gives ends each access once on every path, and uses no
-/// local after it retires it.
+/// Checks the rules of IR that the stages after the one that gave it take as given.
 public enum IRVerifier {
     /// The first declaration or operation in `program`, which `stage` gave, that breaks the IR's rules, or nil where
-    /// none does. Each primary initializer's declaration is checked in the order of its ID, then each body in the
-    /// order of its function's ID.
+    /// none does. Declarations are checked before bodies, each in the order of its function's ID.
     public static func verify(_ program: IRProgram, from stage: IRStage) -> IRViolation? {
         firstViolation(in: program) { body, declaration throws(IRViolation) in
             try verifySharedRules(in: body, of: declaration, in: program)
@@ -17,22 +12,21 @@ public enum IRVerifier {
     }
 
     /// The first declaration or operation in `program` that breaks the rules every stage's IR keeps, or nil where none
-    /// does. Those are its types, the blocks its paths reach, and the checks of the indices it finds elements by, but
-    /// not the rules of its accesses' ends and its locals' retirements, which differ between stages. The declarations
-    /// and bodies are checked in the same order as `verify(_:from:)` checks them.
+    /// does. Those are all but the rules of where accesses end and locals retire, which differ between stages.
     package static func verifySharedRules(_ program: IRProgram) -> IRViolation? {
         firstViolation(in: program) { body, declaration throws(IRViolation) in
             try verifySharedRules(in: body, of: declaration, in: program)
         }
     }
 
-    /// The first violation in `program`: of a primary initializer's declaration, in the order of its ID, or else the
-    /// first that `verifyBody` throws for a function's body and declaration, in the order of its ID.
+    /// The first violation in `program`: of a function's declaration, in the order of its ID, or else the first that
+    /// `verifyBody` throws for a function's body and declaration, in the order of its ID.
     private static func firstViolation(
         in program: IRProgram,
         verifyingEachBodyBy verifyBody: (IRBody, FunctionDeclaration) throws(IRViolation) -> Void,
     ) -> IRViolation? {
         for id in program.functions.ids {
+            if let violation = nameViolation(of: program.functions[id]) { return violation }
             if let violation = initializerViolation(of: id, in: program) { return violation }
         }
 
@@ -68,6 +62,16 @@ public enum IRVerifier {
             try AccessScopeVerifier(body: body, of: declaration.name).verify()
             try LocalLifeVerifier(body: body, of: declaration.name).verify()
         }
+    }
+
+    /// The violation of `declaration` where its name doesn't spell its parameters as lowering does, as `f(_: &Int)`.
+    private static func nameViolation(of declaration: FunctionDeclaration) -> IRViolation? {
+        let base = String(declaration.name.prefix { $0 != "(" })
+        let spelled = FunctionDeclaration.name(base, parameters: declaration.parameters)
+
+        guard declaration.name != spelled else { return nil }
+        let message = "the IR names the function '\(declaration.name)', where its parameters name it '\(spelled)'"
+        return IRViolation(function: declaration.name, message: message)
     }
 
     /// The violation of the function `id` of `program`, where it is a primary initializer that a call can't build its

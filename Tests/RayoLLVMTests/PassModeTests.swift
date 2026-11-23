@@ -8,7 +8,7 @@ struct PassModeTests {
     @Test func `a value of at most two scalars passes split into them, and returns in a struct of them`() throws {
         // A Pair's Bool and Int are two LLVM parameters, in the order the Pair declares them.
         try withEmitted(executable(structs + emptyMain + relaying("Pair"))) { module in
-            let type = try function(named: "relay(_: Pair)", in: module).type
+            let type = try function(named: "relay(_: &Pair)", in: module).type
             #expect(type.parameters.map(\.text) == ["i1", "i64"])
             #expect(type.result.text == "{ i1, i64 }")
         }
@@ -17,7 +17,7 @@ struct PassModeTests {
     @Test func `a struct splits into the scalars of its fields, those of a struct inside it too`() throws {
         // A Nested holds a Bool, then a Flags of two Bools, which is more than two scalars in all.
         try withEmitted(executable(structs + emptyMain + relaying("Nested"))) { module in
-            let type = try function(named: "relay(_: Nested)", in: module).type
+            let type = try function(named: "relay(_: &Nested)", in: module).type
             #expect(type.parameters.map(\.text) == ["ptr", "ptr"])
             #expect(type.result.text == "void")
         }
@@ -26,7 +26,7 @@ struct PassModeTests {
     @Test func `a large borrowed argument passes as the caller's place, and a large result in its slot`() throws {
         // The result's slot comes first, and the argument's place after it, each marked with what holds of it.
         try withEmitted(executable(structs + emptyMain + relaying("Trio"))) { module in
-            let text = try function(named: "relay(_: Trio)", in: module).text
+            let text = try function(named: "relay(_: &Trio)", in: module).text
             #expect(text.contains("(\(resultSlot) %0, \(borrowedPlace) %1)"))
         }
     }
@@ -40,11 +40,11 @@ struct PassModeTests {
               temp %1: Int
             bb0:
               begin a0 read %0 @1:1-1:2
-              %1 @1:1-1:2 = call "first(_: Trio)"(a0) @1:1-1:2
+              %1 @1:1-1:2 = call "first(_: &Trio)"(a0) @1:1-1:2
               end a0
               return
             }
-            func "first(_: Trio)"(_: &Trio) -> Int {
+            func "first(_: &Trio)"(_: &Trio) -> Int {
               param %0 t: &Trio @1:1-1:1
               temp %1: Int
             bb0:
@@ -56,8 +56,8 @@ struct PassModeTests {
         // `main` passes the Trio's slot itself, and `first` reads the Int through the pointer, copying nothing.
         try withEmitted(executable(structs + functions)) { module in
             let llvmMain = try function(named: RuntimeFunction.main.symbol, in: module)
-            #expect(llvmMain.text.contains("call i64 @\"first(_: Trio)\"(\(borrowedPlace) %0)"))
-            let llvmFirst = try function(named: "first(_: Trio)", in: module)
+            #expect(llvmMain.text.contains("call i64 @\"first(_: &Trio)\"(\(borrowedPlace) %0)"))
+            let llvmFirst = try function(named: "first(_: &Trio)", in: module)
             #expect(instructions(.allocate, in: llvmFirst).map(\.allocatedType?.text) == ["i64"])
             #expect(llvmFirst.text.contains("getelementptr inbounds nuw %Trio, ptr %0, i32 0, i32 0"))
             #expect(!llvmFirst.text.contains("memcpy"))
@@ -112,7 +112,8 @@ struct PassModeTests {
         // Each copy is a memcpy of the Trio's 24 bytes, and no load or store is of a Trio or a Holder.
         try withEmitted(executable(structs + main + relaying("Trio"))) { module in
             let functions = try [
-                function(named: RuntimeFunction.main.symbol, in: module), function(named: "relay(_: Trio)", in: module),
+                function(named: RuntimeFunction.main.symbol, in: module),
+                function(named: "relay(_: &Trio)", in: module),
             ]
             let copy = "call void @llvm.memcpy.p0.p0.i64(ptr align 8 %0, ptr align 8 %1, i64 24, i1 false)"
             #expect(functions[1].text.contains(copy))
@@ -131,7 +132,7 @@ struct PassModeTests {
               temp %0: Trio
             bb0:
               begin a0 read %0 @1:1-1:2
-              %0 @1:1-1:2 = call "relay(_: Trio)"(a0) @1:1-1:2
+              %0 @1:1-1:2 = call "relay(_: &Trio)"(a0) @1:1-1:2
               end a0
               return
             }
@@ -142,7 +143,7 @@ struct PassModeTests {
             let llvmMain = try function(named: RuntimeFunction.main.symbol, in: module)
             #expect(instructions(.allocate, in: llvmMain).count == 2)
             #expect(llvmMain.text.contains("""
-                  call void @"relay(_: Trio)"(\(resultSlot) %1, \(borrowedPlace) %0)
+                  call void @"relay(_: &Trio)"(\(resultSlot) %1, \(borrowedPlace) %0)
                   call void @llvm.memcpy.p0.p0.i64(ptr align 8 %0, ptr align 8 %1, i64 24, i1 false)
                 """))
         }
@@ -193,12 +194,12 @@ struct PassModeTests {
               %1 @1:1-1:2 = call "E()"() @1:1-1:2
               %0 @1:1-1:2 = fill 4000000000 of read %1 @1:1-1:2 @1:1-1:2
               begin a0 read %0 @1:1-1:2
-              %2 @1:1-1:2 = call "f(_: [4000000000 of E])"(a0) @1:1-1:2
+              %2 @1:1-1:2 = call "f(_: &[4000000000 of E])"(a0) @1:1-1:2
               end a0
               \(printUInt("%2", through: 1))
               return
             }
-            func "f(_: [4000000000 of E])"(_: &[4000000000 of E]) -> UInt {
+            func "f(_: &[4000000000 of E])"(_: &[4000000000 of E]) -> UInt {
               param %0 a: &[4000000000 of E] @1:1-1:1
             bb0:
               return UInt 4000000000
@@ -206,7 +207,7 @@ struct PassModeTests {
             """)
 
         try withEmitted(program) { module in
-            let type = try function(named: "f(_: [4000000000 of E])", in: module).type
+            let type = try function(named: "f(_: &[4000000000 of E])", in: module).type
             #expect(type.parameters.isEmpty)
         }
         #expect(try !compile(program, for: build).isEmpty)
@@ -254,7 +255,7 @@ struct PassModeTests {
     private func relaying(_ type: String) -> String {
         """
 
-        func "relay(_: \(type))"(_: &\(type)) -> \(type) {
+        func "relay(_: &\(type))"(_: &\(type)) -> \(type) {
           param %0 value: &\(type) @1:1-1:2
         bb0:
           return read %0 @1:1-1:2

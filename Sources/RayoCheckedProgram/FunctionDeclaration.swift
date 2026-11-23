@@ -14,8 +14,13 @@ public struct FunctionDeclaration: Equatable, Sendable {
         self.kind = kind
     }
 
-    /// The name of a function called `base` whose parameters have these labels and types, as the program's text
-    /// spells them, such as `f(_: Int, by: Bool)`. A parameter's convention is no part of the name.
+    /// The name of a function called `base`, spelling each parameter's label, convention and type: `f(_: &Int)`.
+    package static func name(_ base: String, parameters: [FunctionParameter]) -> String {
+        name(base, parameters: parameters.map { (label: $0.label, type: $0.convention.spelling(of: $0.type)) })
+    }
+
+    /// The name of a function called `base`, given each parameter's label and its type as already spelled, such as
+    /// `&Int`.
     package static func name(_ base: String, parameters: [(label: String?, type: String)]) -> String {
         let parameterList = parameters.map { "\($0.label ?? "_"): \($0.type)" }.joined(separator: ", ")
         return "\(base)(\(parameterList))"

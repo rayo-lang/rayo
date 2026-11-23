@@ -65,7 +65,7 @@ struct ElementTests {
               %0[%2] @1:1-1:2 = operand 7 @1:1-1:2
               %0[%2] @1:1-1:2 = add checked read %0[%2] @1:1-1:2, 10 @1:1-1:2
               begin a0 read %0 @1:1-1:2
-              %3 @1:1-1:2 = call "total(_: [2 of Int])"(a0) @1:1-1:2
+              %3 @1:1-1:2 = call "total(_: &[2 of Int])"(a0) @1:1-1:2
               end a0
               \(printInt("%3", through: 1))
               %1 @1:1-1:2 = operand move %0 @1:1-1:2 @1:1-1:2
@@ -73,7 +73,7 @@ struct ElementTests {
               \(printInt("%1[1]", through: 3))
               return
             }
-            func "total(_: [2 of Int])"(_: &[2 of Int]) -> Int {
+            func "total(_: &[2 of Int])"(_: &[2 of Int]) -> Int {
               param %0 a: &[2 of Int] @1:1-1:1
               temp %1: Int
             bb0:

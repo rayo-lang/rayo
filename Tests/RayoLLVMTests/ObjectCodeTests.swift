@@ -73,33 +73,33 @@ struct ObjectCodeTests {
             bb0:
               %0 @1:1-1:2 = fill 100000 of 0 @1:1-1:2
               begin a0 read %0 @1:1-1:2
-              %0 @1:1-1:2 = call "relay(_: [100000 of Int])"(a0) @1:1-1:2
+              %0 @1:1-1:2 = call "relay(_: &[100000 of Int])"(a0) @1:1-1:2
               end a0
               \(printInt("%0[99999]", through: 1))
               %1 @1:1-1:2 = call "Trio(a: Int, b: Int, c: Bool)"(2, 3, true) @1:1-1:2
               %2 @1:1-1:2 = fill 100 of read %1 @1:1-1:2 @1:1-1:2
               %3 @1:1-1:2 = fill 1000 of read %2 @1:1-1:2 @1:1-1:2
               begin a2 read %3 @1:1-1:2
-              %3 @1:1-1:2 = call "relay(_: [1000 of [100 of Trio]])"(a2) @1:1-1:2
+              %3 @1:1-1:2 = call "relay(_: &[1000 of [100 of Trio]])"(a2) @1:1-1:2
               end a2
               \(printInt("%3[999][99].0", through: 3))
               return
             }
-            func "relay(_: [100000 of Int])"(_: &[100000 of Int]) -> [100000 of Int] {
+            func "relay(_: &[100000 of Int])"(_: &[100000 of Int]) -> [100000 of Int] {
               param %0 a: &[100000 of Int] @1:1-1:1
               temp %1: [100000 of Int]
             bb0:
               %1 @1:1-1:2 = operand read %0 @1:1-1:2 @1:1-1:2
               return move %1 @1:1-1:2
             }
-            func "relay(_: [1000 of [100 of Trio]])"(_: &[1000 of [100 of Trio]]) -> [1000 of [100 of Trio]] {
+            func "relay(_: &[1000 of [100 of Trio]])"(_: &[1000 of [100 of Trio]]) -> [1000 of [100 of Trio]] {
               param %0 a: &[1000 of [100 of Trio]] @1:1-1:1
               temp %1: [1000 of [100 of Trio]]
             bb0:
               %1 @1:1-1:2 = operand read %0 @1:1-1:2 @1:1-1:2
               return move %1 @1:1-1:2
             }
-            func "relay(_: [100000 of [2 of Pair]])"(_: &[100000 of [2 of Pair]]) -> [100000 of [2 of Pair]] {
+            func "relay(_: &[100000 of [2 of Pair]])"(_: &[100000 of [2 of Pair]]) -> [100000 of [2 of Pair]] {
               param %0 a: &[100000 of [2 of Pair]] @1:1-1:1
               temp %1: [100000 of [2 of Pair]]
             bb0:

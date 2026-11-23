@@ -182,7 +182,7 @@ struct ReturnTests {
               %1 @1:1-1:2 = call "Trio(a: Int, b: Int, c: Bool)"(3, 4, false) @1:1-1:2
               begin a0 read %0 @1:1-1:2
               begin a1 read %1 @1:1-1:2
-              %2 @1:1-1:2 = call "pick(_: Bool, _: Trio, _: Trio)"(false, a0, a1) @1:1-1:2
+              %2 @1:1-1:2 = call "pick(_: &Bool, _: &Trio, _: &Trio)"(false, a0, a1) @1:1-1:2
               end a1
               end a0
               \(printInt("%2.0", through: 2))
@@ -190,7 +190,7 @@ struct ReturnTests {
               \(printBool("%2.2", through: 4))
               return
             }
-            func "pick(_: Bool, _: Trio, _: Trio)"(_: &Bool, _: &Trio, _: &Trio) -> Trio {
+            func "pick(_: &Bool, _: &Trio, _: &Trio)"(_: &Bool, _: &Trio, _: &Trio) -> Trio {
               param %0 first: &Bool @1:1-1:1
               param %1 t: &Trio @1:1-1:1
               param %2 u: &Trio @1:1-1:1
@@ -213,13 +213,13 @@ struct ReturnTests {
             func "main()"() -> Void {
               temp %0: Trio
             bb0:
-              %0 @1:1-1:2 = call "make(_: Bool)"(true) @1:1-1:2
+              %0 @1:1-1:2 = call "make(_: &Bool)"(true) @1:1-1:2
               \(printInt("%0.0", through: 0))
               \(printInt("%0.1", through: 1))
               \(printBool("%0.2", through: 2))
               return
             }
-            func "make(_: Bool)"(_: &Bool) -> Trio {
+            func "make(_: &Bool)"(_: &Bool) -> Trio {
               param %0 flag: &Bool @1:1-1:1
               var %1 t: Trio @1:1-1:1
             bb0:

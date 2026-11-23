@@ -14,7 +14,7 @@ struct BrokenIR: CustomTestStringConvertible, Sendable {
 }
 
 /// A program whose `main`, which takes and returns nothing, runs `blocks`. Its `main` holds an Int in `%0`, an array of
-/// two Ints in `%1` and a UInt in `%2`, and it declares `f(_: Int)`, which borrows its one Int.
+/// two Ints in `%1` and a UInt in `%2`, and it declares `f(_: &Int)`, which borrows its one Int.
 private func program(running blocks: String) throws -> IRProgram {
     try IRParser.program(from: """
         main "main()"
@@ -25,7 +25,7 @@ private func program(running blocks: String) throws -> IRProgram {
         bb0:
         \(blocks)
         }
-        func "f(_: Int)"(_: &Int) -> Void
+        func "f(_: &Int)"(_: &Int) -> Void
         """)
 }
 
@@ -204,7 +204,7 @@ private let brokenWhereOnlyADebugBuildChecks = [
         blocks: """
               %0 @1:1-1:2 = operand 1 @1:1-1:2
               begin a0 read %0 @1:1-1:2
-              _ = call "f(_: Int)"(a0) @1:1-1:2
+              _ = call "f(_: &Int)"(a0) @1:1-1:2
               return
             """,
         message: "the IR leaves the function at bb0 without ending a0",

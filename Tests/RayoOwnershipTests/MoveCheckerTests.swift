@@ -30,8 +30,8 @@ struct MoveCheckerTests {
     func `a move out of an owned parameter is allowed, and one out of a mutable parameter is reported`(
         reference: String, expected: [Diagnostic],
     ) throws {
-        let function = (name: "f(_: Int)", text: """
-            func "f(_: Int)"(_: \(reference)Int) -> Void {
+        let function = (name: "f(_: \(reference)Int)", text: """
+            func "f(_: \(reference)Int)"(_: \(reference)Int) -> Void {
               param %0 n: \(reference)Int @1:1-1:1
             bb0:
               _ = operand move %0 @2:1-2:1 @1:1-1:1
@@ -108,13 +108,13 @@ struct MoveCheckerTests {
     }
 }
 
-/// The function `f(_: Int, _: Shot)`, made of `blocks`, which returns `result`, and whose locals are `n` (`%0`), a
+/// The function `f(_: &Int, _: &Shot)`, made of `blocks`, which returns `result`, and whose locals are `n` (`%0`), a
 /// borrowed Int parameter, `p` (`%1`), a borrowed `Shot` parameter, `v` (`%2`), a `var` that holds an Int, `a` (`%3`),
 /// a `var` that holds two `Hit`s, a UInt temporary (`%4`), and `grid` (`%5`), a `var` that holds two arrays of two
 /// Ints.
 private func takingIntAndShot(_ blocks: String, result: String = "Void") -> (name: String, text: String) {
     let text = """
-        func "f(_: Int, _: Shot)"(_: &Int, _: &Shot) -> \(result) {
+        func "f(_: &Int, _: &Shot)"(_: &Int, _: &Shot) -> \(result) {
           param %0 n: &Int @1:1-1:1
           param %1 p: &Shot @1:1-1:1
           var %2 v: Int @1:1-1:1
@@ -124,5 +124,5 @@ private func takingIntAndShot(_ blocks: String, result: String = "Void") -> (nam
         \(blocks)
         }
         """
-    return ("f(_: Int, _: Shot)", text)
+    return ("f(_: &Int, _: &Shot)", text)
 }
