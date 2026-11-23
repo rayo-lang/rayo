@@ -1,6 +1,6 @@
 public import RayoSource
 
-/// Reserved words. Other words, such as `keep`, lex as identifiers.
+/// Reserved words. Other words, such as `borrows`, lex as identifiers.
 public enum Keyword: String, Sendable {
     case `let`, `var`, `func`, `struct`, `if`, `else`, `while`, `break`, `continue`, `return`, copy, `true`, `false`
     case consume, `self`, mutable, mutating, ref

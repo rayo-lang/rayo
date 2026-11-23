@@ -56,9 +56,8 @@ task-decl     = 'task' 'func' identifier generic-params? param-clause
                 ('with' '(' identifier ':' ref-type ')')? ('->' result-type)? where-clause? block ;
                                                                    (* one resume parameter, whose ref-type is a mutable one only: with (ctx: mutable &C) (07) *)
 param-clause  = '(' (param (',' param)* ','?)? ')' ;
-param         = (arg-label | '_')? identifier ':' 'keep'? type ('=' expression)? ;
-                                                                   (* x: T owns its argument, x: &T borrows it, x: mutable &T borrows it for change (01);
-                                                                      'keep' only where 05 allows it, on a T or &T parameter *)
+param         = (arg-label | '_')? identifier ':' type ('=' expression)? ;
+                                                                   (* x: T owns its argument, x: &T borrows it, x: mutable &T borrows it for change (01) *)
 arg-label     = identifier | keyword ;                            (* func index(of x: &T, in s: &[T]) *)
 result-type   = type | result-base '!' ;                           (* a bare '!' infers the failure type: only on a non-public function with a body (10) *)
 init-result   = '->' 'Self' '!' failure-type? ;                    (* an initializer that can fail: init(mass: Float) -> Self!PhysicsError; bare only on a non-public one (10) *)

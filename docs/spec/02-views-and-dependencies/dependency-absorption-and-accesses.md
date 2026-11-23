@@ -40,14 +40,26 @@ for d in mutable &targets { d = mutable &crate; break }     // by storing a borr
 
 **Writing a whole new value through an exclusive view adds and never replaces**, since the view may cover only part of what it depends on.
 
-**When such a place belongs to the caller, the store is a store into the caller's place, and rule 5 applies.** That holds whatever brought the view in: a `mutable &` parameter, an owned value that holds a mutable reference, or an owned `mutating` closure with exclusive captures. Every exclusive dependency a parameter carries in is treated like a `mutable &` parameter, by rule 5 and by its use at every exit ([below](#rule-5-the-callee-side)).
+**When such a place belongs to the caller, the store is a store into the caller's place, and rule 5 applies.** That holds whatever brought the view in: a `mutable &` parameter or an owned value that holds a mutable reference. Every exclusive dependency a parameter carries in is treated like a `mutable &` parameter, by rule 5 and by its use at every exit ([below](#rule-5-the-callee-side)).
 
-**On the caller's side, an owned argument that is a mutable view absorbs like a `mutable &` one**, since it can be stored through too. Examples are an owned struct of mutable references, a `List<mutable &any Damageable>` and a `mutating` closure ([Mutable views](dependency-projection-and-results.md#mutable-views)). So `views`, which `low` and `high` were split from, absorbs this call's other arguments:
+**On the caller's side, an owned argument that is a mutable view absorbs like a `mutable &` one**, since it can be stored through too. Examples are an owned struct of mutable references and a `List<mutable &any Damageable>` ([Mutable views](dependency-projection-and-results.md#mutable-views)). So `views`, which `low` and `high` were split from, absorbs this call's other arguments:
 
 ```swift
 let (low, high) = views.span.mutableSplit(at: 2)
 poison(Halves(low: consume low, high: consume high), &tmp)   // 'views' depends on 'tmp' from here on
 ```
+
+**An owned function value is no absorbing argument, even a `mutating` one, which is a mutable view**, since nothing a call of it stores into its captures may depend on its arguments ([05](../05-protocols-generics-and-closures/functions-and-closures.md#what-a-closure-may-keep-from-its-parameters)). The same holds for a closure of concrete type owned through a `some F` parameter, or through a type parameter constrained to a function type. So the temporary key below leaves nothing borrowed:
+
+```swift
+func forEachMatch(_ key: &Key, _ body: mutating (&Symbol) -> Void) { … }
+
+var hits = alloc List<&Text>()
+forEachMatch(&Key(text: "if", hash: h)) { _ in hits.append(&name) }   // 'hits' takes on 'name', never the temporary key
+print("\(hits.count) matches")
+```
+
+A function value or a closure given to a `mutable &` parameter absorbs as any `mutable &` argument does, since the callee may replace it with another closure.
 
 **A `&` argument absorbs nothing, whatever it carries**, since nothing is stored through a shared view. What safe code can write through a shared path holds only unscoped values: an object's value, a thread-local and the contents of a `Synchronized` value ([Generic code and `~Scoped`](scoped-values.md#generic-code-and-scoped)).
 
@@ -76,7 +88,7 @@ put(mutable &out)                       // 'out' depends on 'src' from here on
 
 **An argument that absorbs a place the closure captures exclusively also depends on the closure, exclusively, unless the call consumes it.** What the caller can see decides this, as it does for a result ([Closure calls](dependency-projection-and-results.md#closure-calls)).
 
-**The closure itself absorbs only what its `keep` arguments give it** ([05](../05-protocols-generics-and-closures/functions-and-closures.md#what-a-closure-may-keep-keep)). For a `keep &T` argument, that is its argument place and its set, as rule 3 counts them, never the place that holds a reference passed as the argument. For a `keep T` argument, it is the set alone. A `mutating` closure absorbs these into itself, and so into the places it depends on exclusively. Its other parameters are call-scoped, lent only for the call, so nothing it was lent reaches its captures. So a closure lent data for one call, such as a lock's, can't keep a view of it.
+**The closure itself absorbs nothing from its arguments**, since nothing it stores into its captures may depend on its parameters ([05](../05-protocols-generics-and-closures/functions-and-closures.md#what-a-closure-may-keep-from-its-parameters)). So nothing it was lent reaches its captures, and a closure lent data for one call, such as a lock's, can't keep a view of it.
 
 **An access through a place property is a call to its accessor**, with `self` and the subscript's arguments, and its place depends on its sources ([Place and value properties](place-and-value-properties.md#what-a-place-depends-on)). No accessor code runs after the caller's access. So what the caller stores into a `mutate`'s place is a change to part of each source it depends on exclusively, and of what that source holds exclusively. Each of those takes it on (above). An argument that is no source, such as a key or a `mutable &` parameter no item names, takes on nothing.
 
@@ -139,10 +151,9 @@ let f = { [move s] in &s }     // error: the result refers to an owned capture
 
 - places captured by shared reference;
 - what any capture carries;
-- what parameters declared `keep` carry ([05](../05-protocols-generics-and-closures/functions-and-closures.md#what-a-closure-may-keep-keep));
 - static storage.
 
-**Parameters not declared `keep` are call-scoped**, lent only for one call, so a closure can return what depends on one, but can't store it:
+**Nothing a closure stores into its captures may depend on its parameters** ([05](../05-protocols-generics-and-closures/functions-and-closures.md#what-a-closure-may-keep-from-its-parameters)), so a closure can return what depends on one, but can't store it:
 
 ```swift
 let names = alloc entries.map { &$0.name }   // the closure returns what depends on its parameter; storing it would be an error

@@ -44,10 +44,9 @@ throw try catch do defer static mutable consuming copy consume borrow mutating a
 where with await unsafe unchecked alloc extern as is nil true false
 associatedtype subscript`.
 
-**Contextual keywords are keywords only in the positions below, and can be used as identifiers anywhere else.** They are `mutate`, `get`, `set`, `c`, `move`, `of`, `error`, `prefix`, `noalloc`, `stack`, `union`, `keep`, `borrows`, `outlives` and `discard`. Some of those positions are narrow:
+**Contextual keywords are keywords only in the positions below, and can be used as identifiers anywhere else.** They are `mutate`, `get`, `set`, `c`, `move`, `of`, `error`, `prefix`, `noalloc`, `stack`, `union`, `borrows`, `outlives` and `discard`. Some of those positions are narrow:
 
 - **`union`** is a keyword only after a declaration's attributes and modifiers, or at the start of an import config rule, when an identifier follows it, so `a.union(b)` stays a method call;
-- **`keep`** only at the start of a parameter's type, or of a function type's parameter, when a type follows it, so a parameter whose type is named `keep` still parses;
 - **`error`** only after `static`;
 - **`prefix`** only in an `import c … where` clause;
 - **`noalloc`** only at the start of a rule inside an import config, or after `extern c`;

@@ -12,17 +12,19 @@
 
 - **Must accept** tokens that view the source without copying text, in a token list that lives as long as the function needs it.
 
-### A2 · Collecting views through helpers, loops and callbacks (also A15, part of A24)
+### A2 · Collecting views through helpers, loops and iterators (also A15, part of A24)
 
-**Code collects views of a text into a list it owns, and uses the list afterwards.** It does so through a helper, a loop and a callback:
+**Code collects views of a text into a list it owns, and uses the list afterwards.** It does so through a helper, a loop and an iterator:
 
 ```swift
 func splitLines(_ text: &Text, into out: mutable &List<&Text>) { ... }
 
 splitLines(&source, into: mutable &lines)                    // the helper appends to the caller's list
 for entry in &table.entries { names.append(&entry.name) }   // a loop over a collection
-forEachLine(&src) { line in lines.append(&line) }           // a callback
+for line in src.lines() { collected.append(&line) }         // a SharedIterator over the text's lines
 print(lines.count)
+print(names.count)
+print(collected.count)
 ```
 
 The caller has to know which text the list views. Changing that text, as `source.append` would, may move it to a larger buffer and free the old one, which the list still views ([safety argument](../safety-argument.md)).
@@ -40,8 +42,8 @@ for row in &rows { runs.append(&row[..<4]) }   // 'rows' is a List<[4 of Float]>
 copyAll(from: &src, into: mutable &dst)        // copies the references that 'src' holds into 'dst'
 ```
 
-- **Must accept** the helper, the loop and the callback in the first block, and a user-defined sequence, such as a lexer used as a `for` sequence, whose elements are collected the same way, with no fallback to index loops.
-- In the helper and the callback, the dependency is created *inside the callee*, and the caller must learn about it with no annotation, or with a small checked one.
+- **Must accept** the helper, the loop and the iterator in the first block, and a user-defined sequence, such as a lexer used as a `for` sequence, whose elements are collected the same way, with no fallback to index loops.
+- In the helper and the iterator, the dependency is created *inside the callee*, and the caller must learn about it with no annotation, or with a small checked one.
 - **Must accept** a quicksort without recursion that keeps its pending ranges as mutable references in a worklist, starting and popping as above, with `data` untouchable until `work` is dead.
 - **Must accept**, with no `where` clause, the `lex` and `fill` calls above over two `List<&Text>`s, each list used afterwards: a list takes on what the other arguments view, not the arguments themselves.
 - **Must accept** the `map` over a `&[Token]` and the `map` over `entries` above, each result used after the call, and the loop over a `List<[4 of Float]>`, with `runs` used after the loop.

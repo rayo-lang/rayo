@@ -34,8 +34,7 @@ ref-type      = 'mutable'? '&' type-primary type-suffix* ;         (* a referenc
 composition   = type-primary ('&' type-primary)* ;                 (* any P & Sendable; any P? is (any P)?; &any P & Sendable is &(any P & Sendable);
                                                                       after a cast operator, the type takes every '&' that follows *)
 type-name     = identifier generic-args? ('.' identifier generic-args?)* ;   (* Enemy, gameplay.Enemy, T.Element, List<gameplay.Enemy>, Text *)
-fn-param-type = 'keep'? type ('|' type)* ;                         (* some (mutable &Context) -> Bool; mutating (keep &Text) -> Void; (IoError | ParseError) -> Void;
-                                                                     'keep' only on a T or &T parameter, never a mutable &T one (05) *)
+fn-param-type = type ('|' type)* ;                                 (* some (mutable &Context) -> Bool; mutating (&Text) -> Void; (IoError | ParseError) -> Void *)
 type-suffix   = '?' ;                                              (* '*' binds to the name, '?' applies after *)
 generic-args  = '<' generic-arg (',' generic-arg)* ','? '>' ;
 generic-arg   = type | expression | '_' ;                          (* '_' only in a declaration's annotation or after 'as': filled from the initializer, as in List<_> (04) *)

@@ -131,7 +131,7 @@ For such a type, `T.fields` and `T.cases` are empty, the kind queries and `T.isC
     - an inline array's count;
     - a reference's kind, shared or mutable;
     - an existential's protocols, as a set;
-    - a function type's `unsafe`, closure kind, `@sendable`, `@noalloc`, or `@c` with its stack need in bytes, `target.cStackReserve` when none is written; and each parameter's `keep`;
+    - a function type's `unsafe`, closure kind, `@sendable`, `@noalloc`, or `@c` with its stack need in bytes, `target.cStackReserve` when none is written;
     - an error union's members, as a set.
 
   So `Closure<unsafe () -> Void>` and `Closure<() -> Void>` differ.
