@@ -49,7 +49,7 @@ class CheckDocsTests(unittest.TestCase):
         self.assertEqual(findings(self.root), ['README.md:7: dash: use a colon, a comma or a new sentence'])
 
     def test_a_fence_with_an_info_string_does_not_close_a_code_block(self):
-        self.write('README.md', '```\nlet a = 1\n```rayo\nlet b = 2 — a dash\n```\n\nAfter — a dash.\n')
+        self.write('README.md', '```rayo\nlet a = 1\n```rayo\nlet b = 2 — a dash\n```\n\nAfter — a dash.\n')
 
         self.assertEqual(findings(self.root), ['README.md:7: dash: use a colon, a comma or a new sentence'])
 
@@ -72,8 +72,21 @@ class CheckDocsTests(unittest.TestCase):
 
         self.assertEqual(findings(self.root), ['docs/spec/01-values.md:7: swift fence: fence Rayo code as rayo'])
 
+    def test_a_code_block_fenced_swift_in_any_case_is_reported(self):
+        self.write('README.md', '```Swift title\nlet a = b\n```\n')
+
+        self.assertEqual(findings(self.root), ['README.md:1: swift fence: fence Rayo code as rayo'])
+
+    def test_a_code_block_with_no_language_is_reported_in_the_docs_but_not_in_the_agent_docs(self):
+        self.write('README.md', 'A move:\n\n```\nlet a = b\n```\n')
+        self.write('docs/agents/domain.md', '```\n/\n├── GLOSSARY.md\n```\n')
+
+        self.assertEqual(findings(self.root), [
+            "README.md:3: fence with no language: name the block's language, such as rayo",
+        ])
+
     def test_a_swift_fence_shown_inside_a_code_block_is_not_reported(self):
-        self.write('README.md', '````md\n```swift\nlet a = 1\n```\n````\n\n```\nlet b = 2\n```swift\n```\n')
+        self.write('README.md', '````md\n```swift\nlet a = 1\n```\n````\n\n```rayo\nlet b = 2\n```swift\n```\n')
 
         self.assertEqual(findings(self.root), [])
 

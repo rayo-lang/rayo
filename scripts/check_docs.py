@@ -36,7 +36,7 @@ def markdown_files(root):
 
 
 def lines_and_opening_fences(lines):
-    # Pairs each line with whether it is code, a fence line or a line between an opening fence and its close, and with
+    # Pairs each line with whether it is code (a fence line, or a line between an opening fence and its close) and with
     # the fence it opens, if it opens a code block.
     opener = None
     for line in lines:
@@ -109,10 +109,14 @@ def dash_findings(path, text):
 
 
 def fence_findings(path, text):
-    # Only the agent docs and skills show Swift, the compiler's language, so a swift block anywhere else is Rayo code.
+    # Swift, the compiler's language, appears only in the skills, so a swift block here is Rayo code; each block names
+    # its language, so Rayo code is never left unmarked.
     for number, opener in opening_fences(text):
-        if opener['info'].split()[:1] == ['swift']:
+        language = opener['info'].lower().split()[:1]
+        if language == ['swift']:
             yield f'{path}:{number}: swift fence: fence Rayo code as rayo'
+        elif not language:
+            yield f"{path}:{number}: fence with no language: name the block's language, such as rayo"
 
 
 def layout_findings(path, text):

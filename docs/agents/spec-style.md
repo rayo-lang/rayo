@@ -31,7 +31,7 @@ The spec is **precise, plain and explained**: every rule stated exactly, with th
     - to call the overload that takes a reference, where another takes the argument as written.
 
   Every code example in the docs and in `examples/` follows this rule, other than the proof program in `examples/v0.1/`, which keeps the `&` that v0.1 needed, since the compiler lends a bare place from v0.2 on.
-- **Rayo code is fenced ```` ```rayo ````.** Only the agent docs and the skills show Swift, the compiler's language, so `check_docs.py` reports a block fenced `swift` anywhere else.
+- **Rayo code is fenced ```` ```rayo ````, and other code names its own language.** Swift, the compiler's language, appears only in the skills, so `check_docs.py` reports a block fenced `swift` anywhere else, and a block that names no language.
 - **A rule that serves more than games has a general motivation and lead example.** Rayo is a general systems language, so no construct or reason reads as existing for games. A game example may follow as a second case, as an ECS query follows a columnar store's.
 
 ## Terms and links
