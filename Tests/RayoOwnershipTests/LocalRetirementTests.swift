@@ -11,7 +11,8 @@ struct LocalRetirementTests {
               %0 @1:1-1:1 = operand 1 @1:1-1:1
               declare %1
               %1 @1:1-1:1 = add checked read %0 @1:1-1:1, 2 @1:1-1:1
-              _ = call builtin "print(_: &Int)"(read %1 @1:1-1:1) @1:1-1:1
+              begin a0 read %1 @1:1-1:1
+              _ = call builtin "print(_: &Int)"(a0) @1:1-1:1
               return
             """
         #expect(try ended(blocks) == body(of: """
@@ -21,7 +22,9 @@ struct LocalRetirementTests {
               declare %1
               %1 @1:1-1:1 = add checked read %0 @1:1-1:1, 2 @1:1-1:1
               retire %0
-              _ = call builtin "print(_: &Int)"(read %1 @1:1-1:1) @1:1-1:1
+              begin a0 read %1 @1:1-1:1
+              _ = call builtin "print(_: &Int)"(a0) @1:1-1:1
+              end a0
               retire %1
               return
             """))
@@ -42,7 +45,8 @@ struct LocalRetirementTests {
               %0 @1:1-1:1 = add checked read %0 @1:1-1:1, 1 @1:1-1:1
               goto bb1
             bb3:
-              _ = call builtin "print(_: &Int)"(read %0 @1:1-1:1) @1:1-1:1
+              begin a0 read %0 @1:1-1:1
+              _ = call builtin "print(_: &Int)"(a0) @1:1-1:1
               return
             """
         #expect(try ended(blocks) == body(of: """
@@ -60,7 +64,9 @@ struct LocalRetirementTests {
               goto bb1
             bb3:
               retire %6
-              _ = call builtin "print(_: &Int)"(read %0 @1:1-1:1) @1:1-1:1
+              begin a0 read %0 @1:1-1:1
+              _ = call builtin "print(_: &Int)"(a0) @1:1-1:1
+              end a0
               retire %0
               return
             """))
@@ -76,7 +82,8 @@ struct LocalRetirementTests {
               %0 @1:1-1:1 = operand 1 @1:1-1:1
               branch read %6 @1:1-1:1, bb1, bb2
             bb1:
-              _ = call builtin "print(_: &Int)"(read %0 @1:1-1:1) @1:1-1:1
+              begin a0 read %0 @1:1-1:1
+              _ = call builtin "print(_: &Int)"(a0) @1:1-1:1
               goto bb2
             bb2:
               return
@@ -90,7 +97,9 @@ struct LocalRetirementTests {
               branch read %6 @1:1-1:1, bb1, bb3
             bb1:
               retire %6
-              _ = call builtin "print(_: &Int)"(read %0 @1:1-1:1) @1:1-1:1
+              begin a0 read %0 @1:1-1:1
+              _ = call builtin "print(_: &Int)"(a0) @1:1-1:1
+              end a0
               retire %0
               goto bb2
             bb2:
@@ -124,14 +133,22 @@ struct LocalRetirementTests {
     }
 
     @Test func `a local that no declaration starts never retires`() throws {
-        // `x` holds a value from the start of the function, as a parameter does.
+        // `x` holds a value from the start of the function, as a parameter does, so the print's access alone ends.
         let blocks = """
             bb0:
               %0 @1:1-1:1 = operand 1 @1:1-1:1
-              _ = call builtin "print(_: &Int)"(read %0 @1:1-1:1) @1:1-1:1
+              begin a0 read %0 @1:1-1:1
+              _ = call builtin "print(_: &Int)"(a0) @1:1-1:1
               return
             """
-        #expect(try ended(blocks) == body(of: blocks))
+        #expect(try ended(blocks) == body(of: """
+            bb0:
+              %0 @1:1-1:1 = operand 1 @1:1-1:1
+              begin a0 read %0 @1:1-1:1
+              _ = call builtin "print(_: &Int)"(a0) @1:1-1:1
+              end a0
+              return
+            """))
     }
 
     @Test func `a local that the function's return reads lives until the function returns`() throws {

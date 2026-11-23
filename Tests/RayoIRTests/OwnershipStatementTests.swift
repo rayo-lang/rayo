@@ -44,7 +44,7 @@ private let ownershipStatements = [
     OwnershipStatement(
         testDescription: "a retirement of a local",
         blocks: """
-              _ = call builtin "print(_: &Int)"(read %0 @1:1-1:2) @1:1-1:2
+              _ = operand read %0 @1:1-1:2 @1:1-1:2
               goto bb1
             bb1:
               retire %0

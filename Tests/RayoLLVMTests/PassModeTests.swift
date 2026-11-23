@@ -130,7 +130,9 @@ struct PassModeTests {
             func "main()"() -> Void {
               temp %0: Trio
             bb0:
-              %0 @1:1-1:2 = call "relay(_: Trio)"(read %0 @1:1-1:2) @1:1-1:2
+              begin a0 read %0 @1:1-1:2
+              %0 @1:1-1:2 = call "relay(_: Trio)"(a0) @1:1-1:2
+              end a0
               return
             }
             """
@@ -193,7 +195,7 @@ struct PassModeTests {
               begin a0 read %0 @1:1-1:2
               %2 @1:1-1:2 = call "f(_: [4000000000 of E])"(a0) @1:1-1:2
               end a0
-              \(printUInt("%2"))
+              \(printUInt("%2", through: 1))
               return
             }
             func "f(_: [4000000000 of E])"(_: &[4000000000 of E]) -> UInt {

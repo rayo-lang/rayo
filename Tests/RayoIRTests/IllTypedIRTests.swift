@@ -35,6 +35,12 @@ struct IllTypedIRTests {
         #expect(IRVerifier.verify(program, from: .lowering) == nil)
     }
 
+    // A constant lies in no place, so a call passes it to a borrowed parameter as it is.
+    @Test func `a constant passed to a borrowed parameter has no violation`() throws {
+        let program = try IRParser.program(from: passing("", "1", to: "&Int"))
+        #expect(IRVerifier.verify(program, from: .lowering) == nil)
+    }
+
     @Test func `a retirement of a parameter, whose place the call keeps until it returns, is a violation`() throws {
         let program = try IRParser.program(from: main("bb0:\n  return", after: """
             func "f(_: Int)"(_: &Int) -> Void {
@@ -245,7 +251,8 @@ private let illTypedIR = [
         text: main("""
               temp %0: Bool
             bb0:
-              _ = call builtin "print(_: &Int)"(read %0 @1:1-1:2) @1:1-1:2
+              begin a0 read %0 @1:1-1:2
+              _ = call builtin "print(_: &Int)"(a0) @1:1-1:2
               return
             """),
         function: "main()",
@@ -411,7 +418,7 @@ private let illTypedIR = [
         testDescription: "a call that passes an access to an owned parameter",
         text: passing("begin a0 read %0 @1:1-1:2", "a0", to: "Int"),
         function: "main()",
-        message: "the IR passes 'f(_: Int)' a read access, where it takes a value",
+        message: "the IR passes 'f(_: Int)' a read access, where it takes a constant or a value",
     ),
     IllTypedIR(
         testDescription: "a call that passes a value to a mutable parameter",
@@ -423,7 +430,19 @@ private let illTypedIR = [
         testDescription: "a call that passes a modify access to a borrowed parameter",
         text: passing("begin a0 modify %0 @1:1-1:2", "a0", to: "&Int"),
         function: "main()",
-        message: "the IR passes 'f(_: Int)' a modify access, where it takes a value or a read access",
+        message: "the IR passes 'f(_: Int)' a modify access, where it takes a constant or a read access",
+    ),
+    IllTypedIR(
+        testDescription: "a call that passes a place's value to a borrowed parameter, with no access to the place",
+        text: passing("", "read %0 @1:1-1:2", to: "&Int"),
+        function: "main()",
+        message: "the IR passes 'f(_: Int)' a value, where it takes a constant or a read access",
+    ),
+    IllTypedIR(
+        testDescription: "a call that moves a place's value into a borrowed parameter",
+        text: passing("", "move %0 @1:1-1:2", to: "&Int"),
+        function: "main()",
+        message: "the IR passes 'f(_: Int)' a value, where it takes a constant or a read access",
     ),
     IllTypedIR(
         testDescription: "a run that starts at a primary initializer",

@@ -20,17 +20,25 @@ let programStructs = """
 
     """
 
-/// The IR statement that prints the Int that `place` holds, such as `%0.1`.
-func printInt(_ place: String) -> String {
-    #"_ = call builtin "print(_: &Int)"(read \#(place) @1:1-1:2) @1:1-1:2"#
+/// The IR statements that print the Int that `place` holds, such as `%0.1`, through the access `aN`, where `N` is
+/// `access`, which no other statement of the function begins.
+func printInt(_ place: String, through access: Int) -> String {
+    printStatements(of: "Int", at: place, through: access)
 }
 
-/// The IR statement that prints the UInt that `place` holds.
-func printUInt(_ place: String) -> String {
-    #"_ = call builtin "print(_: &UInt)"(read \#(place) @1:1-1:2) @1:1-1:2"#
+/// The IR statements that print the UInt that `place` holds, through the access `access` numbers.
+func printUInt(_ place: String, through access: Int) -> String {
+    printStatements(of: "UInt", at: place, through: access)
 }
 
-/// The IR statement that prints the Bool that `place` holds.
-func printBool(_ place: String) -> String {
-    #"_ = call builtin "print(_: &Bool)"(read \#(place) @1:1-1:2) @1:1-1:2"#
+/// The IR statements that print the Bool that `place` holds, through the access `access` numbers.
+func printBool(_ place: String, through access: Int) -> String {
+    printStatements(of: "Bool", at: place, through: access)
+}
+
+/// The IR statements that print the value of `type` that `place` holds, as the ownership stage gives a print its
+/// argument: a read access to the place, numbered `access`, begun as the call begins and ended once it returns.
+private func printStatements(of type: String, at place: String, through access: Int) -> String {
+    let call = #"_ = call builtin "print(_: &\#(type))"(a\#(access)) @1:1-1:2"#
+    return "begin a\(access) read \(place) @1:1-1:2\n\(call)\nend a\(access)"
 }

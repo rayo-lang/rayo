@@ -58,7 +58,7 @@ struct ControlFlowTests {
               %1 @1:1-1:2 = less read %0 @1:1-1:2, 3 @1:1-1:2
               branch read %1 @1:1-1:2, bb2, bb3
             bb2:
-              \(printInt("%0"))
+              \(printInt("%0", through: 0))
               %0 @1:1-1:2 = add checked read %0 @1:1-1:2, 1 @1:1-1:2
               goto bb1
             bb3:
@@ -100,7 +100,7 @@ struct ControlFlowTests {
             bb1:
               unreachable
             bb2:
-              \(printInt("%0"))
+              \(printInt("%0", through: 0))
               return
             }
             func "seven()"() -> Int {
@@ -149,9 +149,9 @@ struct ReturnTests {
             bb0:
               %0 @1:1-1:2 = call "yes()"() @1:1-1:2
               %1 @1:1-1:2 = call "pair()"() @1:1-1:2
-              \(printBool("%0"))
-              \(printInt("%1.0"))
-              \(printInt("%1.1"))
+              \(printBool("%0", through: 0))
+              \(printInt("%1.0", through: 1))
+              \(printInt("%1.1", through: 2))
               return
             }
             func "yes()"() -> Bool {
@@ -180,10 +180,14 @@ struct ReturnTests {
             bb0:
               %0 @1:1-1:2 = call "Trio(a: Int, b: Int, c: Bool)"(1, 2, true) @1:1-1:2
               %1 @1:1-1:2 = call "Trio(a: Int, b: Int, c: Bool)"(3, 4, false) @1:1-1:2
-              %2 @1:1-1:2 = call "pick(_: Bool, _: Trio, _: Trio)"(false, read %0 @1:1-1:2, read %1 @1:1-1:2) @1:1-1:2
-              \(printInt("%2.0"))
-              \(printInt("%2.1"))
-              \(printBool("%2.2"))
+              begin a0 read %0 @1:1-1:2
+              begin a1 read %1 @1:1-1:2
+              %2 @1:1-1:2 = call "pick(_: Bool, _: Trio, _: Trio)"(false, a0, a1) @1:1-1:2
+              end a1
+              end a0
+              \(printInt("%2.0", through: 2))
+              \(printInt("%2.1", through: 3))
+              \(printBool("%2.2", through: 4))
               return
             }
             func "pick(_: Bool, _: Trio, _: Trio)"(_: &Bool, _: &Trio, _: &Trio) -> Trio {
@@ -210,9 +214,9 @@ struct ReturnTests {
               temp %0: Trio
             bb0:
               %0 @1:1-1:2 = call "make(_: Bool)"(true) @1:1-1:2
-              \(printInt("%0.0"))
-              \(printInt("%0.1"))
-              \(printBool("%0.2"))
+              \(printInt("%0.0", through: 0))
+              \(printInt("%0.1", through: 1))
+              \(printBool("%0.2", through: 2))
               return
             }
             func "make(_: Bool)"(_: &Bool) -> Trio {

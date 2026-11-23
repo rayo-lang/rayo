@@ -27,7 +27,9 @@ struct ObjectCodeTests {
                 bb0:
                   %0 @1:1-1:2 = operand 42 @1:1-1:2
                   %1 @1:1-1:2 = operand \(taking) %0 @1:1-1:2 @1:1-1:2
-                  _ = call builtin "print(_: &Int)"(read %1 @1:1-1:2) @1:1-1:2
+                  begin a0 read %1 @1:1-1:2
+                  _ = call builtin "print(_: &Int)"(a0) @1:1-1:2
+                  end a0
                   return
                 }
                 """)
@@ -70,13 +72,17 @@ struct ObjectCodeTests {
               var %3 trios: [1000 of [100 of Trio]] @1:1-1:1
             bb0:
               %0 @1:1-1:2 = fill 100000 of 0 @1:1-1:2
-              %0 @1:1-1:2 = call "relay(_: [100000 of Int])"(read %0 @1:1-1:2) @1:1-1:2
-              \(printInt("%0[99999]"))
+              begin a0 read %0 @1:1-1:2
+              %0 @1:1-1:2 = call "relay(_: [100000 of Int])"(a0) @1:1-1:2
+              end a0
+              \(printInt("%0[99999]", through: 1))
               %1 @1:1-1:2 = call "Trio(a: Int, b: Int, c: Bool)"(2, 3, true) @1:1-1:2
               %2 @1:1-1:2 = fill 100 of read %1 @1:1-1:2 @1:1-1:2
               %3 @1:1-1:2 = fill 1000 of read %2 @1:1-1:2 @1:1-1:2
-              %3 @1:1-1:2 = call "relay(_: [1000 of [100 of Trio]])"(read %3 @1:1-1:2) @1:1-1:2
-              \(printInt("%3[999][99].0"))
+              begin a2 read %3 @1:1-1:2
+              %3 @1:1-1:2 = call "relay(_: [1000 of [100 of Trio]])"(a2) @1:1-1:2
+              end a2
+              \(printInt("%3[999][99].0", through: 3))
               return
             }
             func "relay(_: [100000 of Int])"(_: &[100000 of Int]) -> [100000 of Int] {

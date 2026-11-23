@@ -12,11 +12,11 @@ struct ArrayLiteralTests {
             bb0:
               %0 @1:1-1:2 = array of Int(4, 5, 6) @1:1-1:2
               %1 @1:1-1:2 = array of Bool(false, true) @1:1-1:2
-              \(printInt("%0[0]"))
-              \(printInt("%0[1]"))
-              \(printInt("%0[2]"))
-              \(printBool("%1[0]"))
-              \(printBool("%1[1]"))
+              \(printInt("%0[0]", through: 0))
+              \(printInt("%0[1]", through: 1))
+              \(printInt("%0[2]", through: 2))
+              \(printBool("%1[0]", through: 3))
+              \(printBool("%1[1]", through: 4))
               return
             }
             """
@@ -37,11 +37,11 @@ struct ArrayLiteralTests {
               %2 @1:1-1:2 = array of Pair(read %0 @1:1-1:2, read %0 @1:1-1:2) @1:1-1:2
               %3 @1:1-1:2 = array of Trio(read %1 @1:1-1:2, move %1 @1:1-1:2) @1:1-1:2
               %2[0].0 @1:1-1:2 = operand 9 @1:1-1:2
-              \(printInt("%2[0].0"))
-              \(printInt("%2[1].0"))
-              \(printInt("%2[1].1"))
-              \(printInt("%3[1].1"))
-              \(printBool("%3[1].2"))
+              \(printInt("%2[0].0", through: 0))
+              \(printInt("%2[1].0", through: 1))
+              \(printInt("%2[1].1", through: 2))
+              \(printInt("%3[1].1", through: 3))
+              \(printBool("%3[1].2", through: 4))
               return
             }
             """
@@ -58,10 +58,10 @@ struct ArrayLiteralTests {
               %0 @1:1-1:2 = array of Int(1, 2) @1:1-1:2
               %1 @1:1-1:2 = array of [2 of Int](read %0 @1:1-1:2, read %0 @1:1-1:2) @1:1-1:2
               %1[1][0] @1:1-1:2 = operand 3 @1:1-1:2
-              \(printInt("%1[0][0]"))
-              \(printInt("%1[0][1]"))
-              \(printInt("%1[1][0]"))
-              \(printInt("%1[1][1]"))
+              \(printInt("%1[0][0]", through: 0))
+              \(printInt("%1[0][1]", through: 1))
+              \(printInt("%1[1][0]", through: 2))
+              \(printInt("%1[1][1]", through: 3))
               return
             }
             """
@@ -92,9 +92,9 @@ struct ArrayLiteralTests {
             bb0:
               %0 @1:1-1:2 = array of Int(1, 2, 3) @1:1-1:2
               %0 @1:1-1:2 = array of Int(read %0[1] @1:1-1:2, read %0[0] @1:1-1:2, 9) @1:1-1:2
-              \(printInt("%0[0]"))
-              \(printInt("%0[1]"))
-              \(printInt("%0[2]"))
+              \(printInt("%0[0]", through: 0))
+              \(printInt("%0[1]", through: 1))
+              \(printInt("%0[2]", through: 2))
               return
             }
             """
@@ -112,9 +112,9 @@ struct FilledArrayTests {
             bb0:
               %0 @1:1-1:2 = fill 3 of 7 @1:1-1:2
               %0[1] @1:1-1:2 = operand 8 @1:1-1:2
-              \(printInt("%0[0]"))
-              \(printInt("%0[1]"))
-              \(printInt("%0[2]"))
+              \(printInt("%0[0]", through: 0))
+              \(printInt("%0[1]", through: 1))
+              \(printInt("%0[2]", through: 2))
               return
             }
             """
@@ -131,11 +131,11 @@ struct FilledArrayTests {
               %0 @1:1-1:2 = call "Trio(a: Int, b: Int, c: Bool)"(1, 2, true) @1:1-1:2
               %1 @1:1-1:2 = fill 2 of read %0 @1:1-1:2 @1:1-1:2
               %1[0].1 @1:1-1:2 = operand 5 @1:1-1:2
-              \(printInt("%1[0].1"))
-              \(printInt("%1[1].0"))
-              \(printInt("%1[1].1"))
-              \(printBool("%1[1].2"))
-              \(printInt("%0.1"))
+              \(printInt("%1[0].1", through: 0))
+              \(printInt("%1[1].0", through: 1))
+              \(printInt("%1[1].1", through: 2))
+              \(printBool("%1[1].2", through: 3))
+              \(printInt("%0.1", through: 4))
               return
             }
             """

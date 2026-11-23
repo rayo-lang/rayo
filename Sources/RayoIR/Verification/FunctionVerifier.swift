@@ -228,28 +228,32 @@ struct FunctionVerifier {
         return callee.result(in: functions)
     }
 
-    /// Throws where `argument` isn't passed as a parameter of `convention` of the function `name` takes it: a value or
-    /// a read access where the parameter borrows, a value where it owns, and a modify access where it is mutable.
+    /// Throws where `argument` isn't passed as a parameter of `convention` of the function `name` takes it: a constant
+    /// or a read access where the parameter borrows, a value where it owns, and a modify access where it is mutable.
+    /// A borrowed argument that lies in a place reaches it through an access, which the ownership stage checks as it
+    /// checks any other; only a constant, which lies in no place, passes as it is.
     private func verify(
         _ argument: CallArgument, passedTo convention: ParameterConvention, of name: String,
     ) throws(IRViolation) {
-        // A value passes through no access.
-        let accessKind: AccessKind? = if let id = argument.access { try access(id).kind } else { nil }
-        let accepted: [AccessKind?] = switch convention {
-        case .borrowed: [nil, .read]
-        case .owned: [nil]
-        case .mutable: [.modify]
+        let passed = try passing(of: argument)
+        let accepted: [ArgumentPassing] = switch convention {
+        case .borrowed: [.constant, .access(.read)]
+        case .owned: [.constant, .value]
+        case .mutable: [.access(.modify)]
         }
-        guard !accepted.contains(accessKind) else { return }
+        guard !accepted.contains(passed) else { return }
 
-        let takes = accepted.map(Self.passing(through:)).joined(separator: " or ")
-        throw violation("the IR passes '\(name)' \(Self.passing(through: accessKind)), where it takes \(takes)")
+        let takes = accepted.map(\.description).joined(separator: " or ")
+        throw violation("the IR passes '\(name)' \(passed.description), where it takes \(takes)")
     }
 
-    /// What an argument passed through an access of `kind` passes, or through none where `kind` is nil, as a
-    /// violation names it.
-    private static func passing(through kind: AccessKind?) -> String {
-        kind.map { "a \($0.rawValue) access" } ?? "a value"
+    /// How a call passes `argument`. Throws where no statement of the body begins its access.
+    private func passing(of argument: CallArgument) throws(IRViolation) -> ArgumentPassing {
+        switch argument {
+        case .operand(.constant): .constant
+        case .operand: .value
+        case .access(let id): .access(try access(id).kind)
+        }
     }
 
     /// The type of the value `argument` passes: its operand's, or that of the place its access reaches. Throws where
@@ -283,5 +287,24 @@ struct FunctionVerifier {
     /// The violation that `message` says, in this function.
     private func violation(_ message: String) -> IRViolation {
         IRViolation(function: declaration.name, message: message)
+    }
+}
+
+/// How a call passes one of its arguments, which a parameter's convention accepts or not.
+private enum ArgumentPassing: Equatable {
+    /// A constant, which lies in no place.
+    case constant
+    /// The value read or moved out of a place, through no access.
+    case value
+    /// An access of the kind to the place that holds the argument.
+    case access(AccessKind)
+
+    /// The passing as a violation names it, such as `a read access`.
+    var description: String {
+        switch self {
+        case .constant: "a constant"
+        case .value: "a value"
+        case .access(let kind): "a \(kind.rawValue) access"
+        }
     }
 }
