@@ -47,9 +47,7 @@ package struct Parser: ~Copyable {
     /// The range of the token before the current one.
     var previousRange: SourceRange { tokens[max(position - 1, 0)].range }
 
-    var atStatementEnd: Bool {
-        current.kind == .newline || current.isPunct(.semicolon) || current.isPunct(.rbrace) || atEnd
-    }
+    var atStatementEnd: Bool { current.endsStatement }
 
     func peek(_ ahead: Int = 1) -> Token {
         tokens[min(position + ahead, tokens.count - 1)]
@@ -60,16 +58,7 @@ package struct Parser: ~Copyable {
 
     /// How many brackets the tokens from the one at `start` up to the current one open and leave unclosed.
     func bracketsLeftOpen(since start: Int) -> Int {
-        var depth = 0
-        for token in tokens[start..<position] {
-            switch token.kind {
-            case .punct(.lparen), .punct(.lbrace), .punct(.lbracket): depth += 1
-            // A stray closer, which a statement's recovery skipped, closes nothing.
-            case .punct(.rparen), .punct(.rbrace), .punct(.rbracket): depth = max(depth - 1, 0)
-            default: break
-            }
-        }
-        return depth
+        tokens[start..<position].reduce(0) { depth, token in token.bracketDepth(from: depth) }
     }
 
     /// Moves past the current token, unless it ends the file, and returns it.

@@ -49,6 +49,10 @@ struct ParserErrorTests {
             .unendedStatement(found: .token(")")), .missingBlock(found: .token("2")),
             .missingCopiedName(found: .newline),
         ]),
+        ("func f(x: = if true { 1 } else { 2 }, y) {\n    copy\n}", [
+            .missingType(found: .token("=")), .missingParameterType(found: .token(")")),
+            .missingCopiedName(found: .newline),
+        ]),
         ("func f(x: Int y: Int = if true { 1 } else { 2 }) {\n    copy\n}", [
             .unclosedParameters(found: .token("y")), .missingCopiedName(found: .newline),
         ]),

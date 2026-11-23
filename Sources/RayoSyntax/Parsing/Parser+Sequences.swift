@@ -61,9 +61,7 @@ extension Parser {
             do {
                 items.append(.parsed(try item(&self)))
             } catch {
-                // A failed item is skipped up to the comma or `)` after it, outside the brackets it opened. Where it
-                // stops anywhere else, such as at the `{` of a body, the list fails with the item's error alone.
-                recover(upTo: [.comma, .rparen, .lbrace], insideBrackets: bracketsLeftOpen(since: start))
+                skipFailedItem(openedSince: start)
                 items.append(.failed)
                 guard current.isPunct(.comma) || current.isPunct(.rparen) else { throw error }
             }
@@ -71,6 +69,15 @@ extension Parser {
             if !consume(.comma) { break }
         }
         try expect(.rparen, else: unclosed)
+    }
+
+    /// Skips the rest of a failed header item, which began at the token at `start`, up to the comma or `)` after it.
+    /// A `{` stops it only where the list's `)` isn't ahead, since then the `{` may begin the body.
+    private mutating func skipFailedItem(openedSince start: Int) {
+        let open = bracketsLeftOpen(since: start)
+        let listClosesAhead = closingParenthesisAhead(insideBrackets: open) != nil
+        let stops: [Punct] = listClosesAhead ? [.comma, .rparen] : [.comma, .rparen, .lbrace]
+        recover(upTo: stops, insideBrackets: open)
     }
 
     /// Skips the rest of a declaration's header that failed, up to the `{` of a body. Where a `)` at this level comes
@@ -86,38 +93,18 @@ extension Parser {
         while current.kind == .newline || current.isPunct(.semicolon) { advance() }
     }
 
-    /// How many tokens past the current one the `)` at its level comes, or nil where the declaration ends first.
-    private func closingParenthesisAhead() -> Int? {
-        var depth = 0
+    /// How many tokens past the current one the `)` at its level comes, or nil where the declaration ends first. `open`
+    /// counts the brackets the current token is inside, which close before that level.
+    private func closingParenthesisAhead(insideBrackets open: Int = 0) -> Int? {
+        var depth = open
         var ahead = 0
         while true {
-            switch peek(ahead).kind {
-            case .eof:
-                return nil
-
-            // A `)` outside the brackets ahead closes the one the parser is in.
-            case .punct(.rparen) where depth == 0:
-                return ahead
-
-            case .punct(.lparen), .punct(.lbrace), .punct(.lbracket):
-                depth += 1
-
-            // A `}` outside the brackets ahead closes the declaration's block.
-            case .punct(.rbrace):
-                guard depth > 0 else { return nil }
-                depth -= 1
-
-            // A `)` or `]` closes one of the brackets ahead; a stray `]` closes nothing.
-            case .punct(.rparen), .punct(.rbracket):
-                depth = max(depth - 1, 0)
-
-            // A newline or `;` outside the brackets ahead ends the declaration.
-            case .newline, .punct(.semicolon):
-                if depth == 0 { return nil }
-
-            default:
-                break
-            }
+            let token = peek(ahead)
+            if token.kind == .eof { return nil }
+            // At the parser's level, a `)` closes the bracket it is in, unless the declaration ends first.
+            if depth == 0, token.isPunct(.rparen) { return ahead }
+            if depth == 0, token.endsStatement { return nil }
+            depth = token.bracketDepth(from: depth)
             ahead += 1
         }
     }
@@ -126,31 +113,11 @@ extension Parser {
     /// file, or one of `stops` outside the item's brackets. `open` counts those it opened before it failed.
     mutating func recover(upTo stops: [Punct] = [], insideBrackets open: Int = 0) {
         var depth = open
-        loop: while !atEnd {
-            // A stop ends the item only outside its brackets.
-            if depth == 0, case .punct(let punct) = current.kind, stops.contains(punct) { break }
-            switch current.kind {
-            // A bracket the item opens is skipped whole, up to the bracket that closes it.
-            case .punct(.lbrace), .punct(.lparen), .punct(.lbracket):
-                depth += 1
-
-            // A `}` outside the item's brackets closes its block, which the sequence stops at; inside, it closes one.
-            case .punct(.rbrace):
-                if depth == 0 { break loop }
-                depth -= 1
-
-            // A `)` or `]` closes one of the item's brackets; a stray one is skipped.
-            case .punct(.rparen), .punct(.rbracket):
-                if depth > 0 { depth -= 1 }
-
-            // A newline or `;` outside the item's brackets ends it; inside them, it is skipped.
-            case .newline, .punct(.semicolon):
-                if depth == 0 { break loop }
-
-            // Every other token is skipped.
-            default:
-                break
-            }
+        while !atEnd {
+            // Outside the item's brackets, the end of its statement or one of `stops` ends it.
+            if depth == 0, atStatementEnd || stops.contains(where: current.isPunct) { return }
+            // Every other token is skipped, a bracket with all it holds, and a stray closer on its own.
+            depth = current.bracketDepth(from: depth)
             advance()
         }
     }
