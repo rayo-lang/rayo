@@ -18,6 +18,9 @@ protocol WaitingValue {
     /// Whether the source writes the value as a `&` of a place.
     var lendsPlace: Bool { get }
 
+    /// Whether the source writes the value, or any branch of it that runs to its end, as a `&` of a place.
+    var mayLendPlace: Bool { get }
+
     /// Settles the value toward `type`: to `type` where it can, and otherwise as it would where its position gives
     /// no type. Reports what keeps it from settling, and returns nil then. An error that still leaves the value a
     /// meaning, such as a literal that `type` can't hold, is reported, and the value settles all the same.
@@ -40,6 +43,9 @@ protocol WaitingValue {
 extension WaitingValue {
     /// No value but a `&` of a place, or an `if` whose branches end in one, is written as a `&`.
     var lendsPlace: Bool { false }
+
+    /// A value with no branches lends a place only where it is written as a `&`.
+    var mayLendPlace: Bool { lendsPlace }
 
     /// Reports the errors that settling the value where its position gives no type reports.
     func reportErrors(by expressions: ExpressionChecker) {

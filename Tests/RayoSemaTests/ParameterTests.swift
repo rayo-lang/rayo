@@ -67,12 +67,12 @@ struct ParameterTests {
     // different ways, the call fits none of them, which spells each `&` it writes.
     @Test(arguments: [
         ("f(&a)", [ErrorCode]()), ("f(a)", []), ("f(1)", []), ("g(a)", []), ("k(a, a)", []), ("k(a, &a)", []),
-        ("ref let r = &a\n    h(r)", []),
+        ("ref let r = &a\n    h(r)", []), ("f(if a > 0 { a } else { &a })", []),
         ("h(&a)", [.referenceToOwnedParameter(name: "h", type: "Int")]),
         ("u(1)", [.ambiguousCall(name: "u")]), ("v(1, 2)", [.ambiguousCall(name: "v")]),
         ("w(&a, &a)", [.noMatchingFunction(name: "w", arguments: "&Int, &Int")]),
         ("g(&b)", [.noMatchingFunction(name: "g", arguments: "&UInt")]),
-    ])
+    ] as [(String, [ErrorCode])])
     func `an overload is picked by how each argument is written, where its type fits several`(
         call: String, expected: [ErrorCode],
     ) {

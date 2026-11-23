@@ -40,6 +40,14 @@ enum CheckedValue {
         }
     }
 
+    /// Whether the source writes the value, or any branch of it that runs to its end, as a `&` of a place.
+    var mayLendPlace: Bool {
+        switch self {
+        case .typed: false
+        case .waiting(let value): value.mayLendPlace
+        }
+    }
+
     /// The one type that values standing side by side, such as an array literal's elements or an `if`'s branches,
     /// settle to where their position gives none, from each value's own type and its type or default. The first type
     /// a value fixes wins, so an untyped value takes the typed values' type; where none fixes one, the first default

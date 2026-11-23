@@ -34,7 +34,7 @@ struct Signature: CustomStringConvertible {
     /// place. A parameter that owns its argument takes no reference, though the place's type may fit it.
     func takesReferences(in arguments: [CheckedValue]) -> Bool {
         parameters.count == arguments.count && zip(parameters, arguments).allSatisfy { parameter, argument in
-            parameter.convention == .borrowed || !argument.lendsPlace
+            parameter.convention == .borrowed || !argument.mayLendPlace
         }
     }
 

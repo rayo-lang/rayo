@@ -30,7 +30,8 @@ struct ParameterTests {
 
     // A `ref let` and a parameter that borrows its argument each hold a reference, which the function that borrows
     // takes as it is, as it takes an `if` whose every branch ends in such a place, while a place that holds a value
-    // reaches the function that owns it.
+    // reaches the function that owns it. An `if` with a branch written with `&` gives a reference there, which the
+    // function that owns its argument can't take, so it reaches the function that borrows it.
     @Test func `a place that holds a reference, given bare, reaches the function that borrows it`() {
         let source = """
             func main() {
@@ -43,12 +44,14 @@ struct ParameterTests {
                 relay(a)
                 show(if c { r } else { s })
                 show(if c { r } else { a })
+                show(if c { a } else { &a })
+                show(if c { r } else { &a })
             }
             func relay(_ n: &Int) { show(n) }
             func show(_ n: Int) { print(n + 10) }
             func show(_ n: &Int) { print(n + 20) }
             """
-        #expect(run(source) == CommandResult(exitCode: 0, output: "11\n21\n21\n21\n11\n", errors: ""))
+        #expect(run(source) == CommandResult(exitCode: 0, output: "11\n21\n21\n21\n11\n21\n21\n", errors: ""))
     }
 
     @Test func `a place given to a '&T' parameter without '&' is lent, and stays its caller's`() {
