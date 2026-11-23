@@ -252,7 +252,7 @@ struct CallChecker {
 
         // Pick the one candidate that the arguments' labels and values fit.
         let labels = arguments.map(\.label)
-        let (remaining, takeArgumentsAsWritten) = remaining(of: candidates, passing: labels, values)
+        let (remaining, areTakenAsWritten) = remaining(of: candidates, passing: labels, values)
         // No candidate fits, which is reported with the arguments' types.
         guard !remaining.isEmpty else {
             reportNoMatch(of: name, labels: labels, values: values, in: range)
@@ -260,7 +260,7 @@ struct CallChecker {
         }
         // Several fit by type, and none takes the arguments as they are written. A candidate that failed was
         // reported where it is declared, and is left to `chosen` to pass over.
-        if !takeArgumentsAsWritten, remaining.count > 1, !remaining.contains(where: \.hasFailed) {
+        if !areTakenAsWritten, remaining.count > 1, !remaining.contains(where: \.hasFailed) {
             reportMiswritten(values, among: remaining, named: name, labels: labels, in: range)
             return nil
         }
@@ -313,7 +313,7 @@ struct CallChecker {
     /// The candidates that a call passing arguments with `labels` and `values`, in order, can reach, and whether they
     /// take each argument as it is written.
     private func remaining(of candidates: [Signature], passing labels: [String?],
-                           _ values: [CheckedValue]) -> (candidates: [Signature], takeArgumentsAsWritten: Bool) {
+                           _ values: [CheckedValue]) -> (candidates: [Signature], areTakenAsWritten: Bool) {
         // Keep the candidates whose labels the arguments match, in order.
         let labeled = candidates.filter { $0.takesLabels(labels) }
         // Keep those that the typed arguments fit, so that an untyped argument is offered only the parameters of the
