@@ -15,13 +15,12 @@ public struct SourceFile: Sendable {
         self.tokens = tokens
     }
 
-    /// The source text that `range` covers, on one line, for an error to name it by. A gap of spaces, newlines and
-    /// comments between tokens is one space, or none inside a bracket or before a `,`. Parentheses around the whole
-    /// are left out.
+    /// The source that `range` covers as one line of Rayo, for an error to name it by: without comments or the
+    /// parentheses around the whole, and with a `;` for each newline that ends a statement.
     public func spelling(of range: SourceRange) -> String {
-        // The tokens that `range` covers, without the newlines among them or the parentheses around them all.
+        // The tokens that `range` covers, without the parentheses around them all.
         var covered = tokens.filter { token in
-            token.kind != .newline && token.kind != .eof
+            token.kind != .eof
                 && range.start.offset <= token.range.start.offset && token.range.end.offset <= range.end.offset
         }
         while Self.isParenthesized(covered) {
@@ -29,22 +28,46 @@ public struct SourceFile: Sendable {
             covered.removeLast()
         }
 
-        // Tokens that touch in the source touch in the spelling, and a gap that keeps a space is one space.
+        // Join the tokens, writing a newline that ends a statement as a `;`, except before the `}` that ends its
+        // block, since the `}` ends the statement too.
         var spelling = ""
-        for (index, token) in covered.enumerated() {
-            if index > 0, Self.isSpaced(covered[index - 1], token) { spelling += " " }
+        var previous: Token?
+        var endsStatement = false
+        for token in covered {
+            if token.kind == .newline {
+                endsStatement = true
+                continue
+            }
+            if let previous {
+                if endsStatement, !token.isPunct(.rbrace) { spelling += ";" }
+                if Self.isSpaced(previous, token) { spelling += " " }
+            }
             spelling += source.text(of: token.range)
+            previous = token
+            endsStatement = false
         }
         return spelling
     }
 
     /// Whether the spelling puts a space between `previous` and `next`: where the source has a gap between them,
-    /// except just inside a bracket or before a `,`.
+    /// except just inside `( )` or `[ ]`, before a `,`, and before a member's `.` that starts its own line.
     private static func isSpaced(_ previous: Token, _ next: Token) -> Bool {
-        let opensBracket = previous.isPunct(.lparen) || previous.isPunct(.lbracket) || previous.isPunct(.lbrace)
-        let closesBracket = next.isPunct(.rparen) || next.isPunct(.rbracket) || next.isPunct(.rbrace)
         let hasGap = previous.range.end.offset < next.range.start.offset
+        let opensBracket = previous.isPunct(.lparen) || previous.isPunct(.lbracket)
+        let closesBracket = next.isPunct(.rparen) || next.isPunct(.rbracket)
         return hasGap && !opensBracket && !closesBracket && !next.isPunct(.comma)
+            && !startsMemberLine(previous, next)
+    }
+
+    /// Whether `next` is a member's `.` that starts its own line, after `previous` ends the value it is a member of.
+    /// A `.` after anything else, such as a `,`, starts an implicit member, and keeps its space.
+    private static func startsMemberLine(_ previous: Token, _ next: Token) -> Bool {
+        guard next.isPunct(.dot), previous.range.end.line < next.range.start.line else { return false }
+        return switch previous.kind {
+        case .identifier, .intLiteral, .keyword(.self), .keyword(.true), .keyword(.false): true
+        case .punct(.rparen), .punct(.rbracket): true
+        default: false
+        }
     }
 
     /// Whether `tokens` start with a `(` that the last of them closes.

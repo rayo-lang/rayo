@@ -36,6 +36,13 @@ struct TemporaryAssignmentTests {
         ("spawn(hp: /* full */ 100).hp = 0", "2:1", "spawn(hp: 100)"),
         ("spawn(\n    hp: 1\n).hp = 0", "2:1", "spawn(hp: 1)"),
         ("[ 1 , 2 ][0] = 3", "2:1", "[1, 2]"),
+        ("spawn( hp: 1 ).hp = 0", "2:1", "spawn(hp: 1)"),
+        ("spawn(hp: makeEnemy()\n    .hp).hp = 0", "2:1", "spawn(hp: makeEnemy().hp)"),
+        (
+            "(if true {\n    print(1)\n    makeEnemy()\n} else { makeEnemy() }).hp = 0", "2:1",
+            "if true { print(1); makeEnemy() } else { makeEnemy() }",
+        ),
+        ("(if true {makeEnemy()} else {makeEnemy()}).hp = 0", "2:1", "if true {makeEnemy()} else {makeEnemy()}"),
         ("(makeEnemy()).hp = 0", "2:1", "makeEnemy()"),
         ("((makeEnemy())).hp = 0", "2:1", "makeEnemy()"),
         ("(makeHP()) + (makeHP()) = 1", "2:1", "(makeHP()) + (makeHP())"),
