@@ -1,6 +1,6 @@
 # Compiler stages
 
-`rayoc` compiles a file in stages, and each stage owns a kind of question about the program. A change goes in the stage that owns the question it decides, as the `code-style` skill says. `Package.swift` says which stage may use which, and [TOOLCHAIN.md](../../TOOLCHAIN.md#layout) what each module holds.
+`rayoc` compiles a file in stages, and each stage owns a kind of question about the program. A change goes in the stage that owns the question it decides, as the `code-style` skill says. `Package.swift` says which stage may use which, and [TOOLCHAIN.md](../../TOOLCHAIN.md#layout) what each module is for.
 
 This page names each stage's kind of question, not each question. A new feature whose question fits a stage's kind leaves the page as it is; a change edits it only to add a stage, widen a stage's kind, or move a kind of question from one stage to another.
 
