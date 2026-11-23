@@ -252,15 +252,15 @@ struct CallChecker {
 
         // Pick the one candidate that the arguments' labels and values fit.
         let labels = arguments.map(\.label)
-        let (remaining, areTakenAsWritten) = remaining(of: candidates, passing: labels, values)
+        let (remaining, takeWrittenReferences) = remaining(of: candidates, passing: labels, values)
         // No candidate fits, which is reported with the arguments' types.
         guard !remaining.isEmpty else {
             reportNoMatch(of: name, labels: labels, values: values, in: range)
             return nil
         }
-        // Several fit by type, and none takes the arguments as they are written. A candidate that failed was
-        // reported where it is declared, and is left to `chosen` to pass over.
-        if !areTakenAsWritten, remaining.count > 1, !remaining.contains(where: \.hasFailed) {
+        // Several fit by type, and each owns an argument written with a `&`. A candidate that failed was reported
+        // where it is declared, and is left to `chosen` to pass over.
+        if !takeWrittenReferences, remaining.count > 1, !remaining.contains(where: \.hasFailed) {
             reportMiswritten(values, among: remaining, named: name, labels: labels, in: range)
             return nil
         }
@@ -311,9 +311,9 @@ struct CallChecker {
     }
 
     /// The candidates that a call passing arguments with `labels` and `values`, in order, can reach, and whether they
-    /// take each argument as it is written.
+    /// take each argument that the source writes as a `&` of a place.
     private func remaining(of candidates: [Signature], passing labels: [String?],
-                           _ values: [CheckedValue]) -> (candidates: [Signature], areTakenAsWritten: Bool) {
+                           _ values: [CheckedValue]) -> (candidates: [Signature], takeWrittenReferences: Bool) {
         // Keep the candidates whose labels the arguments match, in order.
         let labeled = candidates.filter { $0.takesLabels(labels) }
         // Keep those that the typed arguments fit, so that an untyped argument is offered only the parameters of the
@@ -322,15 +322,28 @@ struct CallChecker {
         // Each untyped argument takes each remaining candidate's parameter type, and a candidate it doesn't fit drops
         // out.
         let typesFit = typedFit.filter { $0.takes(values, in: declarations, where: { $0.type == nil }) }
-        // Where some candidates take each argument as it is written, with or without a `&`, the others drop out.
-        // Where none does, those the types fit stay, so the one the call reaches reports how to write its arguments.
-        let writtenFit = typesFit.filter { $0.takesWritten(values) }
-        return writtenFit.isEmpty ? (typesFit, false) : (writtenFit, true)
+        // A candidate that owns an argument written with a `&` takes no reference there, so it drops out. Where every
+        // candidate does, those the types fit stay, so the one the call reaches reports how to write its arguments.
+        let takingReferences = typesFit.filter { $0.takesReferences(in: values) }
+        guard !takingReferences.isEmpty else { return (typesFit, false) }
+
+        // Where some candidates take each argument with no conversion, the others, which lend a bare place, drop out.
+        let areLent = countedAsLent(values, by: takingReferences)
+        let unconverted = takingReferences.filter { $0.takesUnconverted(areLent) }
+        return (unconverted.isEmpty ? takingReferences : unconverted, true)
+    }
+
+    /// Whether each of `values`, in turn, counts as a `&` of a place among `candidates`: one the source writes so,
+    /// and a bare one that every candidate borrows, since lending it then tells none of them apart.
+    private func countedAsLent(_ values: [CheckedValue], by candidates: [Signature]) -> [Bool] {
+        values.indices.map { index in
+            values[index].lendsPlace || candidates.allSatisfy { $0.parameters[index].convention == .borrowed }
+        }
     }
 
     /// Reports `values`, which several of `candidates`, the functions the call names as `name`, fit by type, though
-    /// none takes each of them as it is written. Where every candidate takes each argument the same way, each
-    /// argument reports what any of them would report of it; otherwise the call fits none of them as written.
+    /// each owns an argument that the source writes with a `&`. Where every candidate takes each argument the same
+    /// way, each argument reports what any of them would report of it; otherwise the call fits none of them.
     private func reportMiswritten(_ values: [CheckedValue], among candidates: [Signature], named name: String,
                                   labels: [String?], in range: SourceRange) {
         let conventions = candidates[0].parameters.map(\.convention)

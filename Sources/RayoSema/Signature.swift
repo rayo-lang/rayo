@@ -30,11 +30,20 @@ struct Signature: CustomStringConvertible {
         }
     }
 
-    /// Whether each of `arguments` is written as its parameter takes it: with a `&` where the parameter borrows the
-    /// argument, and without one where it owns it.
-    func takesWritten(_ arguments: [CheckedValue]) -> Bool {
+    /// Whether a parameter that borrows its argument takes each of `arguments` that the source writes as a `&` of a
+    /// place. A parameter that owns its argument takes no reference, though the place's type may fit it.
+    func takesReferences(in arguments: [CheckedValue]) -> Bool {
         parameters.count == arguments.count && zip(parameters, arguments).allSatisfy { parameter, argument in
-            (parameter.convention == .borrowed) == argument.lendsPlace
+            parameter.convention == .borrowed || !argument.lendsPlace
+        }
+    }
+
+    /// Whether the function takes each argument with no conversion, where `areLent` says of each in turn whether it
+    /// counts as a `&` of a place: one that does goes to a parameter that borrows it, and one that doesn't to a
+    /// parameter that owns it, since lending a bare place to a parameter that borrows it is a conversion.
+    func takesUnconverted(_ areLent: [Bool]) -> Bool {
+        parameters.count == areLent.count && zip(parameters, areLent).allSatisfy { parameter, isLent in
+            (parameter.convention == .borrowed) == isLent
         }
     }
 

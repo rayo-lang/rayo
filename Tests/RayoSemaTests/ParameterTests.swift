@@ -58,15 +58,14 @@ struct ParameterTests {
     }
 
     // An argument written with a `&` reaches the function that borrows it, and one written without reaches the one
-    // that owns it. Where none takes an argument as it is written, the one its type fits reports how to write it.
-    // Where its type fits several, each of which takes each argument the same way, the argument reports what any of
-    // them would, and where they take the arguments in different ways, the call fits none of them as written.
+    // that owns it. A bare argument that only a function that borrows it takes is lent, and one that every function
+    // its type fits borrows counts as written with a `&`, so it tells none of them apart. Where several still fit,
+    // each lending a different argument or the same one, the call is ambiguous. Where none takes a `&` written for an
+    // argument, the one its type fits reports how to write it.
     @Test(arguments: [
-        ("f(&a)", [ErrorCode]()), ("f(a)", []), ("f(1)", []),
-        ("g(a)", [.unlentPlace(name: "g", type: "Int", place: "a")]),
+        ("f(&a)", [ErrorCode]()), ("f(a)", []), ("f(1)", []), ("g(a)", []), ("k(a, a)", []), ("k(a, &a)", []),
         ("h(&a)", [.referenceToOwnedParameter(name: "h", type: "Int")]),
-        ("u(1)", [.unsupportedLentValue]),
-        ("v(1, 2)", [.noMatchingFunction(name: "v", arguments: "Int, Int")]),
+        ("u(1)", [.ambiguousCall(name: "u")]), ("v(1, 2)", [.ambiguousCall(name: "v")]),
     ])
     func `an overload is picked by how each argument is written, where its type fits several`(
         call: String, expected: [ErrorCode],
@@ -82,6 +81,8 @@ struct ParameterTests {
             func u(_ x: &UInt) {}
             func v(_ x: &Int, _ y: Int) {}
             func v(_ x: UInt, _ y: &UInt) {}
+            func k(_ x: &Int, _ y: Int) {}
+            func k(_ x: &Int, _ y: &Int) {}
             """
         #expect(errors("func main() {\n    let a = 1\n    \(call)\n}\n\(declarations)") == expected)
     }

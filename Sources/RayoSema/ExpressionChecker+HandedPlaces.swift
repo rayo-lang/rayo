@@ -14,12 +14,13 @@ extension ExpressionChecker {
         }
     }
 
-    /// Reports `value`, which the source writes without a `&`, where `recipient` takes a reference: a parameter that
-    /// borrows its argument, or a `ref let`. A value of any other recipient is written as it should be.
+    /// Reports `value`, which the source writes without a `&`, where `recipient` takes a reference and can't take it
+    /// so: a parameter that borrows its argument, given a value it can't be lent, or a `ref let`. A value of any other
+    /// recipient is written as it should be.
     func reportUnlent(_ value: CheckedExpr, to recipient: Recipient?) {
         switch recipient {
         case .parameter(let parameter)? where parameter.convention == .borrowed:
-            reportUnlent(value, to: parameter)
+            reportUnlendable(value)
         case .declaration(.refLet)?:
             reportUnreferenced(value)
         default:
@@ -27,20 +28,14 @@ extension ExpressionChecker {
         }
     }
 
-    /// Reports `value`, given to `parameter`, which borrows its argument, since a call lends such a parameter a place
-    /// with `&`. A place rooted in a local is reported with the `&` to write, even where its type is implicitly
-    /// copyable, since a copy is a value, and the parameter takes the place; the call still lends the place, so that
-    /// error leaves the body's meaning whole. Any other value, such as a call's result or a copy, is reported as
+    /// Reports `value`, given to a parameter that borrows its argument, where the call can't lend it. A place rooted
+    /// in a local is lent with nothing written, as `&` lends it, even where its type is implicitly copyable, since
+    /// the parameter takes the place, not a copy. Any other value, such as a call's result or a copy, is reported as
     /// unsupported, since rayoc lends no value that no local holds.
-    private func reportUnlent(_ value: CheckedExpr, to parameter: ArgumentParameter) {
+    private func reportUnlendable(_ value: CheckedExpr) {
         // A value that stands here is no `if`, since each branch of an `if` stands in its place on its own.
-        guard let handed = value.handedPlaces.first else {
-            file.errors.report(.unsupportedLentValue, at: value.range)
-            return
-        }
-        let code = ErrorCode.unlentPlace(name: parameter.callee, type: typeName(of: value.type),
-                                         place: sourceName(of: handed))
-        file.errors.reportKeepingMeaning(code, at: handed.place.range)
+        guard value.handedPlaces.isEmpty else { return }
+        file.errors.report(.unsupportedLentValue, at: value.range)
     }
 
     /// Reports `value`, given to a `ref let`, which the source writes without a `&`. A place rooted in a local is

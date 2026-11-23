@@ -28,6 +28,37 @@ struct ParameterTests {
         #expect(run(source) == CommandResult(exitCode: 0, output: "11\n21\n", errors: ""))
     }
 
+    @Test func `a place given to a '&T' parameter without '&' is lent, and stays its caller's`() {
+        let source = """
+            func main() {
+                var boss = Enemy(stats: Stats(hp: 7), slots: [1, 2])
+                show(boss)
+                boss.stats.hp = 9
+                show(boss)
+                print(total(boss.slots))
+            }
+            struct Enemy(var stats: Stats, var slots: [2 of Int])
+            struct Stats(var hp: Int)
+            func show(_ e: &Enemy) { print(hpOf(e.stats)) }
+            func hpOf(_ s: &Stats) -> Int { s.hp }
+            func total(_ a: &[2 of Int]) -> Int { a[0] + a[1] }
+            """
+        #expect(run(source) == CommandResult(exitCode: 0, output: "7\n9\n3\n", errors: ""))
+    }
+
+    @Test func `a bare argument that every overload borrows tells none of them apart`() {
+        let source = """
+            func main() {
+                let a = 1
+                show(a, a)
+                show(a, &a)
+            }
+            func show(_ n: &Int, _ m: Int) { print(n + m + 10) }
+            func show(_ n: &Int, _ m: &Int) { print(n + m + 20) }
+            """
+        #expect(run(source) == CommandResult(exitCode: 0, output: "12\n22\n", errors: ""))
+    }
+
     @Test("functions recurse, directly and through each other, in debug and in release",
           arguments: [["--debug"], ["--release"]])
     func recursion(mode: [String]) {

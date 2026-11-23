@@ -372,8 +372,7 @@ public enum ErrorCode: Sendable, Hashable {
     @Code(282, error: "parameters that own {type.withArticle} arrive in v0.3; write '&{type}' to borrow it")
     case unsupportedOwnedParameter(type: TypeName)
 
-    @Code(283, error: "'{name}' takes a reference to {type.withArticle}; write '&{place}'")
-    case unlentPlace(name: String, type: TypeName, place: String)
+    // 283 is unused, and stays so.
 
     @Code(284, error: "'{name}' takes {type.withArticle}, not a reference; remove the '&'")
     case referenceToOwnedParameter(name: String, type: TypeName)

@@ -143,6 +143,19 @@ struct BorrowTests {
         ])
     }
 
+    // A place given to a `&T` parameter without a `&` is lent as `&` lends it: the call reads the place itself, so
+    // the place must hold a value, and keeps it after the call.
+    @Test(arguments: [
+        ("\(enemy)\n    show(e)\n    show(e)\n    e.stats.hp = 5\n    show(e)", []),
+        ("\(enemy)\n    let t = consume e\n    show(e)\n    show(t)", [
+            "4:10: error[E0302]: 'e' was moved", "3:13: note: moved here",
+        ]),
+    ])
+    func `a place given to a '&T' parameter without '&' is borrowed for the call`(body: String, expected: [String]) {
+        let source = "func main() {\n\(body)\n}\nfunc show(_ e: &Enemy) { print(e.stats.hp) }\n\(declarations)"
+        #expect(diagnostics(source).flatMap { [$0.description] + $0.notes } == expected)
+    }
+
     // A `ref let` gives up no value of its own, since its value is the place's.
     @Test(arguments: [
         ("    var a = 1\n    ref let b = &a\n    let d = consume b\n    print(d + a)",

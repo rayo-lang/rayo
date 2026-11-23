@@ -15,6 +15,8 @@ private let declarations = """
     func pair(_ n: &Int, with m: Int) {}
     func pass(_ e: &Enemy) { show(&e) }
     func passStats(_ e: &Enemy) { showStats(&e.stats) }
+    func relay(_ e: &Enemy) { show(e) }
+    func relayStats(_ e: &Enemy) { showStats(e.stats) }
     """
 
 /// The locals the tests' bodies start from.
@@ -64,18 +66,15 @@ struct ReferenceParameterTests {
     }
 
     @Test(arguments: [
-        ("show(e)", 10, "an Enemy", "e"), ("read(a)", 10, "an Int", "a"),
-        ("read(e.stats.hp)", 10, "an Int", "e.stats.hp"), ("show(g[i])", 10, "an Enemy", "g[i]"),
-        ("showStats(e.stats)", 15, "a Stats", "e.stats"), ("pair(a, with: a)", 10, "an Int", "a"),
-        ("show(if c { e } else { &g[0] })", 17, "an Enemy", "e"),
+        "show(e)", "read(a)", "read(e.stats.hp)", "show(g[i])", "showStats(e.stats)", "pair(a, with: a)",
+        "show(if c { e } else { &g[0] })", "relay(e)", "relayStats(e)",
     ])
-    func `a place given to a '&T' parameter without '&' names the place with '&'`(
-        statement: String, column: Int, type: String, place: String,
-    ) {
-        let callee = statement.prefix { $0 != "(" }
-        #expect(messages(of: statement) == [
-            "\(column): error[E0283]: '\(callee)' takes a reference to \(type); write '&\(place)'",
-        ])
+    func `a place given to a '&T' parameter without '&' is lent, as '&' lends it`(statement: String) {
+        #expect(messages(of: statement) == [])
+    }
+
+    @Test func `a 'ref let' given to a '&T' parameter without '&' passes the place it refers to`() {
+        #expect(messages(of: "ref let s = &e.stats\n    showStats(s)\n    read(s.hp)") == [])
     }
 
     @Test(arguments: [("read(&c)", "10: error[E0213]: expected Int, found Bool"),
