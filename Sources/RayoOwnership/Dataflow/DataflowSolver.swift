@@ -1,6 +1,8 @@
+import RayoIR
+
 /// Carries a dataflow analysis's state through a function's blocks until the state at each block's boundary settles:
 /// at its entry going forward, and at its exit going backward.
-package struct DataflowSolver<State: DataflowState> {
+struct DataflowSolver<State: DataflowState> {
     private let body: IRBody
     /// The effects of each block's statements and terminator, indexed by `BlockID`, as `BasicBlock.effects` gives them.
     private let effects: [[[Effect]]]
@@ -18,7 +20,7 @@ package struct DataflowSolver<State: DataflowState> {
     /// function going forward. Going backward, `start` is the state at the exit of every block, which the states of
     /// the paths out of the block merge into: so it is the state at the function's exits, and it must add nothing to
     /// a merge. `function` is what the state needs to know of `body`.
-    package static func solve(
+    static func solve(
         from start: State, through body: IRBody, knowing function: State.Function,
     ) -> DataflowResults<State> {
         var solver = DataflowSolver(from: start, through: body, knowing: function)
