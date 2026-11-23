@@ -1,4 +1,3 @@
-@testable import RayoOwnership
 import RayoCheckedProgram
 import RayoIR
 import Testing
@@ -243,9 +242,16 @@ private func solve(
     DataflowSolver.solve(from: start, through: try body(of: blocks, result: result), knowing: ())
 }
 
-/// The body of the function `function` makes of `blocks`, which returns `result`.
+/// The body of a function made of `blocks`, whose one local is the Int `x` (`%0`), and which returns `result`.
 private func body(of blocks: String, result: String = "Void") throws -> IRBody {
-    let program = try program(of: [function(blocks, result: result)], from: .lowering)
+    let program = try IRParser.program(from: """
+        main "f()"
+        func "f()"() -> \(result) {
+          var %0 x: Int @1:1-1:1
+        \(blocks)
+        }
+        """)
+    #expect(IRVerifier.verify(program, from: .lowering) == nil)
     // The program's one function has a body.
     return try #require(program.bodies[FunctionID(index: 0)])
 }

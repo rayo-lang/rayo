@@ -1,6 +1,6 @@
 /// An array of a fixed count whose copies share the parts none of them changed, so copying, merging and comparing
 /// copies cost only what differs between them.
-struct PersistentArray<Element: Equatable>: Equatable {
+package struct PersistentArray<Element: Equatable>: Equatable {
     /// Up to `nodeWidth` elements of the array, in order; a class, since copies share it.
     private final class Leaf {
         /// The first `count` slots hold elements of the array, and the rest repeat the first, since an inline array
@@ -59,13 +59,13 @@ struct PersistentArray<Element: Equatable>: Equatable {
         }
     }
 
-    let count: Int
+    package let count: Int
     /// The elements in order, filling the leaves from the first. An array with no elements has a root with no leaves.
     private var root: Branch
     /// How far an index shifts right to give the root's child that holds it.
     private let rootShift: Int
 
-    init(_ elements: [Element]) {
+    package init(_ elements: [Element]) {
         count = elements.count
 
         // Fill the leaves in order, then each level of branches above them, until one branch holds the rest.
@@ -86,7 +86,7 @@ struct PersistentArray<Element: Equatable>: Equatable {
         rootShift = shift
     }
 
-    subscript(index: Int) -> Element {
+    package subscript(index: Int) -> Element {
         get {
             precondition(0 <= index && index < count, "index out of range")
             var branch = root
@@ -108,14 +108,14 @@ struct PersistentArray<Element: Equatable>: Equatable {
     }
 
     /// Combines the elements at each index. Shared parts are kept as they are, so `combine(x, x)` must be `x`.
-    func merged(with other: Self, combining combine: (Element, Element) -> Element) -> Self {
+    package func merged(with other: Self, combining combine: (Element, Element) -> Element) -> Self {
         precondition(count == other.count, "merged arrays have one count")
         var merged = self
         merged.root = Self.merged(root, other.root, shift: rootShift, combine)
         return merged
     }
 
-    static func == (first: Self, second: Self) -> Bool {
+    package static func == (first: Self, second: Self) -> Bool {
         first.count == second.count && equal(first.root, second.root)
     }
 
