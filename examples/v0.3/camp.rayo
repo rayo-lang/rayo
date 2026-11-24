@@ -1,10 +1,11 @@
 // Between two fights, a party of three heroes makes camp. Each hero still standing eats from the party's rations and
 // heals, and twin recruits come looking for the place a hero who fell left. The twin the party takes in leads it.
-// Then the smith hones the weapons the last fight left, and offers each hero the one in its own place on the rack.
+// Then the smith hones a copy of the weapons the last fight left, and offers each hero the one in its own place on
+// the rack.
 //
 // The program prints each hero's health after resting and the rations left, whether each twin is taken in, the
-// health of the two heroes in front once the recruit leads, and the might of each hero's weapon once the party has
-// re-armed.
+// health of the two heroes in front once the recruit leads, the might of each hero's weapon once the party has
+// re-armed, and the edge of the smith's own club.
 
 func main() {
     var party = Party(heroes: [
@@ -32,16 +33,19 @@ func main() {
     print(party.heroes[0].hp)
     print(party.heroes[1].hp)
 
-    // The rack holds a sword, the club the troll fell with, and a dagger.
-    rearm(mutable party, from: [
+    // The rack holds a sword, the club the troll fell with, and a dagger. The party re-arms from a copy of it, so the
+    // smith's own club keeps its edge.
+    let rack = [
         Weapon(power: 7, edge: 0),
         loot(Enemy(hp: 0, weapon: Weapon(power: 9, edge: 1))),
         Weapon(power: 3, edge: 0),
-    ])
+    ]
+    rearm(mutable party, from: copy rack)
+    print(rack[1].edge)
 }
 
-// Feeds `hero` from `rations`, a meal for each 5 health it lacks, while the rations last, and heals it 5 for each
-// meal it eats. A hero who fell eats nothing.
+// Feeds `hero` from `rations`, a meal for each 5 health it lacks or part of 5, while the rations last, and heals it 5
+// a meal, up to its full health. A hero who fell eats nothing.
 func rest(_ hero: mutable &Hero, on rations: mutable &Int) {
     if hero.hp <= 0 { return }
     var meals = (hero.maxHp - hero.hp + 4) / 5
@@ -106,7 +110,7 @@ func hone(_ rack: [3 of Weapon]) -> [3 of Weapon] {
     return consume rack
 }
 
-// Gives `hero` `weapon` in place of its own, if `weapon` is the mightier of the two.
+// Arms `hero` with `weapon` in place of its own, if `weapon` is the mightier of the two.
 func offer(_ weapon: Weapon, to hero: mutable &Hero) {
     if weapon.power + weapon.edge > might(of: hero) { hero.weapon = consume weapon }
 }
