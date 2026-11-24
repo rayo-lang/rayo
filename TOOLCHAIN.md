@@ -224,8 +224,8 @@ Each row says what a module or test target holds, and changes only when one is a
 | `Tests/RayoDiagnosticsMacrosTests` | Tests of the macros' implementation |
 | `Tests/RayoSyntaxTests` | Tests of parsing |
 | `Tests/RayoSemaTests` | Tests of semantic checking |
-| `Tests/RayoCompilerTests` | Tests of `rayoc`'s command line and pipeline |
-| `Tests/RayoDriverTests` | Tests of the `rayo` commands, and of the whole programs they build and run |
+| `Tests/RayoCompilerTests` | Tests of `rayoc`'s command line and pipeline, and of the errors of source programs that more than one stage takes part in |
+| `Tests/RayoDriverTests` | Tests of the `rayo` commands, and of what whole programs print and how they end when built and run |
 | `Tests/ToolStandIn` | Stand-ins for the tools `rayo` runs, for the driver tests |
 | `Tests/tool-stand-in` | The executable a stand-in runs as |
 | `Tests/LLVMTests` | Tests of the LLVM binding |
@@ -234,3 +234,20 @@ Each row says what a module or test target holds, and changes only when one is a
 | `Tests/RayoLLVMTests` | Tests of the code Rayo IR compiles to |
 | `Tests/SnapshotTesting` | Snapshot testing for other test targets: comparing a test's text with a file kept beside it |
 | `Tests/RayoLLVMTestSupport` | C stand-ins for the runtime's functions in the LLVM tests |
+
+### Where a test goes
+
+More than one test target could hold many tests: a test of what a loop prints could give the emitter IR, or give `rayo run` source. A test goes at the lowest level that can see what it checks. There it runs no more of the toolchain than what it checks needs, so it is quick, and a failure points at the code that is wrong.
+
+Each kind of test has its target, and each target gives its tests the same kind of input:
+
+- **What one stage makes of its input** goes in that stage's target, which calls the stage's own interface.
+    - `RayoSyntaxTests` gives the lexer and the parser source text, and reads the tokens, the syntax tree and the syntax errors.
+    - `RayoSemaTests` gives parsing and checking source text, and reads the errors and warnings. It compares the checked program of a source that checks with a snapshot.
+    - `RayoIRTests` gives lowering source text that checks, and compares the IR with a snapshot. It gives the IR's verifiers, and the analyses that later stages build on, IR text.
+    - `RayoOwnershipTests` gives the ownership checks IR text. It reads the errors they report, and the IR they give with each access and local ended.
+    - `RayoLLVMTests` gives the emitter IR text, and reads the LLVM module and the object code it makes.
+- **What emitted code does when it runs** goes in `RayoLLVMTests` too. A test gives the emitter IR text and runs the code in the test's own process. It reads what the code printed and the panic that ended it, in a debug and in a release build where the two could differ.
+- **An error that more than one stage takes part in** goes in `RayoCompilerTests`, which gives source text to `rayoc --check` in the test's own process and reads the errors. An ownership error of a source program is one, since the program is parsed, checked and lowered before the ownership checks see it. How one stage's error bears on what the others report is another.
+- **What a program prints, and how it ends, when built and run** goes in `RayoDriverTests`. A test gives source text to `rayo run`, which compiles it with the built `rayoc` and links it with the installed clang and LLD. It reads the program's output, its exit code and its panic, in a debug and in a release build where the two could differ.
+- **What `rayo` and `rayoc` themselves do** goes in the target of each. `RayoCompilerTests` holds `rayoc`'s options, its exit codes, what it prints and the files it writes, and gives the compiler the files it reads. `RayoDriverTests` holds the same for `rayo`, and puts a stand-in in place of `rayoc`, clang or a linker where a test decides what that tool does.
