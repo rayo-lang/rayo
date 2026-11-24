@@ -76,10 +76,14 @@ extension AssignmentChecker: ChangeablePlaceRules {
         }
     }
 
-    /// A `let` may be assigned whole, only once on each path, which the initialization check enforces; it never
-    /// changes part by part. A `ref let` is assigned by its declaration, so the check reports any other assignment of
-    /// it whole as a second one.
-    func refusal(toChangeLet local: LocalID, holdsParts: Bool) -> ErrorCode? {
-        holdsParts ? .assignToPartOfLet(name: expressions.names[local].name) : nil
+    /// Admits a whole `let`, which the initialization check lets an assignment give its value once on each path.
+    func refusal(toChangeLet name: String, holdsParts: Bool) -> ErrorCode? {
+        holdsParts ? .changeOfPartOfLet(name: name) : nil
+    }
+
+    /// Admits a whole `ref let` as a `let`, since its declaration gives it its value, so the initialization check
+    /// reports any assignment of it whole as a second one.
+    func refusal(toChangeReferenceLet name: String, holdsParts: Bool) -> ErrorCode? {
+        refusal(toChangeLet: name, holdsParts: holdsParts)
     }
 }

@@ -123,6 +123,12 @@ struct MutableParameterTests {
         #expect(messages(of: statement) == ["\(column): error[E0252]: 'id' is a 'let' field, so it can't change"])
     }
 
+    @Test func `'mutable' of a 'let' field of a '&T' parameter names the field`() {
+        #expect(declarationMessages(of: "func f(_ e: &Enemy) { bump(mutable e.id) }") == [
+            "14:38: error[E0252]: 'id' is a 'let' field, so it can't change",
+        ])
+    }
+
     // An array's count never changes, whatever holds the array, so it is reported ahead of a root that can't change
     // either.
     @Test(arguments: [("bumpCount(mutable e.slots.count)", 31), ("bumpCount(mutable fixedEnemy.slots.count)", 40)])

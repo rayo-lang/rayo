@@ -216,7 +216,7 @@ public enum ErrorCode: Sendable, Hashable {
     case mainTakesParameters
 
     @Code(230, error: "'{name}' is a '&{type}' parameter, so it can't change; take it as 'mutable &{type}'")
-    case assignToParameter(name: String, type: TypeName)
+    case changeOfBorrowedParameter(name: String, type: TypeName)
 
     @Code(231, error: "no '{name}' takes the arguments ({arguments})")
     case noMatchingFunction(name: String, arguments: String)
@@ -276,10 +276,10 @@ public enum ErrorCode: Sendable, Hashable {
     // 250 is unused, and stays so.
 
     @Code(251, error: "'{name}' is a 'let', so its fields and elements can't change")
-    case assignToPartOfLet(name: String)
+    case changeOfPartOfLet(name: String)
 
     @Code(252, error: "'{field}' is a 'let' field, so it can't change")
-    case assignToLetField(field: String)
+    case changeOfLetField(field: String)
 
     @Code(253, error: "an 'if' used for its value needs an 'else'")
     case valueIfWithoutElse
@@ -342,7 +342,7 @@ public enum ErrorCode: Sendable, Hashable {
     case indexNotUInt(found: TypeName)
 
     @Code(273, error: "an array's 'count' is fixed by its type, so it can't change")
-    case assignToCount
+    case changeOfCount
 
     @Code(274, error: "index {index} is out of range for a {type}")
     case indexOutOfRange(index: UInt64, type: TypeName)

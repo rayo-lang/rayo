@@ -24,12 +24,13 @@ extension MutablyLentPlaceRules: ChangeablePlaceRules {
         expressions.error(naming: nonPlace, name)
     }
 
-    /// Refuses a `let` and a `ref let`, whole or part by part, since a `mutable` never gives a place its value.
-    func refusal(toChangeLet local: LocalID, holdsParts: Bool) -> ErrorCode? {
-        let declared = expressions.names[local]
-        // A `let` owns its value, which a `var` would let change, whole or part by part.
-        guard declared.kind == .refLet else { return .mutableOfLet(name: declared.name) }
-        // A part of a `ref let` is refused as an assignment into it is.
-        return holdsParts ? .assignToPartOfLet(name: declared.name) : .mutableOfReferenceLet(name: declared.name)
+    /// Refuses a `let`, whole or part by part, since a `mutable` never gives a place its value.
+    func refusal(toChangeLet name: String, holdsParts: Bool) -> ErrorCode? {
+        .mutableOfLet(name: name)
+    }
+
+    /// Refuses a `ref let`, whole or part by part. A part is refused as an assignment into it is.
+    func refusal(toChangeReferenceLet name: String, holdsParts: Bool) -> ErrorCode? {
+        holdsParts ? .changeOfPartOfLet(name: name) : .mutableOfReferenceLet(name: name)
     }
 }
