@@ -129,6 +129,9 @@ public enum ErrorCode: Sendable, Hashable {
 
     // 137 is unused, and stays so.
 
+    @Code(138, error: "the expression nests more than {limit} levels deep")
+    case expressionTooDeep(limit: Int)
+
     // MARK: Checking
 
     // A checking error takes a number from 201 to 299, then from 401 onwards, since ownership errors hold 301 to 399.
