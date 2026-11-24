@@ -17,7 +17,7 @@
 - **A whole store may write padding**, so a `TrailingArray`'s header, whose tail padding may hold elements, is written field by field through a value property, and a `Synchronized` element never shares bytes with it ([04](../../spec/04-types/data-layout.md#a-header-and-trailing-elements-trailingarray)).
 - **Text is UTF-8.** String ranges are checked on scalar boundaries ([04](../../spec/04-types/collections.md#strings)), so every string holds whole UTF-8 sequences, as a valid one must ([10](../../spec/10-errors-and-safety/unsafe-code.md#raw-accesses)).
 - **Arithmetic** ([04](../../spec/04-types/numbers-and-math.md#integer-overflow-division-and-shifts)). An overflow that wraps gives a wrong value, never an invalid one, and the next bounds check still catches a wrong index. Division by zero and converting NaN or an out-of-range float are memory-safety checks, since their failure, unchecked, is undefined behavior ([10](../../spec/10-errors-and-safety/checks-and-build-modes.md#the-checks)).
-- **Imports keep C's meaning** ([08](../../spec/08-c-interop/imports-and-inline-c.md#structs-unions-and-enums)):
+- **Imports keep C's meaning** ([08](../../spec/08-c-interop/imports-and-declarations.md#structs-unions-and-enums)):
     - a struct Rayo can't lay out exactly imports as `@opaque`, which is used only as `*S` and binds no type parameter, so no generic body needs its layout ([05](../../spec/05-protocols-generics-and-closures/protocols-and-generics.md#type-parameters-stand-for-sized-types));
     - a zeroing `init()` exists only where all-zero bytes are valid;
     - an enum is closed only where its header says so, holding any value of its underlying type otherwise, since C lets an enum object hold any value of that type.
@@ -45,7 +45,7 @@
 - **Memory-safety checks are on in every build** ([10](../../spec/10-errors-and-safety/checks-and-build-modes.md#check-levels)), and only `unchecked` code, which isn't safe code, removes them. Each fails before the access it guards.
 - **A diagnostic check guards nothing memory depends on**: with it off, a wrong value still meets every memory-safety check.
 - **A panic never returns, and its unwind ends no borrow early** ([10](../../spec/10-errors-and-safety/panics.md#what-a-panic-does)). It ends each frame as a `throw` does, so a borrow ends only with the frame that holds it. Every point that can panic is checked as an exit, so the unwind breaks no rule a return keeps. `unsafe` code keeps every place it can reach valid wherever it can panic, so no `deinit` and no `recover` closure finds an invalid value ([10](../../spec/10-errors-and-safety/unsafe-code.md#panics-in-unsafe-code)). A lending call joins its work before the unwind leaves it, so work lent from the panicking thread still finds its memory ([07](../../spec/07-concurrency/thread-work.md#the-librarys-promise)). The failures that can't unwind end the program at once, while other threads may run briefly ([10](../../spec/10-errors-and-safety/panics.md#what-ends-the-program)).
-- **No frame is written past its stack's end** ([10](../../spec/10-errors-and-safety/panics.md#what-ends-the-program)): every function checks its stack on entry, and every call into C checks the need its target declares. The check on entry counts the stack of the routines the implementation supplies, such as software floating point, whose bound it knows ([11](../../spec/11-compilation-model.md#what-a-target-must-provide)).
+- **No frame is written past its stack's end** ([10](../../spec/10-errors-and-safety/panics.md#running-out-of-stack)), since every stack Rayo code runs on has a guard page below it. Every Rayo frame probes the stack as it grows it, so it reaches the guard page before any memory below. The routines the implementation supplies, such as software floating point, probe the same way ([11](../../spec/11-compilation-model.md#what-a-target-must-provide)). Where the platform has no guard pages, every function checks its stack on entry instead. C's own frames keep to their stack under C's contract ([08](../../spec/08-c-interop/c-contract-and-embedding.md#what-c-must-uphold)).
 
 ## The unsafe boundary
 
@@ -66,7 +66,7 @@
 | `@pod` ([04](../../spec/04-types/data-layout.md#plain-data-pod-and-bit-casts)) | `Pod` |
 | The library's lending promise ([07](../../spec/07-concurrency/thread-work.md#the-librarys-promise)) | Borrows lent for a call ([Threads](runtime-and-concurrency.md#threads)) |
 | `Box.adopt` takes back a leaked `Box<T>` once ([06](../../spec/06-memory-and-allocators/owning-values.md#owning-boxes)) | Owned |
-| `@export`, `extern c func` and the rules of an `import c` config block, each an assertion about C ([10](../../spec/10-errors-and-safety/unsafe-code.md#unverified-promises)) | Valid, the stack check |
+| `@export`, `extern(c) func` and the rules of an `import(c)` config block, each an assertion about C ([10](../../spec/10-errors-and-safety/unsafe-code.md#unverified-promises)) | Valid |
 
 **What `unsafe` code allows for is part of the same boundary** ([10](../../spec/10-errors-and-safety/unsafe-code.md#aliasing-and-skipped-deinits)): memory has no declared type, and a `deinit` may never run.
 

@@ -4,7 +4,7 @@
 
 ## E. C interop
 
-**Every crossing between Rayo and C is unsafe by definition.** C has the obligations that `unsafe` Rayo code would have in its place ([08](../../spec/08-c-interop/c-contract-and-embedding.md#what-c-must-uphold)), and a C header can't say that a pointer outlives a call, or that a buffer holds `n` elements ([08](../../spec/08-c-interop/imports-and-inline-c.md#calling-imported-functions)). So these cases are exempt from **Forced unsafe** on the C side. They check two things: the mapping is precise enough to bind real C APIs, and the Rayo wrapper's `unsafe` part stays small, with obligations that are easy to state and keep.
+**Every crossing between Rayo and C is unsafe by definition.** C has the obligations that `unsafe` Rayo code would have in its place ([08](../../spec/08-c-interop/c-contract-and-embedding.md#what-c-must-uphold)), and a C header can't say that a pointer outlives a call, or that a buffer holds `n` elements ([08](../../spec/08-c-interop/imports-and-declarations.md#calling-imported-functions)). So these cases are exempt from **Forced unsafe** on the C side. They check two things: the mapping is precise enough to bind real C APIs, and the Rayo wrapper's `unsafe` part stays small, with obligations that are easy to state and keep.
 
 ### E1 · C holding pointers into Rayo memory
 
@@ -36,7 +36,7 @@ struct R {
 };
 ```
 
-A packed struct can put a field at a misaligned address, where a load or store of the field's type is invalid ([04](../../spec/04-types/structs.md#packed-structs-and-under-aligned-places)). And C lets an enum hold any value of its underlying type, not only its cases ([08](../../spec/08-c-interop/imports-and-inline-c.md#structs-unions-and-enums)).
+A packed struct can put a field at a misaligned address, where a load or store of the field's type is invalid ([04](../../spec/04-types/structs.md#packed-structs-and-under-aligned-places)). And C lets an enum hold any value of its underlying type, not only its cases ([08](../../spec/08-c-interop/imports-and-declarations.md#structs-unions-and-enums)).
 
 - **Must accept** each of these:
     - each type imported with its exact layout;
@@ -74,9 +74,10 @@ A packed struct can put a field at a misaligned address, where a load or store o
 
 ### E7 · C code that needs a large stack
 
-**A C library's function recurses deeply, and a plugin's callback is documented to need 1 MiB of stack.** Running out of stack ends the program before anything is written past the stack's end ([10](../../spec/10-errors-and-safety/panics.md#what-ends-the-program)), so a call into C first checks that the stack its target needs is left ([08](../../spec/08-c-interop/imports-and-inline-c.md#the-stack-a-c-call-needs)).
+**A C library's function recurses deeply, and a plugin's callback is documented to need 1 MiB of stack.** Running out of stack ends the program before anything is written past the stack's end, since every stack Rayo code runs on has a guard page below it ([10](../../spec/10-errors-and-safety/panics.md#running-out-of-stack)).
 
-- **Must accept** calling each, within C's obligations, by declaring its need where the function or the pointer type is declared.
+- **Must accept** calling each with nothing declared about its stack, on a thread whose stack holds what it needs.
+- **Must hold:** when either runs out of stack, having been compiled with stack-clash protection, the program ends with the report, and nothing is written past the stack's end. State what C's contract asks of C compiled without it ([08](../../spec/08-c-interop/c-contract-and-embedding.md#what-c-must-uphold)).
 
 ### E8 · One library on 32-bit and 64-bit targets
 
@@ -100,7 +101,7 @@ size_t board_uart_pending(void);                            // how many queued b
 ```
 
 ```rayo
-import c "board.h" as board where prefix: "board_" unsafe { noalloc board_uart_write }   // the vendor's SDK
+import(c) "board.h" as board where prefix: "board_"   // the vendor's SDK
 
 let queued = UInt(unsafe board.uart_write(msg.baseAddress, CSize(msg.count)))  // size_t is CSize: a UInt32 here
 let pending: UInt = unsafe board.uart_pending()         // compiles here, where a UInt32 widens to UInt, and not on the host
@@ -113,13 +114,13 @@ if let reg = unsafe *UInt32?(bitPattern: uartData) {    // a pointer made from a
 }
 ```
 
-- **Must accept** the SDK imported and called with `unsafe` only around its calls, its `size_t`s as `CSize` and its `uintptr_t`s as `CUIntPtr`, from source that builds for the host too ([08](../../spec/08-c-interop/imports-and-inline-c.md#what-imports-as-what)). **Must hold:** `pending`'s line above is an error on the host, and the explicit form in `queued`'s line is valid on both.
+- **Must accept** the SDK imported and called with `unsafe` only around its calls, its `size_t`s as `CSize` and its `uintptr_t`s as `CUIntPtr`, from source that builds for the host too ([08](../../spec/08-c-interop/imports-and-declarations.md#what-imports-as-what)). **Must hold:** `pending`'s line above is an error on the host, and the explicit form in `queued`'s line is valid on both.
 - **Must accept** `Atomic<UInt32>` counters that both cores change. **Must reject** `uptime`'s line above ([07](../../spec/07-concurrency/synchronization.md#atomics-and-locks)), so the firmware chooses its uptime counter at compile time, as E8's library chooses its counter.
 - *(inherently unsafe)*: **Must accept** the UART's registers read and written through volatile accesses of 4 bytes or fewer, in one small `unsafe` wrapper, as I13 asks. **Must reject** an 8-byte volatile access where `target.pointerBitWidth` is 32, such as the timer's 64-bit count read in one load ([10](../../spec/10-errors-and-safety/unsafe-code.md#hardware-access)). **Must accept** reading that count as two 4-byte halves, and state what keeps the halves consistent.
 - *(inherently unsafe)*: **Must accept** a UART interrupt that hands each received byte through a ring buffer to a task waiting for input, with no lock and no allocation. No byte is lost while the ring has room; state what happens when it fills. State what code may run inside the interrupt handler, given that C never enters Rayo from an interrupt ([08](../../spec/08-c-interop/c-contract-and-embedding.md#what-c-must-uphold)), and how the byte reaches Rayo code.
-- **Must accept** a main loop of the program's own, which steps a `TaskSet` and sleeps the core until the next interrupt, a wake from the other core, or the set's `deadline` ([07](../../spec/07-concurrency/tasks.md#waiting-for-wakes-run-and-blockon)). It handles each event in a `@noalloc` function that calls the SDK functions the import declares `noalloc`.
-- **Must hold:** `Float` and `Double` math, `fma` included, and `Int` multiplication and division give the host's results, bit for bit. The cores lack instructions for some of them, and a sequence of instructions or a software routine computes each of those ([04](../../spec/04-types/numbers-and-math.md#integer-overflow-division-and-shifts), [04](../../spec/04-types/numbers-and-math.md#floating-point)). The stack check on entry to each function counts what those routines use.
-- State what the firmware's platform layer must supply to the runtime with no operating system ([08](../../spec/08-c-interop/c-contract-and-embedding.md#what-the-runtime-needs-from-the-platform)), and where the process seed comes from on a chip with no source of randomness. State what protection the command `Map` then has against keys chosen to collide.
+- **Must accept** a main loop of the program's own, which steps a `TaskSet` and sleeps the core until the next interrupt, a wake from the other core, or the set's `deadline` ([07](../../spec/07-concurrency/tasks.md#waiting-for-wakes-run-and-blockon)).
+- **Must hold:** `Float` and `Double` math, `fma` included, and `Int` multiplication and division give the host's results, bit for bit. The cores lack instructions for some of them, and a sequence of instructions or a software routine computes each of those ([04](../../spec/04-types/numbers-and-math.md#integer-overflow-division-and-shifts), [04](../../spec/04-types/numbers-and-math.md#floating-point)). Those routines guard the stack as Rayo frames do ([11](../../spec/11-compilation-model.md#what-a-target-must-provide)).
+- State what the firmware's platform layer must supply to the runtime with no operating system, and how it guards each stack ([08](../../spec/08-c-interop/c-contract-and-embedding.md#what-the-runtime-needs-from-the-platform)), and where the process seed comes from on a chip with no source of randomness. State what protection the command `Map` then has against keys chosen to collide.
 - **Must accept** the same firmware on a single-core part without atomic read-modify-write instructions, such as a Cortex-M0+. State how its atomics stay lock-free there, whether `uptime`'s line compiles there, and which uptime counter the compile-time choice picks. State what the language promises when that build runs on a chip with a second core.
 
 ---

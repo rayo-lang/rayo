@@ -139,9 +139,9 @@ if let key = Name(existing: line.key), key == jump { … }    // a key read from
 
 **A `Name` is implicitly copyable and unscoped, and it is `Sendable` and `Frozen`.** std declares `unsafe Sendable` and `unsafe Frozen` on it, since its value names immortal interned text, which nothing writes and every thread may read ([07](../07-concurrency/race-freedom-and-sendable.md#what-may-cross-threads-sendable), [06](../06-memory-and-allocators/owning-values.md#frozen-types-with-no-interior-mutability)). It declares `ImplicitlyCopyable` too, since a copy is one pointer-sized value that names the same text ([01](../01-values-and-ownership/moves-copies-destruction.md#implicitly-copyable-types)).
 
-**`==`, hashing, `text` and `Name(existing:)` are `@noalloc`** ([06](../06-memory-and-allocators/allocation-lifecycle.md#allocation-failure)), so code that can't allocate still compares names, looks them up and reads their text. Only interning a new text allocates. `format(into:)` allocates nothing of its own either: it writes the text to its sink, and whether that write allocates is the sink's concern.
+**Only interning a new text allocates.** `==`, hashing, `text` and `Name(existing:)` allocate nothing, so comparing names, looking them up and reading their text never fails for want of memory. `format(into:)` allocates nothing of its own either: it writes the text to its sink, and whether that write allocates is the sink's concern.
 
-**A string literal of type `Name` is interned by the build, so it costs nothing at run time.** The build makes one entry for each text it converts to a `Name` literal in checked code, merged across modules, and freezes it into read-only data. A literal is the `Name` of its text's entry, so it converts at compile time and is `@noalloc` ([Interned literals](#interned-literals)). So it may be a `const`, an attribute argument or part of a `static if` condition. std's interner holds every such entry before any code can intern at run time, so a literal and `Name("jump")` give the same `Name`.
+**A string literal of type `Name` is interned by the build, so it costs nothing at run time.** The build makes one entry for each text it converts to a `Name` literal in checked code, merged across modules, and freezes it into read-only data. A literal is the `Name` of its text's entry, so it converts at compile time and allocates nothing ([Interned literals](#interned-literals)). So it may be a `const`, an attribute argument or part of a `static if` condition. std's interner holds every such entry before any code can intern at run time, so a literal and `Name("jump")` give the same `Name`.
 
 ### Runs of elements
 
@@ -223,8 +223,8 @@ struct Map<K: Hashable, V, H: Hashing = SeededHashing> private init(…)
 struct Set<T: Hashable, H: Hashing = SeededHashing> private init(…)
 
 protocol Hashing: Copyable {
-    @noalloc init()                               // the value a map keeps, unless it is given one
-    @noalloc func makeHasher() -> Hasher          // a new hash state, for one key
+    init()                                        // the value a map keeps, unless it is given one
+    func makeHasher() -> Hasher                   // a new hash state, for one key
 }
 ```
 
@@ -424,13 +424,6 @@ let ws: List<_> = [3, 4, 5]               // error: a List literal needs 'alloc'
 
 **A string literal under `alloc` always makes a `String`**, from the allocator `alloc` takes, as an array literal under `alloc` makes a `List`. Unlike an array literal, it does so whatever its position expects, so `msg` above is a `String`. An interpolated one formats its text into the new `String`. Without `alloc`, an interpolated literal is never a `String`, and a plain literal is a `static &Text` ([above](#strings)). So a type that conforms to `Allocating` can't conform to `ExpressibleByStringLiteral`: a literal of it would need `alloc`, which makes a `String` instead.
 
-**In `@noalloc` code, a literal converts only where that can't allocate** ([06](../06-memory-and-allocators/allocation-lifecycle.md#allocation-failure)). That holds when either of these does:
-
-- its initializer is `@noalloc`, as those of the number types, `Array`, `Simd`, `InlineList`, `static &Text` and `std.math`'s `Vec3` and matrices are;
-- its literals convert at compile time (below), as `Name`'s do.
-
-So a `List`, `Set` or `Map` literal is an error there, as its `alloc` is.
-
 **An array literal's elements arrive inline**, as an `[N of Element]` that the initializer owns, whose count is known at compile time, never as a heap buffer. So a type refuses a count it can't hold at compile time, through `static if` and `static error` ([09](../09-compile-time/constants-and-conditions.md#static-if-and-conditional-compilation)): `Simd<T, N>` takes exactly `N` elements, `Vec3` exactly 3 and `InlineList<T, 8>` at most 8. Passed where an `[N of T]` with an unbound `N` or `T` is expected, as for `alloc List([1, 2, 3])`, a literal binds `N` to its count and `T` as it does with no context.
 
 **An integer or float literal is checked against the type it becomes.** An integer literal must fit the conformer's `IntegerLiteralType`, at compile time. A float literal is rounded once, to its `FloatLiteralType`, which is `Half`, `Float` or `Double`. A prefix `-` applied to a literal, directly or through parentheses, where an operand begins, makes one literal of the opposite sign, checked as one value. So `-128` fits an `Int8`, although `128` alone doesn't, while `n-1` still subtracts. Likewise `-(1)` is the literal `-1`, which fits no unsigned type, and `-(-(1))` is the literal `1`. A postfix member applies to the literal first, so `-128.abs` is `-(128.abs)`.
@@ -473,7 +466,7 @@ Literals of different kinds, such as `1` and `"a"`, are an error. An empty `[]` 
 protocol ExpressibleByInternedLiteral where InternedEntry: ~Scoped {        // an entry refers to nothing that ends
     associatedtype InternedEntry: Frozen & TrivialFree & Sendable         // one per distinct text
     static func internedEntry(for text: static &Text) -> InternedEntry     // run by the compiler, once per distinct text
-    @noalloc unsafe init(internedLiteral entry: static &[InternedEntry])   // the entry the build bound for the literal
+    unsafe init(internedLiteral entry: static &[InternedEntry])            // the entry the build bound for the literal
     unsafe static func internLoaded(_ entries: static &[InternedEntry],    // code loaded after startup (below)
                                     binding bound: mutable &[static &[InternedEntry]]) -> Void!AllocError
 }
@@ -483,7 +476,7 @@ protocol ExpressibleByInternedLiteral where InternedEntry: ~Scoped {        // a
 - **Entries are freezable.** `InternedEntry` is `Frozen`, `TrivialFree`, `Sendable` and unscoped, and the build checks the rest of the freezable test on each entry it makes ([09](../09-compile-time/constants-and-conditions.md#consts-that-reach-run-time)).
 - **A stray entry never becomes a value.** `internedEntry(for:)` is safe to call from anywhere, since it only builds an entry from a text and touches no interner. An entry built that way never becomes a value of the type, since only `unsafe` code calls `init(internedLiteral:)`, promising the entry is the one the build bound (below). std's `Name` also keeps its entry's fields private.
 - **The table exists only at run time.** `T.internedLiterals`, a `static &[T.InternedEntry]`, refers to it. Compile-time code can't read it, and `static if` can't test it, since what it holds depends on every literal the build checks, compile-time code's included.
-- **Each literal is built at compile time.** The `@noalloc` `init(internedLiteral:)` receives the literal's element of the table, and must be able to run at compile time, so every such literal converts at compile time ([above](#literals)).
+- **Each literal is built at compile time.** `init(internedLiteral:)` receives the literal's element of the table, and must be able to run at compile time, so every such literal converts at compile time ([above](#literals)).
 - **Its caller promises the entry.** `init(internedLiteral:)` is `unsafe`: its caller promises that the reference is to the entry the build bound for that literal, since an entry from anywhere else would give its text a second value. The call the build makes for a literal carries that promise itself, so a literal needs no `unsafe` in source, in a `@safe` module too ([10](../10-errors-and-safety/unsafe-code.md#what-needs-unsafe)).
 - **The table seeds the interner.** std's `Name` interner reads `Name.internedLiterals` in its own global's initializer. Interning reads that global, so the initialization checks keep any code from interning before the table is in it ([07](../07-concurrency/global-state.md#initialization-at-startup)).
 

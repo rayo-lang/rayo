@@ -1,28 +1,25 @@
-# Imports and inline C
+# Imports and declarations
 
 [08 · C interop](../08-c-interop.md)
 
-C headers define names and types in C's terms. `import c` maps those declarations into a Rayo module, so code can name the functions and data they expose. An imported declaration retains C's calling and memory rules; code must meet those rules when it uses the declaration.
+C headers define names and types in C's terms. `import(c)` maps those declarations into a Rayo module, so code can name the functions and data they expose. An imported declaration retains C's calling and memory rules; code must meet those rules when it uses the declaration. A C function that no imported header declares, such as one in the program's own C code, is declared to Rayo with `extern(c) func`.
+
+**The parentheses of `import(c)` and `extern(c)` name the language of the declarations, and `c` is the only language the spec defines.** Any other name there is a compile error.
 
 ## Importing headers
 
 ```rayo
-import c "platform.h"                                    // declarations land in module 'platform'
-import c "SDL3/SDL.h" as sdl                             // explicit name
-import c "vendor/fmod.h" as fmod where prefix: "FMOD_"   // strips the prefix: FMOD_System_Create → fmod.System_Create
+import(c) "platform.h"                                    // declarations land in module 'platform'
+import(c) "SDL3/SDL.h" as sdl                             // explicit name
+import(c) "vendor/fmod.h" as fmod where prefix: "FMOD_"   // strips the prefix: FMOD_System_Create → fmod.System_Create
 ```
 
-**`import c` makes a header's declarations available in a Rayo module**, each as the Rayo declaration that the mapping gives it ([below](#what-imports-as-what)). An import may also take a prefix to strip and a config block:
+**`import(c)` makes a header's declarations available in a Rayo module**, each as the Rayo declaration that the mapping gives it ([below](#what-imports-as-what)). An import may also take a prefix to strip and a config block:
 
 - **`prefix:`** strips a case-sensitive match from the start of each imported function, type, enumerator, macro and variable name. A name keeps its prefix when stripping it would leave text that doesn't start an identifier, as `FMOD_3D` would, or a name that collides with another.
-- **Config blocks.** An import may end with a **config block**, `unsafe { … }`, of rules about the header's C. The compiler takes each rule on trust, so the block is spelled `unsafe` ([10](../10-errors-and-safety/unsafe-code.md#unverified-promises)). It holds three kinds of rule:
-    - `stack(n)`, which states the stack a function needs ([below](#the-stack-a-c-call-needs));
-    - `noalloc`, which states that a function allocates nothing ([below](#c-calls-in-noalloc-code-noalloc));
-    - `struct`, `union` or `enum S in "h"`, which names the header to take the type `S` from ([below](#the-identity-of-an-imported-type)).
+- **Config blocks.** An import may end with a **config block**, `unsafe { … }`, of rules about the header's C. The compiler takes each rule on trust, so the block is spelled `unsafe` ([10](../10-errors-and-safety/unsafe-code.md#unverified-promises)). Each rule is a `struct`, `union` or `enum S in "h"`, which names the header to take the type `S` from ([below](#the-identity-of-an-imported-type)). A rule names its type by its C tag, before `prefix:` is stripped.
 
-  Its rules name declarations by their C names, before `prefix:` is stripped.
-
-**Each `import c` reads its header with only the preprocessor definitions the build declares for that import** ([09](../09-compile-time/attributes-and-runtime-data.md#what-a-build-declares)), so no other import's macros reach it. Two imports of one header may therefore read it differently, each with its own definitions.
+**Each `import(c)` reads its header with only the preprocessor definitions the build declares for that import** ([09](../09-compile-time/attributes-and-runtime-data.md#what-a-build-declares)), so no other import's macros reach it. Two imports of one header may therefore read it differently, each with its own definitions.
 
 ### The identity of an imported type
 
@@ -54,7 +51,7 @@ struct sockaddr;      // declared, not defined in this reading: an @opaque type 
 **An import can name a header whose reading has the type**, with a rule in its config block:
 
 ```rayo
-import c "mylib.h" unsafe { struct sockaddr in "sys/socket.h" }   // take struct sockaddr from sys/socket.h's reading
+import(c) "mylib.h" unsafe { struct sockaddr in "sys/socket.h" }   // take struct sockaddr from sys/socket.h's reading
 ```
 
 **Naming a header `h` this way asserts, unchecked, that the type is the one of that kind and tag in the reading of `h` with the import's definitions.** The build fails if that reading doesn't declare it. The named reading may only declare it too, as every public header does for a library's handle type that no header defines, such as Wayland's `struct wl_surface`. So imports that name one header for it share one opaque type.
@@ -65,27 +62,9 @@ import c "mylib.h" unsafe { struct sockaddr in "sys/socket.h" }   // take struct
 
 **Every imported C function is `unsafe` to call**, since a header can't say that a pointer outlives a call, or that a buffer holds `n` elements.
 
-**As a value, an imported function converts only to `@c` function pointer types**, whose calls are `unsafe` too ([05](../05-protocols-generics-and-closures/functions-and-closures.md#c-function-pointers)). Only a `@c` type carries the function's stack need, which a call through any other function type wouldn't check ([below](#the-stack-a-c-call-needs)).
+**As a value, an imported function converts only to `@c` function pointer types**, whose calls are `unsafe` too ([05](../05-protocols-generics-and-closures/functions-and-closures.md#c-function-pointers)).
 
-**A `@safe` module can `import c` a header, to name its types and constants, but it can't call its functions or use its variables**, since both need `unsafe`, which such a module rejects ([10](../10-errors-and-safety/unsafe-code.md#safe-modules)).
-
-#### The stack a C call needs
-
-```rayo
-import c "physics.h" unsafe { stack(256 * 1024) physics_step }   // in the import
-extern c stack(512 * 1024) func solve(_ d: CInt) -> CInt         // on an extern c func declaration
-typealias Visitor = @c stack(1 << 20) (CInt) -> Void             // in a C function pointer's type
-```
-
-**A call into C first checks that the stack its target needs is left, and ends the program otherwise**, so running out of stack is caught before anything is written past the stack's end ([10](../10-errors-and-safety/panics.md#what-ends-the-program)).
-
-**The need is the one declared where the call's target is**, in one of the three places above, each `n` a `const` `Int` expression. When nothing is declared there, the need is `target.cStackReserve` bytes ([09](../09-compile-time/constants-and-conditions.md#static-if-and-conditional-compilation)).
-
-**A function or pointer converts to a `@c` type that declares at least its need, never less**, so a call through that type checks for at least the stack its target needs. A `@c` type without `stack` declares `target.cStackReserve`.
-
-**A Rayo function, a `@c func`, an `@export` function or a literal needs none**, since it checks its own stack on entry.
-
-**Every call to C is `unsafe`, so the calling code answers for the declared need being enough.**
+**A `@safe` module can `import(c)` a header, to name its types and constants, but it can't call its functions or use its variables**, since both need `unsafe`, which such a module rejects ([10](../10-errors-and-safety/unsafe-code.md#safe-modules)).
 
 ### What imports as what
 
@@ -161,7 +140,7 @@ typealias Visitor = @c stack(1 << 20) (CInt) -> Void             // in a C funct
     - a `Double`;
     - a pointer.
 
-  The promotions would change a `Float` or a narrower integer, so the code converts one explicitly first, as in `Double(x)` or `CInt(x)`. A variadic function converts to no function type, and an `extern c func` can't declare one.
+  The promotions would change a `Float` or a narrower integer, so the code converts one explicitly first, as in `Double(x)` or `CInt(x)`. A variadic function converts to no function type, and an `extern(c) func` can't declare one.
 - **Literal macros.** A macro defined as a single literal imports as a `const`, usable as an array length or in a `static if` condition. Its value is the C literal's, so an octal literal reads as octal, and a `float` literal's value is rounded to `float`. A negated or parenthesized literal counts as one. Its type follows the type C gives the literal, suffix included. For an integer or character literal, it is the alias of that C type, such as `CInt` or `CUInt`. For a floating-point literal, it is the type that C type imports as, such as `Float` or `Double`, and for a string literal `static &Text`:
 
     ```c
@@ -195,7 +174,7 @@ void clear(long double* p);                                       // imported, w
 - the `static` variables its module uses;
 - every such definition that these reach.
 
-**Any other definition in a header, of a function or a variable, imports as a declaration alone.** So an import adds no symbol to the program and runs no C when it loads. A library's code comes from linking the library, or from an `extern c` block ([below](#inline-c)).
+**Any other definition in a header, of a function or a variable, imports as a declaration alone.** So an import adds no symbol to the program and runs no C when it loads. A library's code comes from linking the library ([below](#declaring-c-functions)).
 
 ### Structs, unions and enums
 
@@ -262,36 +241,20 @@ enum Team : uint32_t { TEAM_RED, TEAM_BLUE };    // C23 fixes the underlying typ
     - `contains(_:)`.
 - **Shared values.** Enumerators that share a value name one value: the first imports as a case, and each later one as a static constant equal to it.
 
-### C calls in `@noalloc` code: `noalloc`
+## Declaring C functions
 
-```rayo
-import c "mixer.h" unsafe { noalloc mix_block, apply_gain }   // in the import's config block
-extern c noalloc func soft_clip(_ x: Float) -> Float           // on an extern c func declaration
+```c
+// deadzone.c: the program's own C, which a C compiler builds apart from the Rayo modules
+#include "platform.h"
+float pad_deadzone(float v) { return PLATFORM_PAD_DEADZONE(v); }   // wraps a function-like macro, which doesn't import
 ```
 
-**A `noalloc` rule for a function `f` states that `f`, and everything it calls, allocates no memory**, from C's allocator or a Rayo one, so a `@noalloc` function may call it ([06](../06-memory-and-allocators/allocation-lifecycle.md#allocation-failure)). Any other C function may allocate.
-
-**The rule is asserted, not checked**, so the config block that holds it is spelled `unsafe { … }` ([10](../10-errors-and-safety/unsafe-code.md#unverified-promises)). An `extern c func` declares it with `noalloc` before `func`, as above.
-
-## Inline C
-
-An `extern c` block holds C code inside the Rayo module:
-
 ```rayo
-extern c """
-    #include <math.h>
-    static inline float rsqrt(float x) { return 1.0f / sqrtf(x); }
-    """
-extern c func rsqrt(_ x: Float) -> Float             // declared for the type checker; unsafe to call
+extern(c) func pad_deadzone(_ v: Float) -> Float   // declared to Rayo; unsafe to call
 ```
 
-**An `extern c` block's C is compiled with its module, and Rayo code calls a function it defines through an `extern c func` declaration.**
+**An `extern(c) func` declares a C function that no imported header declares**, such as one in the program's own C code, so Rayo code can call it. Its parameter and result types have C representations, and pass as an `@export` function's do ([Calling Rayo from C](calling-rayo-from-c.md#calling-rayo-from-c)). Calling it is `unsafe`, as every call to C is.
 
-- **Headers.** The block sees the headers it includes, read with the preprocessor definitions the build declares for it ([09](../09-compile-time/attributes-and-runtime-data.md#what-a-build-declares)). Every type it sees that an import also gives Rayo must read there as the import reads it, or the build fails, since both name one type ([above](#the-identity-of-an-imported-type)).
-- **Unsafe code.** The block is arbitrary C, so it counts as `unsafe` code.
-- **Declarations.** An `extern c func` declaration is an unverified promise ([10](../10-errors-and-safety/unsafe-code.md#unverified-promises)) of these:
-    - its module's `extern c` code, or a library the build links, defines a C function of that signature;
-    - that function needs at most the stack its calls check for ([above](#the-stack-a-c-call-needs));
-    - when the declaration says `noalloc`, the function allocates nothing ([above](#c-calls-in-noalloc-code-noalloc)).
+**The declaration is an unverified promise that a library or object file the build links defines a C function of that name and signature** ([10](../10-errors-and-safety/unsafe-code.md#unverified-promises)). The compiler can't check it, since it never sees that function's source.
 
-  Its parameter and result types have C representations, and pass as an `@export` function's do ([Calling Rayo from C](calling-rayo-from-c.md#calling-rayo-from-c)). Calling it is `unsafe`, as every call to C is.
+**A C function's code comes from what the build links, never from a Rayo module.** A program's own C code is compiled apart from its Rayo modules, by a C compiler such as `cc`, and the compiler links the object files and libraries the build gives it ([09](../09-compile-time/attributes-and-runtime-data.md#what-a-build-declares)). The same holds for the functions an imported header declares. The only C that a build compiles itself is the `static` definitions that an import reaches ([above](#what-imports-as-what)).

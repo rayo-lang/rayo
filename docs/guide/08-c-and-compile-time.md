@@ -3,7 +3,7 @@
 The same game now runs on a console whose SDK is a C library with a header, `platform.h`. Through it you open a window, poll the gamepads and hear from the audio thread. You also want save games without rewriting the saver each time `Enemy` gains a field. Its current target and cached path should not be saved, so `@Transient` marks those fields to skip:
 
 ```rayo
-import c "platform.h" as plat where prefix: "platform_"   // the SDK's C API, as Rayo declarations
+import(c) "platform.h" as plat where prefix: "platform_"   // the SDK's C API, as Rayo declarations
 
 struct Enemy(
     var pos: Vec3,
@@ -29,21 +29,33 @@ platform_window* platform_window_create(int32_t width, int32_t height, const cha
 bool platform_poll_pad(int32_t index, platform_pad* out);
 ```
 
-`import c` reads the header and makes its declarations available in a Rayo module ([08](../spec/08-c-interop/imports-and-inline-c.md#importing-headers)). The module would be named `platform` after the file; `as plat` gives it a shorter name. The import also strips the `platform_` prefix where it matches, so the C name `platform_poll_pad` becomes `plat.poll_pad`.
+`import(c)` reads the header and makes its declarations available in a Rayo module ([08](../spec/08-c-interop/imports-and-declarations.md#importing-headers)). The module would be named `platform` after the file; `as plat` gives it a shorter name. The import also strips the `platform_` prefix where it matches, so the C name `platform_poll_pad` becomes `plat.poll_pad`.
 
-Rayo maps each C declaration to the closest Rayo form ([08](../spec/08-c-interop/imports-and-inline-c.md#what-imports-as-what)). From the part of `platform.h` above, you get:
+Rayo maps each C declaration to the closest Rayo form ([08](../spec/08-c-interop/imports-and-declarations.md#what-imports-as-what)). From the part of `platform.h` above, you get:
 
 - `plat.PLATFORM_MAX_PADS` is a `const` `CInt` of 4. Prefix stripping is case-sensitive, so the macro keeps its name.
 - `plat.window` is an `@opaque` struct, which Rayo code uses only through a pointer, `*plat.window`.
 - `plat.pad` is a `@c struct` with C's layout, whose `left_stick` is a `[2 of Float]`. `plat.pad()` makes one of all zeros.
-- A C struct such as `plat.pad` owns nothing, so it is copyable, but it never copies with nothing written, since no one has declared its copies cheap: code writes `copy` or `consume` before one ([08](../spec/08-c-interop/imports-and-inline-c.md#structs-unions-and-enums)).
+- A C struct such as `plat.pad` owns nothing, so it is copyable, but it never copies with nothing written, since no one has declared its copies cheap: code writes `copy` or `consume` before one ([08](../spec/08-c-interop/imports-and-declarations.md#structs-unions-and-enums)).
 - A C enum is one integer, so it copies with nothing written, as a number does.
 - `plat.window_create` is an `unsafe func` taking `(Int32, Int32, *CChar?)` and returning a `*plat.window?`.
 - `plat.poll_pad` is an `unsafe func` taking `(Int32, *plat.pad?)` and returning a `Bool`.
 
-A C pointer imports as a raw pointer that may be null, `*T?`, unless the header marks it `_Nonnull` ([below](#raw-pointers)). C's `int` and `char` become `CInt` and `CChar`, whose size and signedness follow the target. In the same way `size_t` becomes `CSize`, which is as wide as the target's pointers: 32 bits on a 32-bit target, though Rayo's `Int` is 64 bits on every target. A C enum is **open**: it may hold any value of its underlying type, so a `when` over it needs an `else` ([08](../spec/08-c-interop/imports-and-inline-c.md#structs-unions-and-enums)).
+A C pointer imports as a raw pointer that may be null, `*T?`, unless the header marks it `_Nonnull` ([below](#raw-pointers)). C's `int` and `char` become `CInt` and `CChar`, whose size and signedness follow the target. In the same way `size_t` becomes `CSize`, which is as wide as the target's pointers: 32 bits on a 32-bit target, though Rayo's `Int` is 64 bits on every target. A C enum is **open**: it may hold any value of its underlying type, so a `when` over it needs an `else` ([08](../spec/08-c-interop/imports-and-declarations.md#structs-unions-and-enums)).
 
-Function-like macros do not import. You can wrap one in a C function inside an `extern c` block ([08](../spec/08-c-interop/imports-and-inline-c.md#inline-c)). Importing the header itself adds no implementation to your program; the SDK's code comes from linking its library.
+Function-like macros do not import, such as the header's `PLATFORM_PAD_DEADZONE(v)`, which zeroes a stick reading near the center. To use one, wrap it in a C function of your own, and declare that function to Rayo with `extern(c) func` ([08](../spec/08-c-interop/imports-and-declarations.md#declaring-c-functions)):
+
+```c
+// deadzone.c, the game's own C
+#include "platform.h"
+float pad_deadzone(float v) { return PLATFORM_PAD_DEADZONE(v); }
+```
+
+```rayo
+extern(c) func pad_deadzone(_ v: Float) -> Float   // unsafe to call, as every C function is
+```
+
+The Rayo compiler doesn't compile `deadzone.c`. The build compiles it with a C compiler, such as `cc`, and links the object file into your program. Importing the header adds no implementation either: the SDK's code comes from linking its library.
 
 ## Calling C: `unsafe`
 
@@ -60,7 +72,7 @@ func readPad(_ index: Int32) -> plat.pad? {
 }
 ```
 
-The header tells Rayo the function's parameter types, but cannot say whether its pointers remain valid or how many elements a buffer holds. Every imported C function therefore needs `unsafe` at the call ([08](../spec/08-c-interop/imports-and-inline-c.md#calling-imported-functions)). In `now`, it covers one expression; around several operations, write `unsafe { … }` ([10](../spec/10-errors-and-safety/unsafe-code.md#unsafe-code)).
+The header tells Rayo the function's parameter types, but cannot say whether its pointers remain valid or how many elements a buffer holds. Every imported C function therefore needs `unsafe` at the call ([08](../spec/08-c-interop/imports-and-declarations.md#calling-imported-functions)). In `now`, it covers one expression; around several operations, write `unsafe { … }` ([10](../spec/10-errors-and-safety/unsafe-code.md#unsafe-code)).
 
 `unsafe` lets you perform operations the compiler cannot verify. It does not disable ordinary checks: a list index inside the block still gets a bounds check. In return, you promise that every access through a raw pointer ([10](../spec/10-errors-and-safety/unsafe-code.md#what-unsafe-code-upholds)):
 
@@ -73,7 +85,7 @@ Breaking that promise is undefined behavior, as in C. Code that makes such promi
 
 **An `unsafe func` is one whose callers need `unsafe`.** Its body isn't an `unsafe` block: it writes `unsafe` where it needs it, as any function does.
 
-**A build can declare a module `@safe`, and everything the compiler takes on trust is then an error in it** ([10](../spec/10-errors-and-safety/unsafe-code.md#safe-modules)). That covers `unsafe` code, `extern c` code, and unverified promises such as `@export` ([below](#calling-rayo-from-c-export)).
+**A build can declare a module `@safe`, and everything the compiler takes on trust is then an error in it** ([10](../spec/10-errors-and-safety/unsafe-code.md#safe-modules)). That covers `unsafe` code, and unverified promises such as an `extern(c) func` declaration or `@export` ([below](#calling-rayo-from-c-export)).
 
 **A `@safe` module can still import a C header**, for its types and constants. It can also call the safe wrappers that another module builds with `unsafe`.
 
@@ -183,7 +195,7 @@ Say your studio's level editor, written in C++, asks the game whether an enemy d
 
 **A struct crosses with its fields in the order Rayo lays them out in memory, and the generated header declares them in that order.** Rayo sorts a struct's fields by alignment, largest first, so no padding falls between them, and fields of equal alignment keep their declared order ([04](../spec/04-types/structs.md#structs)).
 
-**`@c` keeps a struct's fields in the order you declare them, and checks that each has a C representation** ([04](../spec/04-types/structs.md#layout-attributes)). Use it when something outside your program fixes the layout, such as a C library's header, a file format or a network packet. Every struct that `import c` makes is a `@c struct`.
+**`@c` keeps a struct's fields in the order you declare them, and checks that each has a C representation** ([04](../spec/04-types/structs.md#layout-attributes)). Use it when something outside your program fixes the layout, such as a C library's header, a file format or a network packet. Every struct that `import(c)` makes is a `@c struct`.
 
 **`@layout(.declared)` keeps the declared order too, and checks nothing**, so its fields may be of any type. When they all have C representations, the struct crosses to C with them in the order you declare them, as a `@c` struct does ([04](../spec/04-types/structs.md#layout-attributes)).
 
@@ -260,9 +272,9 @@ let dropRates: Map<Int, Float> = alloc [1: 0.6, 2: 0.3, 3: 0.1]                 
 
 ```rayo
 static if target.platform == .ps5 {
-    import c "platform_ps5.h" as plat where prefix: "platform_"
+    import(c) "platform_ps5.h" as plat where prefix: "platform_"
 } else {
-    import c "platform.h" as plat where prefix: "platform_"
+    import(c) "platform.h" as plat where prefix: "platform_"
 }
 
 static if !target.hasFlag("sse4") {
@@ -383,7 +395,7 @@ struct Boss(@Bounds(0, maxHp) var hp: Float = 100)      // fine
 
 ## In the spec
 
-- [08 C interop](../spec/08-c-interop.md): importing headers and what each C declaration imports as, C representations, callbacks, `@export`, and everything C must uphold.
+- [08 C interop](../spec/08-c-interop.md): importing headers and what each C declaration imports as, declaring C functions with `extern(c) func`, C representations, callbacks, `@export`, and everything C must uphold.
 - [10 Unsafe code](../spec/10-errors-and-safety/unsafe-code.md#unsafe-code): what needs `unsafe`, raw pointers, the full rules `unsafe` code keeps, and `@safe` modules.
 - [05 C function pointers](../spec/05-protocols-generics-and-closures/functions-and-closures.md#c-function-pointers): which functions convert to a `@c` type, and when.
 - [03 Pinning for C](../spec/03-handles-and-objects.md#pinning-for-c): what a pin guarantees while C holds its address.

@@ -305,4 +305,4 @@ enum ThreadStart {
 
 **std guarantees that no lent work is ever queued**, since its lending calls run their work inline during startup ([above](#lent-work-during-startup)). Another library keeps the same guarantee through the result: it starts a worker before it hands the worker any lent work, and when the start comes back `.queued`, it runs the work inline instead.
 
-**A library may also start threads through the platform's API with `import c`.** The start routine is then a C entry ([08](../08-c-interop/calling-rayo-from-c.md#c-entries-and-threads)). The runtime doesn't know that thread until it enters, so entering before startup ends or after shutdown panics, as for any C thread.
+**A library may also start threads through the platform's API with `import(c)`.** The start routine is then a C entry ([08](../08-c-interop/calling-rayo-from-c.md#c-entries-and-threads)). The runtime doesn't know that thread until it enters, so entering before startup ends or after shutdown panics, as for any C thread.

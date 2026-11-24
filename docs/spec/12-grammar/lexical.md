@@ -44,13 +44,11 @@ throw try catch do defer static mutable consuming copy consume borrow mutating a
 where with await unsafe unchecked alloc extern as is nil true false
 associatedtype subscript`.
 
-**Contextual keywords are keywords only in the positions below, and can be used as identifiers anywhere else.** They are `mutate`, `get`, `set`, `c`, `move`, `of`, `error`, `prefix`, `noalloc`, `stack`, `union`, `borrows`, `outlives` and `discard`. Some of those positions are narrow:
+**Contextual keywords are keywords only in the positions below, and can be used as identifiers anywhere else.** They are `mutate`, `get`, `set`, `move`, `of`, `error`, `prefix`, `union`, `borrows`, `outlives` and `discard`. Some of those positions are narrow:
 
 - **`union`** is a keyword only after a declaration's attributes and modifiers, or at the start of an import config rule, when an identifier follows it, so `a.union(b)` stays a method call;
 - **`error`** only after `static`;
-- **`prefix`** only in an `import c … where` clause;
-- **`noalloc`** only at the start of a rule inside an import config, or after `extern c`;
-- **`stack`** only at the start of such a rule, after `extern c` or its `noalloc`, or after `@c` in a type;
+- **`prefix`** only in an `import(c) … where` clause;
 - **`borrows`** and **`outlives`** only in a `where` clause, right after an item's subject. A requirement starts with a type, and a dotted path such as `out.items` parses as a type too, so the token after it tells a `borrows-item` from a constraint;
 - **`discard`** only at the start of a statement when `self` follows it.
 

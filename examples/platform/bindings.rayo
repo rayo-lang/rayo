@@ -6,14 +6,11 @@ import std.math
 import std.pool
 import std.queue                         // MpscQueue
 import gameplay                          // Game, newGame, tick (examples/gameplay/)
-import c "platform.h" as plat where prefix: "platform_"   // every imported function is unsafe to call
+import(c) "platform.h" as plat where prefix: "platform_"   // every imported function is unsafe to call
 
-// A function-like macro wrapped in inline C, since macros aren't imported.
-extern c """
-    #include "platform.h"
-    static inline float pad_deadzone(float v) { return PLATFORM_PAD_DEADZONE(v); }
-    """
-extern c func pad_deadzone(_ v: Float) -> Float
+// A function-like macro, wrapped in a C function of the game's own (deadzone.c), since macros
+// aren't imported. The build compiles deadzone.c with a C compiler and links it.
+extern(c) func pad_deadzone(_ v: Float) -> Float
 
 // MARK: - Safe wrappers
 

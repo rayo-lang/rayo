@@ -16,7 +16,7 @@ Six principles decide Rayo's trade-offs.
 
    Where the compiler stages a place through a temporary, a declaration announces it:
     - a `@layout(.packed)` struct ([04](spec/04-types/structs.md#packed-structs-and-under-aligned-places));
-    - an imported C bitfield ([08](spec/08-c-interop/imports-and-inline-c.md#structs-unions-and-enums));
+    - an imported C bitfield ([08](spec/08-c-interop/imports-and-declarations.md#structs-unions-and-enums));
     - a value property, one declared with `get` and `set` ([02](spec/02-views-and-dependencies/place-and-value-properties.md#value-properties-get-and-set)).
 
    A place property, declared with `borrow` and `mutate`, never stages: it hands out its storage itself ([02](spec/02-views-and-dependencies/place-and-value-properties.md#place-properties-borrow-and-mutate)).
@@ -82,7 +82,7 @@ import std.pool                             // Pool; Handle is in the prelude
 import std.jobs                             // forEachInParallel, from std's job system
 import std.tasks                            // TaskSet, elapsed(_:)
 import engine.editor                        // the engine's own Bounds attribute
-import c "platform.h" as plat where prefix: "platform_"   // a C header: platform_time_seconds() is plat.time_seconds()
+import(c) "platform.h" as plat where prefix: "platform_"   // a C header: platform_time_seconds() is plat.time_seconds()
 
 // Game data is ordinary values, and the pools in World own them.
 @reflect(private)                           // lets reflective code in other modules, such as the editor, see every field
@@ -153,5 +153,5 @@ What it shows:
 - **Race-free parallel loops.** The closure in `steer` runs on several threads at once. It compiles because it writes only its own enemy and only reads `world.players`; also writing `world.players` would be a compile error ([07](spec/07-concurrency/thread-work.md#lending-work-to-other-threads)).
 - **Tasks.** `openDoor` pauses at `await`, and continues when it is woken and its owner steps it. Its wait counts the world's own time, so it wakes itself at every pass of the main loop, and each pass checks the clock. It holds no borrow across an `await`, so it never keeps a stale pointer into `world` ([07](spec/07-concurrency/tasks.md#semantics)).
 - **Reflection and attributes.** `Bounds` is an ordinary struct used as an attribute. The editor finds it by reflecting over `Enemy`'s fields, and `@reflect(private)` lets it see fields that aren't public ([09](spec/09-compile-time.md)).
-- **C, called directly.** `import c` makes a header's declarations available, and every call into C is `unsafe` ([08](spec/08-c-interop.md)).
+- **C, called directly.** `import(c)` makes a header's declarations available, and every call into C is `unsafe` ([08](spec/08-c-interop.md)).
 

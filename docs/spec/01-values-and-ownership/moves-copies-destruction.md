@@ -83,7 +83,7 @@ Generic code treats an unconstrained type parameter as possibly move-only, so co
 
 - **Number types, `Bool` and raw pointers**, which the language makes conform, since each is one machine value ([04](../04-types/numbers-and-math.md#numbers), [10](../10-errors-and-safety/unsafe-code.md#raw-pointers)). A `Simd` vector of 16 bytes or less conforms too, such as a `Vec4` ([04](../04-types/numbers-and-math.md#simd-and-math)).
 - **Shared references**, `&T`, which the language makes conform, since a copy is one more shared borrow of the same place ([References](references.md#making-a-reference)).
-- **Imported C enums and flag sets**, which the language makes conform, since each is one integer ([08](../08-c-interop/imports-and-inline-c.md#structs-unions-and-enums)).
+- **Imported C enums and flag sets**, which the language makes conform, since each is one integer ([08](../08-c-interop/imports-and-declarations.md#structs-unions-and-enums)).
 - **A struct or enum that lists `ImplicitlyCopyable`.** The compiler confirms that the type is copyable and that every field and payload is implicitly copyable, as it confirms a listed `Copyable`. A `~Copyable` type can't conform.
 - **A tuple whose elements all conform**, since a tuple's type spells out each element, so a reader sees each value it copies.
 

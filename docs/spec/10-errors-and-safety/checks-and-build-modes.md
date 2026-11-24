@@ -61,7 +61,7 @@ unchecked {                        // bounds and the table's other checks off he
 | Check | Class | `debug` | `release` |
 | --- | --- | --- | --- |
 | Indexing and slicing bounds, vector loads and stores within their run of elements ([04](../04-types/numbers-and-math.md#simd-and-math)), and string ranges on Unicode scalar boundaries | memory safety | on | on |
-| Stack space, on entry to each function and before each call into C | memory safety | on | on |
+| Stack space: probes in each frame that grows the stack, or a check on entry to each function where the platform has no guard pages ([Running out of stack](panics.md#running-out-of-stack)) | memory safety | on | on |
 | Thread-bound object: liveness, conflicting accesses, and destruction under an access | memory safety | on | on |
 | Thread-local: initialized, not destroyed, and conflicting accesses | memory safety | on | on |
 | Opening an owning value whose storage a reset or an unregistration invalidated | memory safety | on | on |
@@ -73,7 +73,7 @@ unchecked {                        // bounds and the table's other checks off he
 | Entry from C before startup or after shutdown | memory safety | on | on |
 | Polling a finished task | memory safety | on | on |
 | Integer division and remainder by zero, and float-to-integer conversion of NaN or an out-of-range value | memory safety | on | on |
-| Integer overflow on `+ - *`, unary `-`, `Int.min / -1`, unlabeled integer conversions whose value doesn't fit, and imported bitfield writes that don't fit the width ([08](../08-c-interop/imports-and-inline-c.md#structs-unions-and-enums)) | diagnostic | on | off: wraps or truncates ([04](../04-types/numbers-and-math.md#integer-overflow-division-and-shifts)) |
+| Integer overflow on `+ - *`, unary `-`, `Int.min / -1`, unlabeled integer conversions whose value doesn't fit, and imported bitfield writes that don't fit the width ([08](../08-c-interop/imports-and-declarations.md#structs-unions-and-enums)) | diagnostic | on | off: wraps or truncates ([04](../04-types/numbers-and-math.md#integer-overflow-division-and-shifts)) |
 | `x!` on `nil`, and `try!` on an error | memory safety | on | on |
 | `precondition` | memory safety | on | on |
 | `unreachable()` reached | memory safety | on | on |

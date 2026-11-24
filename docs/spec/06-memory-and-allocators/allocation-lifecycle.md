@@ -2,7 +2,7 @@
 
 [06 · Memory and allocators](../06-memory-and-allocators.md)
 
-An owning value cannot proceed as though an allocation succeeded when it did not, or free storage before its contents are accounted for. Rayo lets code recover from allocation failure where it asks to, and `@noalloc` rules out allocation in a function. When storage is released, the value's destruction rules decide what must run first.
+An owning value cannot proceed as though an allocation succeeded when it did not, or free storage before its contents are accounted for. Rayo lets code recover from allocation failure where it asks to. When storage is released, the value's destruction rules decide what must run first.
 
 ## Allocation failure
 
@@ -25,35 +25,6 @@ func addSpawn(_ p: Vec3, to spawns: mutable &SoA<Vec3>) -> Void!AllocError {
 - `Name(interning:)` ([04](../04-types/collections.md#collections-and-strings)), and `allocateRaw` and `reallocateRaw` ([10](../10-errors-and-safety/unsafe-code.md#raw-allocations)).
 
 **One `try` covers both failures of `try alloc f(…)`, when `f` can fail itself.** The expression fails with the error union of `AllocError` and `f`'s failure type ([10](../10-errors-and-safety/typed-errors.md#error-unions)), as in `try alloc Blob.load(path)`, which can fail to read or to allocate. `try?` and `try!` apply to it as to any `try`.
-
-**`@noalloc` on a function makes anything in it that may allocate a compile error:**
-
-- any `alloc` in its body, `try alloc` included;
-- any call that may allocate (below), such as one that may grow a value, as `append` may;
-- any conversion to `Closure<F>`, whether or not that one would allocate, since its type says it may ([05](../05-protocols-generics-and-closures/functions-and-closures.md#unscoped-closures-closuref)).
-
-```rayo
-@noalloc
-func fillSilence(_ out: mutable &[Float], _ history: mutable &List<Float>) {
-    for i in 0..<out.count { out[i] = 0 }        // fine: nothing here allocates
-    history.append(0)                            // error: 'append' may allocate, and 'fillSilence' is @noalloc
-    var spare = alloc List<Float>()              // error: 'alloc' allocates, and 'fillSilence' is @noalloc
-}
-```
-
-**In a `@noalloc` function, a call may allocate unless its callee is known statically and is itself `@noalloc`, or is a language operation that doesn't allocate**, such as integer arithmetic or indexing a run of elements. That includes the calls the language makes for the code, such as a literal's initializer ([05](../05-protocols-generics-and-closures/functions-and-closures.md#functions-and-closures), [04](../04-types/collections.md#literals)). Arithmetic that a software routine computes counts as an operation that doesn't allocate, since no software routine allocates ([11](../11-compilation-model.md#what-a-target-must-provide)). A call with no static callee is checked through its type:
-
-- a call through a function value may allocate unless its type is `@noalloc` ([05](../05-protocols-generics-and-closures/functions-and-closures.md#function-typed-values));
-- a call through `any P`, and a requirement call in generic code, may allocate unless the protocol declares the requirement `@noalloc`, which every witness to it must then be.
-
-**Destroying a value may allocate unless each `deinit` it runs, at any depth, is `@noalloc` or `PlainDeinit`** ([02](../02-views-and-dependencies/dependency-lifetimes.md#when-destroying-a-value-counts-as-using-it)), since freeing memory isn't allocating.
-
-- **Hidden `deinit`s.** So destroying a value of a type parameter may allocate, and so may destroying one whose type hides its `deinit`, such as a `Box<any P>` or a `Closure`. The exceptions are a `TrivialFree` type ([below](#releasing-a-value-without-destroying-it-trivialfree)), and a `Closure` whose function type is `@noalloc`, since only captures whose destruction passes the check move into one ([05](../05-protocols-generics-and-closures/functions-and-closures.md#function-typed-values)).
-- **Objects and pins.** Dropping an object's owner may allocate, since it may run the object's `deinit`. So may dropping a `Pin` or a `LocalPin`, since the last pin to drop runs the `deinit` its destruction left waiting.
-
-**A call to C may allocate unless the import or the `extern c func` declares the function `noalloc` ([08](../08-c-interop/imports-and-inline-c.md#c-calls-in-noalloc-code-noalloc)), or it goes through a `@c noalloc` pointer ([05](../05-protocols-generics-and-closures/functions-and-closures.md#c-function-pointers)).**
-
-**`@noalloc` doesn't cover attaching a thread.** A `@c` or `@export` function's first entry on a thread Rayo didn't create attaches that thread. That runs its thread-local initializers ([08](../08-c-interop/calling-rayo-from-c.md#c-entries-and-threads)), which may allocate, in a `@noalloc` function too.
 
 ## Releasing a value without destroying it: `TrivialFree`
 

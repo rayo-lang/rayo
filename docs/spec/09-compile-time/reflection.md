@@ -100,7 +100,7 @@ Reflection reads three kinds of fact, one table each: a type's fields, cases and
 
 **Two kinds of imported C member reflect in their own way:**
 
-- **Imported bitfields.** `T.fields` lists them with the types they import as. `field.offset` is the storage unit's offset, `field.bitRange` locates the field within it, and the field is read and written through its accessors ([08](../08-c-interop/imports-and-inline-c.md#structs-unions-and-enums)).
+- **Imported bitfields.** `T.fields` lists them with the types they import as. `field.offset` is the storage unit's offset, `field.bitRange` locates the field within it, and the field is read and written through its accessors ([08](../08-c-interop/imports-and-declarations.md#structs-unions-and-enums)).
 - **Anonymous members.** An imported struct's anonymous union or struct member is listed in `T.fields` as **one field of its type**, never as separate fields, so a union's members, which overlap, stay one place ([below](#tuples-field-lists-and-queries)).
 
 **Some types have no fields or cases for reflection to see:**
@@ -109,7 +109,7 @@ Reflection reads three kinds of fact, one table each: a type's fields, cases and
 - a language type whose layout is left open ([11](../11-compilation-model.md#what-the-language-leaves-open)), such as `&any P` or a function type;
 - every other language type but a tuple, such as a number, `Bool`, a raw or object pointer, a reference, an inline array or a `Simd` vector;
 - an unsized type, a run `[T]`, `Text` or `any P`, whose size isn't known where code is compiled ([01](../01-values-and-ownership/references.md#unsized-types));
-- an `@opaque` type, whose layout Rayo doesn't know or can't map ([08](../08-c-interop/imports-and-inline-c.md#what-imports-as-what)).
+- an `@opaque` type, whose layout Rayo doesn't know or can't map ([08](../08-c-interop/imports-and-declarations.md#what-imports-as-what)).
 
 For such a type, `T.fields` and `T.cases` are empty, the kind queries and `T.isConstructible` are false, and `value[field]` and `T.construct` don't apply. Only `T.size`, `T.alignment`, `T.isPaddingFree` and `T.layoutId` observe its layout. On an unsized or an `@opaque` type they are compile errors, since it has none Rayo can use ([04](../04-types/data-layout.md#sizes-fixed-when-the-program-is-built)).
 
@@ -123,7 +123,7 @@ For such a type, `T.fields` and `T.cases` are empty, the kind queries and `T.isC
     - for a block, closure or branch, which has no name, its position in the scope around it;
     - every compile-time argument the declaration's body is instantiated with (below).
 
-  So two sibling blocks' local `struct Scratch`s differ, and so do local types of a `get` and a `set`. An imported C type has, in place of these parts, the identity 08 gives it ([08](../08-c-interop/imports-and-inline-c.md#the-identity-of-an-imported-type)).
+  So two sibling blocks' local `struct Scratch`s differ, and so do local types of a `get` and a `set`. An imported C type has, in place of these parts, the identity 08 gives it ([08](../08-c-interop/imports-and-declarations.md#the-identity-of-an-imported-type)).
 - **The type's own generic arguments** are part of it, a value argument by its value. So `Tag<Player>` and `Tag<Enemy>` differ, and so do `List<&Text>` and `List<static &Text>` ([02](../02-views-and-dependencies/scoped-values.md#static-values)).
 - **A type with no name**, a closure literal's or a task's state or an interpolated literal's value, has its parts as a declared type does, so a generic `task func`'s state differs for each of the function's generic arguments. In place of a name, it has its position among the unnamed types of its innermost scope, counted after `static if` and `static for` are expanded, so each element of a `static for` has its own.
 - **A structural type**, a tuple, inline array, run, raw pointer, reference, existential, function type or error union, is one part. The part holds the type's kind, the identities of the types inside the type, with aliases and parentheses resolved, and every other fact of the type's form:
@@ -131,7 +131,7 @@ For such a type, `T.fields` and `T.cases` are empty, the kind queries and `T.isC
     - an inline array's count;
     - a reference's kind, shared or mutable;
     - an existential's protocols, as a set;
-    - a function type's `unsafe`, closure kind, `@sendable`, `@noalloc`, or `@c` with its stack need in bytes, `target.cStackReserve` when none is written;
+    - a function type's `unsafe`, closure kind, `@sendable` or `@c`;
     - an error union's members, as a set.
 
   So `Closure<unsafe () -> Void>` and `Closure<() -> Void>` differ.
@@ -233,7 +233,7 @@ func rebuild<T>(_ old: T) -> T {
 }
 ```
 
-**`T.construct` calls `T`'s primary initializer with every field, in header order, and runs no secondary `init`** ([04](../04-types/structs.md#initializers)), so the use site must be able to call it. `T.isConstructible` (`const`) says whether it can. It is true only for a struct with a primary initializer, an imported C struct's included ([08](../08-c-interop/imports-and-inline-c.md#structs-unions-and-enums)), or a tuple type. Even then it is false when the type:
+**`T.construct` calls `T`'s primary initializer with every field, in header order, and runs no secondary `init`** ([04](../04-types/structs.md#initializers)), so the use site must be able to call it. `T.isConstructible` (`const`) says whether it can. It is true only for a struct with a primary initializer, an imported C struct's included ([08](../08-c-interop/imports-and-declarations.md#structs-unions-and-enums)), or a tuple type. Even then it is false when the type:
 
 - has stored fields the use site can't see (`private` ones, without `@reflect(private)`);
 - has an `unsafe` stored field, or an `unsafe` primary initializer, and the use isn't inside `unsafe`, since `T.construct` would call it with no `unsafe` written ([10](../10-errors-and-safety/unsafe-code.md#what-needs-unsafe));

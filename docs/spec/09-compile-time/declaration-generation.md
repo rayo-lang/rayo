@@ -24,7 +24,7 @@ A library writes such a type once, and the compiler generates its members from t
 
 - **Struct headers.** In a struct's header, they generate stored fields ([04](../04-types/structs.md#structs)).
 - **Type bodies.** In the body of a struct, enum, union or extension, never a protocol, they generate any member ([12](../12-grammar/declarations.md#files-and-declarations)). That covers computed properties, a union's stored members, constants, methods, initializers, subscripts, nested types and type aliases, an enum's cases, and a `deinit`, which is still the type's only one.
-- **The top level.** At a file's top level, they generate any declaration ([12](../12-grammar/declarations.md#files-and-declarations)): structs, unions, enums, protocols and type aliases; functions and `task` functions; constants; global `let`s and `var`s, `@threadlocal var`s included; extensions; and `extern c` blocks and `extern c func` declarations. A top-level `static if` can also include or exclude `import` statements, `import c` ones included ([`static if` and conditional compilation](constants-and-conditions.md#static-if-and-conditional-compilation)).
+- **The top level.** At a file's top level, they generate any declaration ([12](../12-grammar/declarations.md#files-and-declarations)): structs, unions, enums, protocols and type aliases; functions and `task` functions; constants; global `let`s and `var`s, `@threadlocal var`s included; extensions; and `extern(c) func` declarations. A top-level `static if` can also include or exclude `import` statements, `import(c)` ones included ([`static if` and conditional compilation](constants-and-conditions.md#static-if-and-conditional-compilation)).
 
 ## Computed names
 

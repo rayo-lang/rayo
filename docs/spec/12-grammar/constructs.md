@@ -22,13 +22,12 @@ type-primary  = type-name
               | 'static' type-primary                              (* a static type (02): static &Text, static Token, static &any Logger;
                                                                       (static &[Float])? is an optional static reference *)
               | 'any' composition | 'some' composition
-              | '@c' 'noalloc'? c-stack? '(' (fn-param-type (',' fn-param-type)* ','?)? ')' '->' type
-                                                                   (* C function pointer (08); 'noalloc': its calls allocate nothing (05) *)
-              | 'unsafe'? ('mutating' | 'consuming')? '@sendable'? '@noalloc'? '(' (fn-param-type (',' fn-param-type)* ','?)? ')' '->' type ;
+              | '@c' '(' (fn-param-type (',' fn-param-type)* ','?)? ')' '->' type
+                                                                   (* C function pointer (05) *)
+              | 'unsafe'? ('mutating' | 'consuming')? '@sendable'? '(' (fn-param-type (',' fn-param-type)* ','?)? ')' '->' type ;
                                                                    (* function type; 'unsafe' calls need 'unsafe' (05);
                                                                       'mutating' may write its captures, 'consuming' is call-once;
-                                                                      '@sendable' holds only closures with Sendable captures (07);
-                                                                      '@noalloc' holds only functions whose calls can't allocate (05) *)
+                                                                      '@sendable' holds only closures with Sendable captures (07) *)
 ref-type      = 'mutable'? '&' type-primary type-suffix* ;         (* a reference (01): &Enemy, mutable &[Float], &any Drawable;
                                                                       &T? refers to an optional, and (&T)? is an optional reference (see Notes) *)
 composition   = type-primary ('&' type-primary)* ;                 (* any P & Sendable; any P? is (any P)?; &any P & Sendable is &(any P & Sendable);

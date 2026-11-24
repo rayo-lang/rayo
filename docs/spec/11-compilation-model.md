@@ -19,13 +19,13 @@ public func armor(_ e: &Enemy) -> Float { e.hp * 0.5 }   // visible to every mod
 ```rayo
 import engine.math as m      // named 'm', so 'm.dot' is engine.math's 'dot'
 import engine.physics        // named 'physics', the path's last identifier
-import c "platform.h"        // named 'platform', the header's file name without its extension
+import(c) "platform.h"       // named 'platform', the header's file name without its extension
 ```
 
 **An import gives the module it imports a name in the file**, which qualifies that module's declarations, as `m.dot` does:
 
 - **With `as`**, the name is the one `as` gives.
-- **Without `as`**, the name is the path's last identifier, or, for `import c`, the header's file name without its extension ([08](08-c-interop/imports-and-inline-c.md#importing-headers)). A header whose file name isn't an identifier needs `as`.
+- **Without `as`**, the name is the path's last identifier, or, for `import(c)`, the header's file name without its extension ([08](08-c-interop/imports-and-declarations.md#importing-headers)). A header whose file name isn't an identifier needs `as`.
 
 **When names clash, these rules say which declaration a name means:**
 
@@ -174,9 +174,9 @@ speed = lerp(speed, topSpeed, 0.1)  // the body runs in place, in every build
 **A target's C ABI, which every call into C and every export follows, matches Rayo's own types where the two meet ([08](08-c-interop/calling-rayo-from-c.md#c-representations)).** It:
 
 - represents integers in two's complement, and `float` and `double` as IEEE 754 binary32 and binary64, as Rayo's integers and its `Float` and `Double` are ([04](04-types/numbers-and-math.md#numbers));
-- has an 8-bit `char`, the exact-width integer types, and a one-byte `bool` holding 0 or 1, which import as Rayo's sized integers and `Bool` ([08](08-c-interop/imports-and-inline-c.md#what-imports-as-what));
+- has an 8-bit `char`, the exact-width integer types, and a one-byte `bool` holding 0 or 1, which import as Rayo's sized integers and `Bool` ([08](08-c-interop/imports-and-declarations.md#what-imports-as-what));
 - has data and function pointers of its pointer width, whose null is all zero bits;
-- has `size_t`, `ptrdiff_t`, `intptr_t` and `uintptr_t` of its pointer width too, which import as `CSize`, `CPtrDiff`, `CIntPtr` and `CUIntPtr` ([08](08-c-interop/imports-and-inline-c.md#what-imports-as-what));
+- has `size_t`, `ptrdiff_t`, `intptr_t` and `uintptr_t` of its pointer width too, which import as `CSize`, `CPtrDiff`, `CIntPtr` and `CUIntPtr` ([08](08-c-interop/imports-and-declarations.md#what-imports-as-what));
 - places a struct's members, in the order it declares them, by the rules of 04 ([04](04-types/structs.md#structs)), so a Rayo struct crosses to C as the C struct that declares its fields in layout order ([08](08-c-interop/calling-rayo-from-c.md#c-representations)). It packs a record as `@layout(.packed)` and `@layout(.packed(N))` do ([04](04-types/structs.md#layout-attributes)). Each integer, floating-point value, `bool` and pointer is aligned to its size.
 
 **A target's atomic operations and fences have the guarantees of the C++20 memory model that Rayo uses, and are lock-free at every size `Atomic<T>` accepts**, since none of Rayo's atomic operations blocks ([07](07-concurrency/synchronization.md#atomics-and-locks)). Those sizes are 1, 2 and 4 bytes on every target, and 8 bytes on a target with lock-free 64-bit atomics, which every target with 64-bit pointers must have.
@@ -207,7 +207,7 @@ Then the second load reads a value no older, in its location's modification orde
 
 So an address passed on through any chain of threads, by `.relaxed` atomics included, still brings what was released before it was first stored, since passing a value on stores what was read. The rules by which creating a `Shared` value, registering an allocator or interning a `Name` happens before its uses rest on this ([07](07-concurrency/synchronization.md#atomics-and-locks)).
 
-**The implementation knows a bound on the stack that each function it supplies uses**, its runtime's and its software routines' included. The stack check on entry to each function needs that bound ([10](10-errors-and-safety/checks-and-build-modes.md#the-checks)).
+**Every function the implementation supplies guards the stack as a Rayo frame does**, its runtime's and its software routines' included. It probes the stack as it grows it, or, where the platform has no guard pages, checks on entry that the stack it needs is left ([10](10-errors-and-safety/panics.md#running-out-of-stack)). So none of them writes past a stack's end.
 
 **No software routine allocates** ([06](06-memory-and-allocators/allocation-lifecycle.md#allocation-failure)).
 
@@ -217,7 +217,7 @@ So an address passed on through any chain of threads, by `.relaxed` atomics incl
 
 **WebAssembly without shared memory is a target, and counts as single-core**, since its one thread sees its memory alone. WebAssembly with shared memory isn't covered: its memory model gives no ordering through an address dependency, and a browser's main thread can't park ([08](08-c-interop/c-contract-and-embedding.md#what-the-runtime-needs-from-the-platform)).
 
-**On WebAssembly, the engine keeps a call stack of its own**, beside the stack in linear memory that compiled code keeps its frames' data on. Rayo's stack checks cover only the stack in linear memory. Running out of either stack ends the program, but exhausting the engine's stack traps, so the program ends without the report and the other steps that end it otherwise ([10](10-errors-and-safety/panics.md#what-ends-the-program)).
+**On WebAssembly, the engine keeps a call stack of its own**, beside the stack in linear memory that compiled code keeps its frames' data on. Linear memory has no guard pages, so Rayo frames check the stack in it on entry ([10](10-errors-and-safety/panics.md#running-out-of-stack)), and nothing checks the engine's stack. Running out of either stack ends the program, but exhausting the engine's stack traps, so the program ends without the report and the other steps that end it otherwise ([10](10-errors-and-safety/panics.md#what-ends-the-program)).
 
 ## What the language leaves open
 
@@ -251,6 +251,6 @@ So an address passed on through any chain of threads, by `.relaxed` atomics incl
     - how many allocators may be registered, at once and over the run, and how many times one may be reset ([06](06-memory-and-allocators/allocator-implementations.md#how-values-record-their-allocator));
     - how many objects may be created over the run ([03](03-handles-and-objects.md#destroying-an-object));
     - how many threads the platform can start ([07](07-concurrency/thread-work.md#starting-a-thread-runtimestartthread));
-    - how much stack a thread has, and the default reserve for a call into C, which `target.cStackReserve` reports ([09](09-compile-time/constants-and-conditions.md#static-if-and-conditional-compilation));
+    - how much stack a thread has;
     - how far each count kept for safety goes ([10](10-errors-and-safety/panics.md#what-panics)).
 - **Whether a `const` evaluation, or a chain of generic instantiations, finishes within the toolchain's limits** ([09](09-compile-time/constants-and-conditions.md#running-code-at-compile-time-const), [05](05-protocols-generics-and-closures/protocols-and-generics.md#instantiation)). That decides only whether the program builds. Whether a global `let`'s compile-time run finishes within those limits decides only whether the global is initialized at startup or placed in read-only data ([07](07-concurrency/global-state.md#initialization-at-startup)).

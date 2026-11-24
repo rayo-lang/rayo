@@ -171,7 +171,7 @@ let db = Database(raw: conn)                        // conn: the *sqlite3 that s
 
 **Every type parameter stands for a type with a size**, and so do an associated type and the `Self` of a protocol extension, since a body may hold a value of the type ([04](../04-types/data-layout.md#sizes-fixed-when-the-program-is-built)). So two kinds of type bind none of them:
 
-- **an `@opaque` type**, an imported C type that Rayo uses only behind a pointer, since Rayo doesn't know its size ([08](../08-c-interop/imports-and-inline-c.md#what-imports-as-what));
+- **an `@opaque` type**, an imported C type that Rayo uses only behind a pointer, since Rayo doesn't know its size ([08](../08-c-interop/imports-and-declarations.md#what-imports-as-what));
 - **an unsized type**, `[T]`, `Text` or `any P`, which code holds only behind a reference, a `Box`, an object pointer or a reference-counted pointer ([01](../01-values-and-ownership/references.md#unsized-types)).
 
 A reference to an unsized type has a size of its own, so `&[T]`, `&Text` and `&any P` bind any type parameter, as in `List<&Text>`. A raw pointer to an `@opaque` type is one address, so `*sqlite3` binds any type parameter too, as in `List<*sqlite3>`.

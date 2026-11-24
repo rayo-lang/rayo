@@ -85,7 +85,7 @@ A program calls the C functions it declares, and prints through std's prelude, w
 v0.5 adds:
 
 - `extern(c) func` declarations of C functions, called only inside `unsafe` ([08](docs/spec/08-c-interop.md#08--c-interop));
-- C's integer aliases, `CInt`, `CSize`, `CPtrDiff` and the rest, which the compiler provides for each target as the `IntN` or `UIntN` of its C type's size and signedness ([08](docs/spec/08-c-interop/imports-and-inline-c.md#what-imports-as-what));
+- C's integer aliases, `CInt`, `CSize`, `CPtrDiff` and the rest, which the compiler provides for each target as the `IntN` or `UIntN` of its C type's size and signedness ([08](docs/spec/08-c-interop/imports-and-declarations.md#what-imports-as-what));
 - the prelude: std's Rayo source, which ships inside `rayoc` and is compiled with every program, and which every program sees without an import ([11](docs/spec/11-compilation-model.md#the-prelude));
 - a program's own declarations, which shadow the prelude's names;
 - `print(Int)`, `print(UInt)` and `print(Bool)`, moved from the runtime's LLVM IR into the prelude, and written in Rayo over the host's write function, declared with `extern(c) func`: POSIX's `write`, and Windows' `_write`.

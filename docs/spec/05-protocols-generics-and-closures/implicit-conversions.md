@@ -36,10 +36,10 @@ let pickMax: (Int, Int) -> Int = max            // a named function to a functio
 
 - A closure, named function or operator converts to a function type. A closure in a place is lent or taken as its kind needs ([below](#function-values-of-closures-in-places)).
 - A `Closure<F>` in a place converts to the function type `F`, or to any function type a value of type `F` converts to (below), lent or taken as a closure is. Converting a `Closure<consuming …>` consumes it, but keeps its out-of-line context until the place is next assigned or its scope ends, whichever comes first. The context is then freed without destroying the captures, which the function value took.
-- A literal that captures nothing, a named `@c func`, `@export`, imported or `extern c` function, or a `@c` value converts to a `@c` function pointer type ([C function pointers](functions-and-closures.md#c-function-pointers)). The pointer type must have the same types, or inside `unsafe` the same C representations, and must declare at least the converted function's stack need.
+- A literal that captures nothing, a named `@c func`, `@export`, imported or `extern(c)` function, or a `@c` value converts to a `@c` function pointer type ([C function pointers](functions-and-closures.md#c-function-pointers)). The pointer type must have the same types, or inside `unsafe` the same C representations.
 - A Rayo function value converts to each of these, with every parameter's type unchanged ([01](../01-values-and-ownership/parameters.md#parameters)), within the limits that C function pointers set for `unsafe` and C functions ([C function pointers](functions-and-closures.md#c-function-pointers)):
     - a stronger kind: non-`mutating` to `mutating` or `consuming`, and `mutating` to `consuming`;
-    - the type without `@sendable` or `@noalloc`;
+    - the type without `@sendable`;
     - its `unsafe` form;
     - for a value that can't fail, the type whose result is a `T!Never` in place of its `T`, which is laid out the same, so a generic `R!E` binds `E` to `Never` ([10](../10-errors-and-safety/typed-errors.md#what-a-failure-type-names));
     - for a value whose result is a `T!Never`, the type whose result is a `T`, for the same reason.

@@ -131,14 +131,14 @@ let label = nickname ?? player.name          // error: write 'copy', 'consume' o
 
 - raw pointers, `@c` function pointers, `Box`es, object owners and reference-counted pointers, whose `nil` is null;
 - weak pointers, weak links and `Handle`s, whose `nil` is zero. `Handle` is a std type the language names ([11](../11-compilation-model.md#the-prelude)), and its generation is never 0 ([03](../03-handles-and-objects.md#pools-and-handles));
-- an enum with a spare tag value, whose `nil` is the lowest value of its stored type that no case uses: any Rayo enum that has one, `@nonexhaustive` or not, and an imported C enum the header declares closed ([08](../08-c-interop/imports-and-inline-c.md#structs-unions-and-enums));
-- a struct or tuple, through its first stored field or element that has a niche, whose `nil` is that field's. An imported bitfield never supplies one ([08](../08-c-interop/imports-and-inline-c.md#structs-unions-and-enums));
+- an enum with a spare tag value, whose `nil` is the lowest value of its stored type that no case uses: any Rayo enum that has one, `@nonexhaustive` or not, and an imported C enum the header declares closed ([08](../08-c-interop/imports-and-declarations.md#structs-unions-and-enums));
+- a struct or tuple, through its first stored field or element that has a niche, whose `nil` is that field's. An imported bitfield never supplies one ([08](../08-c-interop/imports-and-declarations.md#structs-unions-and-enums));
 - a `T!Never` whose `T` has one, whose `nil` is `T`'s, since it stores no tag of its own (above).
 
 **These have no niche:**
 
 - an optional itself;
-- an open imported C enum, which may hold any value of its underlying type ([08](../08-c-interop/imports-and-inline-c.md#structs-unions-and-enums));
+- an open imported C enum, which may hold any value of its underlying type ([08](../08-c-interop/imports-and-declarations.md#structs-unions-and-enums));
 - `Bool`, so C reading a Rayo `Bool`'s byte as a `bool` always finds 0 or 1.
 
 **No niche lies inside a `Synchronized` value**, at any depth ([07](../07-concurrency/synchronization.md#the-synchronized-contract)). Other threads write its bytes, as a `Mutex<Handle<T>>`'s `Handle` is written under the lock, while reading a tag is a plain load. So `Mutex<Handle<T>>?` and `Atomic<WeakShared<T>>?` keep their tag outside, in the form below.
@@ -203,7 +203,7 @@ var m = Mixed(word: 0)
 unsafe { use(m.byte) }     // reading a member of Mixed needs unsafe
 ```
 
-- **Layout.** Every member is at offset 0, and the union is sized to its largest member, rounded up to its largest alignment, as a C union is. A packed union counts each member's alignment as 1, or at most `N`, as a packed struct does ([Layout attributes](structs.md#layout-attributes)). `@c union` adds the `@c` field checks, and imported C unions arrive in this form ([08](../08-c-interop/imports-and-inline-c.md#structs-unions-and-enums)).
+- **Layout.** Every member is at offset 0, and the union is sized to its largest member, rounded up to its largest alignment, as a C union is. A packed union counts each member's alignment as 1, or at most `N`, as a packed struct does ([Layout attributes](structs.md#layout-attributes)). `@c union` adds the `@c` field checks, and imported C unions arrive in this form ([08](../08-c-interop/imports-and-declarations.md#structs-unions-and-enums)).
 - **Members.** They are copyable, since a union doesn't record which member it holds, and so couldn't tell which one to destroy. They are all one place for exclusivity, since writing one can change another ([01](../01-values-and-ownership/exclusivity.md#which-places-overlap)).
 - **Initializers.** A union is built from one member, as in `Bits(f: 1.5)`, and its own `init` builds its value as an enum's does ([above](#enums)).
 - **Access.** Writing a whole new value into a member that isn't `unsafe` is safe: initializing the union with it, or assigning it. An `unsafe` member, like an `unsafe` field, is given a value only inside `unsafe` ([Initializers](structs.md#initializers)). Every other access reads, since it starts from the bytes already there: a reference made with `&` or `mutable`, a `mutating` call, `b.u += 1` or a reflective change through `value[field]`.

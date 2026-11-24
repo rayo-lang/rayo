@@ -43,7 +43,7 @@ func h(_ e: &Enemy) { … }   // h(&boss) calls this one
 
 **A call `T(x)` with one unlabeled literal argument makes the literal a `T`**, as `x as T` does, so `Float(0)` is the `Float` zero.
 
-**The language makes calls the code doesn't write, and the rules for calls apply to each.** Each one's callee is known statically. So the checks on calls cover them, such as the `@noalloc` check ([06](../06-memory-and-allocators/allocation-lifecycle.md#allocation-failure)) and the check that a global's initializer reads no global before it is initialized ([07](../07-concurrency/global-state.md#initialization-at-startup)). They are:
+**The language makes calls the code doesn't write, and the rules for calls apply to each.** Each one's callee is known statically. So the checks on calls cover them, such as the check that a global's initializer reads no global before it is initialized ([07](../07-concurrency/global-state.md#initialization-at-startup)). They are:
 
 - a `deinit` that a scope's end, an overwrite or a `consume` runs;
 - an accessor or an operator;
@@ -250,7 +250,7 @@ h { finish() }                       // the closure converts to the optional's .
 - an object's access;
 - a step through a reference, which the body reads from the place that holds it, so the closure captures that place ([01](../01-values-and-ownership/references.md#forwarding-through-a-reference)).
 
-**The path also stops before an under-aligned place**, so the closure captures the aligned place that holds it, since no reference to an under-aligned place may exist ([04](../04-types/structs.md#packed-structs-and-under-aligned-places)). A bitfield is captured through its C memory location, since the bitfields of one memory location are one place for exclusivity ([08](../08-c-interop/imports-and-inline-c.md#structs-unions-and-enums)).
+**The path also stops before an under-aligned place**, so the closure captures the aligned place that holds it, since no reference to an under-aligned place may exist ([04](../04-types/structs.md#packed-structs-and-under-aligned-places)). A bitfield is captured through its C memory location, since the bitfields of one memory location are one place for exclusivity ([08](../08-c-interop/imports-and-declarations.md#structs-unions-and-enums)).
 
 **A body that names a borrowing binding captures the place the binding names**, as worked out when it was bound. The capture brings the binding's dependency set and the dynamic accesses the binding holds, which stay held while the closure lives.
 
@@ -336,7 +336,7 @@ var oops = Hotkey(action: { log("pressed \(id)") })                // error: 'id
 
 - **Captures are listed.** Each is `[move x]`, or `[copy x]` for a copyable value, which leaves `x` usable. An implicitly copyable value is listed with `copy` too, as `id` is above, since the list is where a closure says how it holds each capture. `self` is listed too, and only a `consuming` method can move it. An unlisted capture is a compile error. A capture the body moves out of is already owned ([above](#closure-kinds)) and needs no entry. A global is never a capture of any closure: the body reaches it as any function does ([07](../07-concurrency/global-state.md#global-state)).
 - **Size.** A `Closure` holds small captures inline, laid out as a struct, as a literal's are ([below](#closures-by-concrete-type-some-f)). How much it holds inline, and so its own size, is a layout choice the language leaves open, and code never depends on it ([11](../11-compilation-model.md#what-the-language-leaves-open)). A capture whose layout the language or a library leaves open, such as a task's state, a `Pin<T>` or a value that holds one, is never inline.
-- **Allocation.** Captures that aren't inline go in an out-of-line context that the closure owns. So converting a closure to a `Closure` may allocate, as `append` may, and takes no `alloc`: the `Closure` type shows that it may. The context's allocator follows the rule for allocations with no construction ([06](../06-memory-and-allocators/allocator-basics.md#allocations-with-no-construction)). In `@noalloc` code, every conversion into a `Closure` is an error, whether or not that one would allocate.
+- **Allocation.** Captures that aren't inline go in an out-of-line context that the closure owns. So converting a closure to a `Closure` may allocate, as `append` may, and takes no `alloc`: the `Closure` type shows that it may. The context's allocator follows the rule for allocations with no construction ([06](../06-memory-and-allocators/allocator-basics.md#allocations-with-no-construction)).
 - **It counts as holding a `Synchronized` value.** Its inline captures may hold one, unseen in its type. So a `Closure` given to a `&T` parameter is always the caller's place ([01](../01-values-and-ownership/parameters.md#borrowed-arguments)), and a packed struct can't hold one ([04](../04-types/structs.md#packed-structs-and-under-aligned-places)).
 - **An out-of-line context is checked like any owning storage** ([06](../06-memory-and-allocators/arena-safety.md#opening-an-owning-value-checks-it)). Calling a `Closure` whose context outlived its allocator's memory, as when an arena was reset since the closure was made, panics. Destroying such a `Closure` skips its captures' `deinit`s and the free, as for a stale `Box`.
 - **Calling.** A stored `Closure<mutating …>` is called only from a changeable place, and calling a `Closure<consuming …>` consumes it.
@@ -374,7 +374,7 @@ unsafe { print(f(4)) }                          // calling one is unsafe
 **`@c (Int32) -> Int32` is a C function pointer.** It has no room for captures. Its parameters and result cross in their C representations, a `Result` it returns included ([08](../08-c-interop/calling-rayo-from-c.md#c-representations)). Calling one is `unsafe`, since the type can't tell a Rayo function from a C one. These convert to it:
 
 - a literal that captures nothing;
-- a named `@c func`, `@export`, imported or `extern c` function, or a `@c` value, when its parameters and result have the same types as the pointer type's, and it needs no more stack than the pointer type declares ([08](../08-c-interop/imports-and-inline-c.md#the-stack-a-c-call-needs)).
+- a named `@c func`, `@export`, imported or `extern(c)` function, or a `@c` value, when its parameters and result have the same types as the pointer type's.
 
 **Inside `unsafe`, a function also converts to a `@c` type whose types differ but have the same C representations** ([08](../08-c-interop/calling-rayo-from-c.md#c-representations)). So a `WeakPointer<Body>` parameter meets a `UInt64` one. A `mutable &T` parameter also meets a `*T` or `*T?` one there, since both cross as `T*`:
 
@@ -389,20 +389,11 @@ enum PadButton: Int32 { case start, back }      // crosses as its raw type, Int3
 - every call through the pointer passes values valid for the function's own types, and a pointer for a `mutable &T` parameter meets what 08 asks of one ([08](../08-c-interop/c-contract-and-embedding.md#what-c-must-uphold));
 - every value the function returns, or writes through a `mutable &T` parameter or a pointer, is valid for the pointer type's types, as 08 asks of C.
 
-**`@c noalloc (Int32) -> Int32` is a C function pointer whose calls allocate nothing**, so `@noalloc` code may call one ([06](../06-memory-and-allocators/allocation-lifecycle.md#allocation-failure)). Only what allocates nothing converts to it:
-
-- a named `@noalloc` function;
-- an imported or `extern c` function declared `noalloc` ([08](../08-c-interop/imports-and-inline-c.md#c-calls-in-noalloc-code-noalloc));
-- a literal whose body passes the `@noalloc` check;
-- another `@c noalloc` value.
-
-**Inside `unsafe`, a `@c` value without the mark converts too**, as a pointer C handed over does, and that code promises what `noalloc` asserts. The mark converts away, never back outside `unsafe`.
-
 **`unsafe (UInt32) -> Void` is an unsafe function type**, whose calls need `unsafe`. Any Rayo function value converts to the `unsafe` form of its type, never back.
 
 **An `unsafe func` declared in Rayo converts only to `unsafe` function types** and `Closure`s of them, and, when it is also `@c`, to `@c` types. So no function value hides its call from the caller. It satisfies a `some F` or a function-type constraint only when `F` is `unsafe`.
 
-**C code stays behind `@c` types.** An imported or `extern c` function is an `unsafe func` too ([08](../08-c-interop/imports-and-inline-c.md#what-imports-as-what)), but converts only to `@c` types, which carry its stack need ([08](../08-c-interop/imports-and-inline-c.md#the-stack-a-c-call-needs)). A `@c` value converts only to another `@c` type, or its optional, as above. Neither converts to a Rayo function type, a `Closure` or an `unsafe` form, whose calls wouldn't check that need. A literal that calls C inside an `unsafe` block is an ordinary Rayo function:
+**C code stays behind `@c` types.** An imported or `extern(c)` function is an `unsafe func` too ([08](../08-c-interop/imports-and-declarations.md#what-imports-as-what)), but converts only to `@c` types. A `@c` value converts only to another `@c` type, or its optional, as above. Neither converts to a Rayo function type, a `Closure` or an `unsafe` form. A literal that calls C inside an `unsafe` block is an ordinary Rayo function:
 
 ```rayo
 let now: () -> Double = { unsafe { platform_time_seconds() } }   // a Rayo function type, though its body calls C
@@ -432,7 +423,6 @@ func mk() -> () -> Int { let x = 5; return { [copy x] in x } }     // error: the
 
   A named function views no storage and depends on nothing, which is why `pick` compiles. An overloaded name is resolved by the expected type. A closure literal that captures nothing converts the same way, since its storage holds nothing. So `inc` and the default of `sorted(by:)` above compile.
 - **`@sendable` function types**, such as `@sendable (mutable &Particle) -> Void`, hold only closures whose captures, by reference or owned, all have `Sendable` types, and their values are `Sendable` ([07](../07-concurrency/race-freedom-and-sendable.md#what-may-cross-threads-sendable)). A named function always converts to one. A `@sendable` value converts to the same type without the mark, never the reverse, and `Closure<F>` and `some F` carry the mark the same way.
-- **`@noalloc` function types**, such as `@noalloc (mutable &[Float]) -> Void`, hold only functions whose calls can't allocate: a `@noalloc` named function, or a literal whose body passes the `@noalloc` check ([06](../06-memory-and-allocators/allocation-lifecycle.md#allocation-failure)). Where a call may destroy the literal's captures, the check covers that destruction too. A call may destroy them for a `consuming` literal, and for any literal moved into a `Closure` or passed owned for a `some F`, since a call through a `consuming` type destroys what it doesn't move out. A call through a `@noalloc` function type counts as a `@noalloc` call. The mark converts away as `@sendable` does, never the reverse, and `Closure<F>` and `some F` carry it the same way.
 
 **A literal is kept in a hidden local when it is in one of these places, and the local there depends on its storage after the statement**, by rules 3 and 4 ([02](../02-views-and-dependencies.md#dependencies)):
 

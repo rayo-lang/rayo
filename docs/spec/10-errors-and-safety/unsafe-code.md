@@ -33,17 +33,17 @@ let total = unsafe (a.pointee + b.pointee)  // covers both reads
 - dereferencing or offsetting a raw pointer, and converting an integer to a pointer ([below](#raw-pointers));
 - taking an address with `ptr(to:)` ([below](#taking-an-address));
 - the raw-memory operations ([below](#raw-memory)), and resizing or freeing a raw allocation ([below](#raw-allocations));
-- calls into C, since a header can't say that a pointer outlives the call, or that a buffer holds `n` elements ([08](../08-c-interop/imports-and-inline-c.md#calling-imported-functions));
+- calls into C, since a header can't say that a pointer outlives the call, or that a buffer holds `n` elements ([08](../08-c-interop/imports-and-declarations.md#calling-imported-functions));
 - calls through `@c` pointers, since the type can't tell a Rayo function from a C one ([05](../05-protocols-generics-and-closures/functions-and-closures.md#c-function-pointers)), and calls to `unsafe` functions;
 - using a field or property declared `unsafe`, which `unsafe` code trusts, such as a run's `baseAddress` ([04](../04-types/collections.md#runs-of-elements)), whether by name, through reflection or as a `SoA` column;
-- accessing a bare global `var` ([07](../07-concurrency/global-state.md#global-state)) or an imported C variable ([08](../08-c-interop/imports-and-inline-c.md#what-imports-as-what)), since every thread can reach it;
-- converting a function to a `@c` type by C representations alone, or a `@c` value to a `@c noalloc` one ([05](../05-protocols-generics-and-closures/functions-and-closures.md#c-function-pointers));
+- accessing a bare global `var` ([07](../07-concurrency/global-state.md#global-state)) or an imported C variable ([08](../08-c-interop/imports-and-declarations.md#what-imports-as-what)), since every thread can reach it;
+- converting a function to a `@c` type by C representations alone ([05](../05-protocols-generics-and-closures/functions-and-closures.md#c-function-pointers));
 - reading a union member where 04 requires it, since what another member's write left there may not be a valid value of it ([04](../04-types/enums.md#untagged-unions)).
 
 **No `unsafe` call is hidden**, so every promise that `unsafe` code makes is made at a visible `unsafe` site.
 
 - **An `unsafe` declaration** is used only inside `unsafe`, or through an `unsafe` function type, an `unsafe` requirement or a `: unsafe P` conformance. That holds for an `unsafe` declaration of any kind: a function, an initializer, an operator, a subscript or an accessor.
-- **An imported or `extern c` function** is used only inside `unsafe`, or through a `@c` pointer, whose calls need `unsafe` ([05](../05-protocols-generics-and-closures/functions-and-closures.md#c-function-pointers)).
+- **An imported or `extern(c)` function** is used only inside `unsafe`, or through a `@c` pointer, whose calls need `unsafe` ([05](../05-protocols-generics-and-closures/functions-and-closures.md#c-function-pointers)).
 
 So a call the language makes on the code's behalf is allowed only where the call written out would be. Examples are a `@converts` initializer under `try` ([Propagating errors with `try`](typed-errors.md#propagating-errors-with-try)), and the `==` of an expression pattern ([04](../04-types/enums.md#matching-with-when-and-choosing-with-if)).
 
@@ -248,9 +248,8 @@ Plain assignment through `p.pointee` assumes initialized memory, and replaces th
 **A `@safe` module rejects:**
 
 - `unsafe` blocks, expressions and functions;
-- the unverified promises ([below](#unverified-promises)): `unsafe` conformances, `@pod`, `@export` functions, `import c` config blocks and `extern c func` declarations;
-- `unchecked` blocks ([`unchecked` blocks](checks-and-build-modes.md#unchecked-blocks));
-- `extern c` blocks of C code ([08](../08-c-interop/imports-and-inline-c.md#inline-c)).
+- the unverified promises ([below](#unverified-promises)): `unsafe` conformances, `@pod`, `@export` functions, `import(c)` config blocks and `extern(c) func` declarations;
+- `unchecked` blocks ([`unchecked` blocks](checks-and-build-modes.md#unchecked-blocks)).
 
 ### Unverified promises
 
@@ -267,5 +266,5 @@ Plain assignment through `p.pointee` assumes initialized memory, and replaces th
     - a witness is a static stored `var` that isn't `@threadlocal`, which also promises that its accesses never race;
     - a witness is an `unsafe` declaration meeting a safe requirement;
     - its derived `==` or `hash(into:)` reads such a field or member ([05](../05-protocols-generics-and-closures/operators.md#equality-and-ordering)).
-- **A rule in an `import c` config block** is an assertion about the header's C. The rules are `noalloc` ([08](../08-c-interop/imports-and-inline-c.md#c-calls-in-noalloc-code-noalloc)), `stack` ([08](../08-c-interop/imports-and-inline-c.md#the-stack-a-c-call-needs)), and `struct`, `union` or `enum S in "h"` ([08](../08-c-interop/imports-and-inline-c.md#the-identity-of-an-imported-type)). A `stack` in a `@c` function pointer type is no promise, since a function converts to the type only when the type declares at least the function's need.
-- **An `extern c func` declaration** is an assertion about its module's `extern c` code or a linked library ([08](../08-c-interop/imports-and-inline-c.md#inline-c)).
+- **A rule in an `import(c)` config block** is an assertion about the header's C: that `struct`, `union` or `enum S in "h"` names the type the header means by `S` ([08](../08-c-interop/imports-and-declarations.md#the-identity-of-an-imported-type)).
+- **An `extern(c) func` declaration** is an assertion that a library or object file the build links defines a C function of that name and signature ([08](../08-c-interop/imports-and-declarations.md#declaring-c-functions)).

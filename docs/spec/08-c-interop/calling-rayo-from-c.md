@@ -27,10 +27,10 @@ A C or C++ program uses a library written in Rayo:
 
 - every exported function;
 - every `@export(c)` type;
-- every type that the signature of one of the module's exported functions, `@c func`s or `extern c func`s uses;
+- every type that the signature of one of the module's exported functions, `@c func`s or `extern(c) func`s uses;
 - every type that one of the module's `@c` types uses.
 
-**Every generated header declares `rayo_int_t` and `rayo_uint_t`**, typedefs of `int64_t` and `uint64_t`, which `Int` and `UInt` cross as. C's `#ifndef` can't test for a typedef, so the header guards each with a macro it defines alongside it, as `_SIZE_T_DEFINED` guards `size_t`. So several generated headers can be included together. A header that Rayo imports back gives them as `Int` and `UInt` again ([What imports as what](imports-and-inline-c.md#what-imports-as-what)).
+**Every generated header declares `rayo_int_t` and `rayo_uint_t`**, typedefs of `int64_t` and `uint64_t`, which `Int` and `UInt` cross as. C's `#ifndef` can't test for a typedef, so the header guards each with a macro it defines alongside it, as `_SIZE_T_DEFINED` guards `size_t`. So several generated headers can be included together. A header that Rayo imports back gives them as `Int` and `UInt` again ([What imports as what](imports-and-declarations.md#what-imports-as-what)).
 
 **For each `List`, `String` and `TrailingArray` type among them, the header declares a free function**: an `@export` function whose parameter owns the value, which it destroys. So a call of the free function enters Rayo as any call from C does ([below](#c-entries-and-threads)).
 
@@ -38,7 +38,7 @@ A C or C++ program uses a library written in Rayo:
 
 **A type's C representation is the C type its values cross to C as.** It has the Rayo type's size and alignment, and these rules give it:
 
-- **Imported types.** Each Rayo type that a C type imports as ([What imports as what](imports-and-inline-c.md#what-imports-as-what)), such as `Int32`, `Bool`, a raw pointer, `Simd<Float, 4>` or an imported `@c union`, crosses as that C type. When several import as it, it crosses as the first one the import table lists that the target has, so `*T?` crosses as `T*`.
+- **Imported types.** Each Rayo type that a C type imports as ([What imports as what](imports-and-declarations.md#what-imports-as-what)), such as `Int32`, `Bool`, a raw pointer, `Simd<Float, 4>` or an imported `@c union`, crosses as that C type. When several import as it, it crosses as the first one the import table lists that the target has, so `*T?` crosses as `T*`.
 - **C aliases.** A type written with one of the C aliases, such as `CChar` or `CLong`, crosses as the C type it stands for, so `*CChar` is a `char*` in a generated header.
 - **The table below.** The types in it cross as it gives, provided every type they are built from, such as a struct's fields or a `List<T>`'s `T`, has a C representation too. The `T` of a `Handle` or of a weak pointer to a concrete type needn't have one, since only the bits cross.
 - **No size 0.** Since a C representation has its type's size and C has no type of size 0, a struct with no stored fields or a `[0 of T]` has none.
@@ -98,7 +98,7 @@ A C or C++ program uses a library written in Rayo:
 
 **Ownership crosses to C in these ways:**
 
-- as a `List`, `String` or `TrailingArray` that a C entry returns to C or stores through a `mutable &T` parameter C lent, or that Rayo passes to an owning parameter of an `extern c func` or a `@c` pointer ([above](#c-representations));
+- as a `List`, `String` or `TrailingArray` that a C entry returns to C or stores through a `mutable &T` parameter C lent, or that Rayo passes to an owning parameter of an `extern(c) func` or a `@c` pointer ([above](#c-representations));
 - as a weak pointer from `UniquePointer.leak`, which comes back through `adopt` ([03](../03-handles-and-objects.md#weak-pointers-as-bits-and-handing-objects-to-c));
 - as a weak link from `Shared.leak`, which comes back through `adopt` ([06](../06-memory-and-allocators/owning-values.md#sharedt-data-with-many-owners));
 - as a `RawAllocation` through `Box.leak` and the `unsafe` `Box.adopt` ([06](../06-memory-and-allocators/owning-values.md#owning-boxes)).
