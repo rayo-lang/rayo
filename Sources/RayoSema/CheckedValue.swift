@@ -23,12 +23,20 @@ enum CheckedValue {
         }
     }
 
-    /// Whether a position that expects `type` takes the value, where `declarations` gives the members an implicit
-    /// member names.
+    /// Whether the value fits `type`, as a call asks when it picks among overloads, where `declarations` gives the
+    /// members an implicit member names. An integer literal's value counts, so it fits only a type that holds it.
     func fits(_ type: RayoType, in declarations: Declarations) -> Bool {
         switch self {
         case .typed(let value): TypeFit.fits(value.type, type)
         case .waiting(let value): value.fits(type, in: declarations)
+        }
+    }
+
+    /// Whether a position that expects `type` takes the value, though a literal in it may be one `type` can't hold.
+    func canSettle(to type: RayoType, in declarations: Declarations) -> Bool {
+        switch self {
+        case .typed(let value): TypeFit.fits(value.type, type)
+        case .waiting(let value): value.canSettle(to: type, in: declarations)
         }
     }
 

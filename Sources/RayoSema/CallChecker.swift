@@ -265,7 +265,7 @@ struct CallChecker {
             return nil
         }
         // Where several fit and none of them is the call's, the arguments' literals are settled for their own errors.
-        guard let chosen = chosen(among: remaining, named: name, for: values, in: range) else {
+        guard let chosen = chosen(among: remaining, named: name, in: range) else {
             expressions.reportSettlingErrors(of: values)
             return nil
         }
@@ -285,10 +285,9 @@ struct CallChecker {
         return (chosen, settled)
     }
 
-    /// The one of `remaining`, the candidates that `values` fit, that the call reaches. Reports a call that several
-    /// fit, naming them as `name`, unless one of them failed, which was reported where it is declared.
-    private func chosen(among remaining: [Signature], named name: String, for values: [CheckedValue],
-                        in range: SourceRange) -> Signature? {
+    /// The one of `remaining`, the candidates that the arguments fit, that the call reaches. Reports a call that
+    /// several fit, naming them as `name`, unless one of them failed, which was reported where it is declared.
+    private func chosen(among remaining: [Signature], named name: String, in range: SourceRange) -> Signature? {
         // A candidate that alone remains is the call's.
         if remaining.count == 1 { return remaining[0] }
 
@@ -296,16 +295,7 @@ struct CallChecker {
         // where the function is declared.
         if remaining.contains(where: \.hasFailed) { return nil }
 
-        // The prelude's built-ins of one name stand in for one generic function, which binds an untyped argument to
-        // its default type, so `print(1)` prints an Int.
-        // An array literal that no element gives a type has no default, and binds no built-in.
-        let defaultTypes = values.compactMap(\.typeOrDefault)
-        if defaultTypes.count == values.count, remaining.allSatisfy(\.isBuiltin),
-           let chosen = remaining.first(where: { $0.takes(defaultTypes) }) {
-            return chosen
-        }
-
-        // Otherwise an untyped argument fits more than one of the functions the code declares.
+        // Otherwise an argument that waits for a type fits more than one of the functions.
         errors.report(.ambiguousCall(name: name), at: range)
         return nil
     }

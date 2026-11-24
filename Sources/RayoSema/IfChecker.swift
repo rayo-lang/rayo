@@ -59,11 +59,11 @@ struct IfChecker {
         return IfValue.Branch(statements: statements, end: .void(at: end))
     }
 
-    /// Settles `value` toward `type`: to `type` where every branch fits it, and otherwise to the type the one rule
-    /// for values side by side picks for its branches, reporting each branch of another type. Each branch's value is
-    /// taken by `recipient`, where the `if`'s position has one. Reports an `if` whose branches give no type.
+    /// Settles `value` toward `type`: to `type` where every branch can settle to it, and otherwise to the type the
+    /// one rule for values side by side picks for its branches, reporting each branch of another type. Each branch's
+    /// value is taken by `recipient`, where the `if`'s position has one. Reports an `if` whose branches give no type.
     func settled(_ value: IfValue, toward type: RayoType?, takenBy recipient: Recipient?) -> CheckedExpr? {
-        if let type, value.fits(type, in: expressions.file.declarations) {
+        if let type, value.canSettle(to: type, in: expressions.file.declarations) {
             return settled(value, expecting: Expectation(type, recipient: recipient))
         }
         guard let ruled = value.ruledType else { return reportNoType(of: value) }

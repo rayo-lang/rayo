@@ -44,10 +44,21 @@ struct IfValue {
             if case .value(let value) = self { value.typeOrDefault } else { type }
         }
 
-        /// Whether the end can stand where a position expects `type`. One that no run reaches fits any type.
+        /// Whether the end fits `type`, as a call asks when it picks among overloads. One that no run reaches fits
+        /// any type.
         func fits(_ type: RayoType, in declarations: Declarations) -> Bool {
             switch self {
             case .value(let value): value.fits(type, in: declarations)
+            case .void: TypeFit.fits(.void, type)
+            case .leaves: true
+            }
+        }
+
+        /// Whether the end can stand where a position expects `type`, though a literal in it may be one `type`
+        /// can't hold. One that no run reaches can stand anywhere.
+        func canSettle(to type: RayoType, in declarations: Declarations) -> Bool {
+            switch self {
+            case .value(let value): value.canSettle(to: type, in: declarations)
             case .void: TypeFit.fits(.void, type)
             case .leaves: true
             }
@@ -69,7 +80,9 @@ struct IfValue {
         self.then = then
         self.otherwise = otherwise
         self.range = range
-        agreedType = ruledType.flatMap { type in ends.allSatisfy { $0.fits(type, in: declarations) } ? type : nil }
+        agreedType = ruledType.flatMap { type in
+            ends.allSatisfy { $0.canSettle(to: type, in: declarations) } ? type : nil
+        }
     }
 
     var branches: [Branch] { [then, otherwise] }
@@ -97,6 +110,12 @@ extension IfValue: WaitingValue {
     func fits(_ type: RayoType, in declarations: Declarations) -> Bool {
         let reached = ends.filter(\.isReached)
         return !reached.isEmpty && reached.allSatisfy { $0.fits(type, in: declarations) }
+    }
+
+    /// Whether every branch that runs to its end gives a value that can settle to `type`, by the same rule.
+    func canSettle(to type: RayoType, in declarations: Declarations) -> Bool {
+        let reached = ends.filter(\.isReached)
+        return !reached.isEmpty && reached.allSatisfy { $0.canSettle(to: type, in: declarations) }
     }
 
     /// Whether every branch that runs to its end ends in a `&` of a place.

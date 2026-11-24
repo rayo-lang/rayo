@@ -58,27 +58,32 @@ struct Signature: CustomStringConvertible {
         if case .callee(.builtin) = target { true } else { false }
     }
 
-    /// Whether values of `types`, in order, fit the parameters. A parameter whose type isn't known takes none.
-    func takes(_ types: [RayoType]) -> Bool {
-        parameters.count == types.count && zip(parameters, types).allSatisfy { parameter, type in
-            parameter.type.map { TypeFit.fits(type, $0) } ?? false
-        }
-    }
-
     /// Whether a call may pass arguments with these labels, in this order.
     func takesLabels(_ labels: [String?]) -> Bool {
         parameters.count == labels.count && zip(parameters, labels).allSatisfy { $0.label == $1 }
     }
 
-    /// Whether each argument the filter picks has the type of its parameter, taken in order, where `declarations`
+    /// Whether each argument the filter picks fits its parameter's type, taken in order, where `declarations`
     /// gives the members an implicit member names. A parameter whose type isn't known takes any argument, so a
     /// mistake in the declaration gives no further error at each call.
     func takes(_ arguments: [CheckedValue], in declarations: Declarations,
                where isConsidered: (CheckedValue) -> Bool) -> Bool {
         parameters.count == arguments.count && zip(parameters, arguments).allSatisfy { parameter, argument in
             guard isConsidered(argument), let type = parameter.type else { return true }
-            return argument.fits(type, in: declarations)
+            return takes(argument, as: type, in: declarations)
         }
+    }
+
+    /// Whether `argument` fits a parameter of `type`, where `declarations` gives the members an implicit member
+    /// names.
+    private func takes(_ argument: CheckedValue, as type: RayoType, in declarations: Declarations) -> Bool {
+        // The prelude's built-ins of one name stand in for one generic function, which binds an argument that waits
+        // for a type to its default type, whatever its value. So only that type's built-in takes it, and `print(1)`
+        // prints an Int.
+        if isBuiltin, argument.type == nil, let defaultType = argument.typeOrDefault {
+            return TypeFit.fits(defaultType, type)
+        }
+        return argument.fits(type, in: declarations)
     }
 }
 
