@@ -1,100 +1,101 @@
-// A hero fights a wave of three enemies for five rounds, striking each enemy that still stands in turn.
+// A hero fights a column of enemies two ranks deep and three files wide. Each round the hero strikes the enemy with
+// the most health, and the blow cleaves into the enemies in front of, behind and beside it. Then each enemy still
+// standing in the front rank strikes the hero. The fight ends when the hero or the whole column falls.
 //
-// The program prints which enemy is strongest and its health before the fight. Each round it prints the round's
-// number, then each enemy's health. After the fight it prints how many blows wounded and how many felled, the damage
-// each kind dealt, the damage the strongest enemy took, how many enemies survive, and whether each one does.
+// Each round prints its number, the health the blow leaves each enemy it reaches, the target first, and then the
+// hero's health once the front rank has struck. After the fight the program prints whether the hero stands, and the
+// round each enemy fell in, or 0 for one still standing, the front rank first.
 
 func main() {
-    var wave = Wave(enemies: [
-        Enemy(stats: Stats(hp: 30, armor: 2)),
-        Enemy(stats: Stats(hp: 52, armor: 8)),
-        Enemy(stats: Stats(hp: 18, armor: 4)),
-    ])
+    var hero = Hero(hp: 50, combo: [16, 10, 22])
+    var column: [2 of [3 of Enemy]] = [
+        [Enemy(hp: 20, armor: 5, attack: 3), Enemy(hp: 28, armor: 6, attack: 5), Enemy(hp: 14, armor: 0, attack: 2)],
+        [Enemy(hp: 12, armor: 3, attack: 3), Enemy(hp: 24, armor: 1, attack: 4), Enemy(hp: 18, armor: 4, attack: 3)],
+    ]
 
-    // The strength of each round's blow is this table's entry at the round's number modulo 4, plus the round's
-    // number, so the hero's blows grow harder as the fight goes on.
-    let strengths: [4 of Int] = [7, 4, 10, 6]
+    // A blow's reach, as steps of rank and file from its target. The target, at the first step, takes the whole
+    // blow, and the enemies around it take half.
+    let reach: [5 of [2 of Int]] = [[0, 0], [-1, 0], [1, 0], [0, -1], [0, 1]]
 
-    // A snapshot of the enemy with the most health, which the fight leaves as it is, so that the damage the enemy
-    // takes can be measured once the fight is over.
-    let strongest = indexOfStrongest(in: wave.enemies)
-    let before = copy wave.enemies[strongest]
-    print(strongest)
-    print(before.stats.hp)
+    // The round each enemy fell in, by rank and file, which stays 0 while the enemy stands.
+    var fellIn: [2 of [3 of UInt]] = .init(repeating: .init(repeating: 0))
 
-    // The ledger has a row for the blows that wound and a row for the blows that fell. Each row holds how many such
-    // blows landed, and the damage they dealt.
-    var ledger: [2 of [2 of Int]] = .init(repeating: .init(repeating: 0))
-    let wounding: UInt = 0
-    let felling: UInt = 1
-    let blows: UInt = 0
-    let dealt: UInt = 1
-
-    // Each round the hero strikes every enemy that still stands, in turn, and the ledger records each blow.
+    // The whole column has fallen once its strongest enemy has.
     var round: UInt = 0
-    while round < 5 {
+    var target = strongest(in: column)
+    while hero.hp > 0 && column[target[0]][target[1]].hp > 0 {
         round += 1
         print(round)
-        var i: UInt = 0
-        while i < wave.enemies.count {
-            if wave.enemies[i].stats.hp > 0 {
-                let taken = damage(from: strengths[round % 4] + Int(round), on: wave.enemies[i])
-                wave.enemies[i].stats.hp -= taken
-                ref let row = if wave.enemies[i].stats.hp > 0 { &wounding } else { &felling }
-                ledger[row][blows] += 1
-                ledger[row][dealt] += taken
+
+        // The hero's blows follow its combo, which starts over once it runs out. A step off the column's edge
+        // reaches no one, and neither does one onto an enemy that has fallen.
+        let blow = hero.combo[(round - 1) % hero.combo.count]
+        var step: UInt = 0
+        while step < reach.count {
+            let r = Int(target[0]) + reach[step][0]
+            let f = Int(target[1]) + reach[step][1]
+            if r >= 0 && r < Int(column.count) && f >= 0 && f < Int(column[0].count) {
+                let rank = UInt(r)
+                let file = UInt(f)
+                if column[rank][file].hp > 0 {
+                    let strength = if step == 0 { blow } else { blow / 2 }
+                    column[rank][file].hp -= damage(from: strength, on: column[rank][file])
+                    print(column[rank][file].hp)
+                    if column[rank][file].hp <= 0 { fellIn[rank][file] = round }
+                }
             }
-            print(wave.enemies[i].stats.hp)
-            i += 1
+            step += 1
         }
+
+        // Only the front rank reaches the hero to strike back.
+        var file: UInt = 0
+        while file < column[0].count {
+            ref let foe = &column[0][file]
+            if foe.hp > 0 { hero.hp -= foe.attack }
+            file += 1
+        }
+        print(hero.hp)
+        target = strongest(in: column)
     }
 
-    // The ledger, and the damage the strongest enemy took.
-    print(ledger[wounding][blows])
-    print(ledger[felling][blows])
-    print(ledger[wounding][dealt])
-    print(ledger[felling][dealt])
-    print(before.stats.hp - wave.enemies[strongest].stats.hp)
-
-    // How many enemies survive: every enemy but those a blow felled. Then whether each one does.
-    print(wave.enemies.count - UInt(ledger[felling][blows]))
-    let standing = survivors(of: wave.enemies)
-    var i: UInt = 0
-    while i < standing.count {
-        print(standing[i])
-        i += 1
+    print(hero.hp > 0)
+    var rank: UInt = 0
+    while rank < fellIn.count {
+        var file: UInt = 0
+        while file < fellIn[rank].count {
+            print(fellIn[rank][file])
+            file += 1
+        }
+        rank += 1
     }
 }
 
 // Gives the damage a blow of `strength` deals `enemy`: armor at least as strong as the blow leaves it a scratch, and
-// weaker armor takes off half its own strength.
+// weaker armor takes its own strength off the blow.
 func damage(from strength: Int, on enemy: &Enemy) -> Int {
-    if enemy.stats.armor >= strength { return 1 }
-    return strength - enemy.stats.armor / 2
+    if enemy.armor >= strength { return 1 }
+    return strength - enemy.armor
 }
 
-// Gives the index of the enemy with the most health, the first of them on a tie.
-func indexOfStrongest(in enemies: &[3 of Enemy]) -> UInt {
-    var strongest: UInt = 0
-    var i: UInt = 1
-    while i < enemies.count {
-        if enemies[i].stats.hp > enemies[strongest].stats.hp { strongest = i }
-        i += 1
+// Gives the rank and the file of the enemy with the most health, the first of them on a tie.
+func strongest(in column: &[2 of [3 of Enemy]]) -> [2 of UInt] {
+    var at: [2 of UInt] = [0, 0]
+    var most = column[0][0].hp
+    var rank: UInt = 0
+    while rank < column.count {
+        ref let enemies = &column[rank]
+        var file: UInt = 0
+        while file < enemies.count {
+            if enemies[file].hp > most {
+                most = enemies[file].hp
+                at = [rank, file]
+            }
+            file += 1
+        }
+        rank += 1
     }
-    return strongest
+    return consume at
 }
 
-// Gives whether each enemy still stands.
-func survivors(of enemies: &[3 of Enemy]) -> [3 of Bool] {
-    var standing: [3 of Bool] = .init(repeating: false)
-    var i: UInt = 0
-    while i < enemies.count {
-        standing[i] = enemies[i].stats.hp > 0
-        i += 1
-    }
-    return standing
-}
-
-struct Wave(var enemies: [3 of Enemy])
-struct Enemy(var stats: Stats)
-struct Stats(var hp: Int, let armor: Int)
+struct Hero(var hp: Int, let combo: [3 of Int])
+struct Enemy(var hp: Int, let armor: Int, let attack: Int)
