@@ -4,8 +4,8 @@ import RayoSource
 import RayoSyntax
 
 /// The rules for a place that changes, whether an assignment changes it or `mutable` lends it for change, so the two
-/// decide alike which places can change. Each conformer says what it reports for a place that starts from a value, a
-/// `let` or a `ref let`.
+/// decide alike which places can change. A temporary never changes, since it ends with its statement. Each conformer
+/// says what it reports for a place that starts from a `let` or a `ref let`.
 protocol ChangeablePlaceRules: PlaceRules {
     var expressions: ExpressionChecker { get }
 
@@ -17,6 +17,17 @@ protocol ChangeablePlaceRules: PlaceRules {
 }
 
 extension ChangeablePlaceRules {
+    /// Checks a root that is no name, such as a call or a literal, as a temporary, which never changes. A place that
+    /// goes on from it has the root refused last, after the rest of the place.
+    func root(_ expr: Expr, holdsParts: Bool) -> TypedPlace? {
+        // A value that failed was reported, and so is one too large for the stack, where a temporary lies.
+        guard let value = expressions.check(expr),
+              let held = expressions.file.declarations.fittingOnStack(value, reporting: expressions.file.errors)
+        else { return nil }
+        guard holdsParts else { return refuse(refusal(toChange: held), at: expr.range) }
+        return (CheckedPlace(root: .temporary(held)), held.type)
+    }
+
     /// Checks the place that `target` names under these rules, checking its root last.
     func changedPlace(_ target: Expr) -> TypedPlace? {
         // A place that failed was reported.

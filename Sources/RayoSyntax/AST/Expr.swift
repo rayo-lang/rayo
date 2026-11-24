@@ -32,8 +32,8 @@ public indirect enum ExprKind: Sendable {
     /// `&place`: a shared reference to what `place` names, which borrows it. `place` is a postfix expression that
     /// starts from a name: a name, a call, or a member or an element of either.
     case reference(Expr)
-    /// `mutable place`: a mutable reference to what `place` names, which borrows it for change. `place` is written
-    /// as a `&`'s is, or is a `&` expression, which checking reports.
+    /// `mutable place`: a mutable reference to what `place` names, which borrows it for change. `place` is any unary
+    /// expression, and checking reports one that names no place that can change, such as a temporary or a `&`.
     case mutableReference(Expr)
     /// An `if` whose value is that of the branch that runs.
     case `if`(IfExpr)

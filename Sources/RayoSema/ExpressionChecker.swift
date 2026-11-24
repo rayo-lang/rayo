@@ -112,7 +112,7 @@ struct ExpressionChecker {
         case .reference(let operand):
             mutableOfReference(operand, referenceRange: lent.range, in: range)
         default:
-            MutablyLentPlaceRules(expressions: self, lentRange: range).changedPlace(lent).map {
+            MutablyLentPlaceRules(expressions: self).changedPlace(lent).map {
                 .waiting(MutablyLentPlace(place: $0.place, placeType: $0.type, range: range))
             }
         }

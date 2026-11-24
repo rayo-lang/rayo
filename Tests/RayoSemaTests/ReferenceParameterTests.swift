@@ -122,10 +122,8 @@ struct ReferenceParameterTests {
         })
     }
 
-    @Test(arguments: [
-        ("_ = mutable a", 9), ("let x = mutable a", 13), ("a = mutable a", 9), ("show(mutable makeEnemy())", 10),
-    ])
-    func `'mutable' outside a call's arguments and a 'ref var', or of a temporary, is reported as unsupported`(
+    @Test(arguments: [("_ = mutable a", 9), ("let x = mutable a", 13), ("a = mutable a", 9)])
+    func `'mutable' outside a call's arguments and a 'ref var' is reported as unsupported`(
         statement: String, column: Int,
     ) {
         #expect(messages(of: statement) == ["\(column): error[E0289]: 'mutable' isn't supported"])

@@ -7,9 +7,6 @@ import RayoSyntax
 struct AssignmentChecker {
     let expressions: ExpressionChecker
 
-    private var errors: ErrorList { expressions.file.errors }
-    private var declarations: Declarations { expressions.file.declarations }
-
     /// Checks an assignment, or a compound assignment such as `+=`. The value is checked even when the target can't
     /// be assigned, so mistakes in it are still reported.
     func assign(_ valueExpr: Expr, op: AssignOperator, to target: Expr, in range: SourceRange) -> CheckedStmt? {
@@ -57,16 +54,6 @@ struct AssignmentChecker {
 
 /// An assignment's target is a changeable place, though an assignment may also give a whole `let` its value.
 extension AssignmentChecker: ChangeablePlaceRules {
-    /// Checks a target's root that is no name, such as a call, as a temporary, which an assignment can't change. A
-    /// target that goes on from it has the root refused last, after the rest of the target.
-    func root(_ expr: Expr, holdsParts: Bool) -> TypedPlace? {
-        // A value that failed was reported, and so is one too large for the stack, where a temporary lies.
-        guard let value = expressions.check(expr),
-              let held = declarations.fittingOnStack(value, reporting: errors) else { return nil }
-        guard holdsParts else { return refuse(refusal(toChange: held), at: expr.range) }
-        return (CheckedPlace(root: .temporary(held)), held.type)
-    }
-
     func error(naming nonPlace: NonPlaceName, _ name: String) -> ErrorCode {
         switch nonPlace {
         // `_` names no place; it only drops a value.
