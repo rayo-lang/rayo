@@ -39,12 +39,13 @@ public enum IRVerifier {
     }
 
     /// Throws the first violation in `body`, the body of `declaration` in `program`, of the rules every stage's IR
-    /// keeps: of its types, then of the blocks its paths reach, then of its indices.
+    /// keeps: of its types, then of the places it changes, then of the blocks its paths reach, then of its indices.
     private static func verifySharedRules(
         in body: IRBody, of declaration: FunctionDeclaration, in program: IRProgram,
     ) throws(IRViolation) {
         // The index check takes each place's type as given, so the types are checked first.
         try FunctionVerifier(body: body, of: declaration, in: program).verify()
+        try ReadOnlyPlaceVerifier(body: body, of: declaration.name).verify()
         try UnreachableBlockVerifier(body: body, of: declaration.name).verify()
         try ElementIndexVerifier(body: body, of: declaration.name, types: program.types).verify()
     }

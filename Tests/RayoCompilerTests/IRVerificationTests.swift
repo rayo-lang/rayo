@@ -14,7 +14,8 @@ struct BrokenIR: CustomTestStringConvertible, Sendable {
 }
 
 /// A program whose `main`, which takes and returns nothing, runs `blocks`. Its `main` holds an Int in `%0`, an array of
-/// two Ints in `%1` and a UInt in `%2`, and it declares `f(_: &Int)`, which borrows its one Int.
+/// two Ints in `%1`, a UInt in `%2` and an Int in the `let` `%3`, and it declares `f(_: &Int)`, which borrows its one
+/// Int.
 private func program(running blocks: String) throws -> IRProgram {
     try IRParser.program(from: """
         main "main()"
@@ -22,6 +23,7 @@ private func program(running blocks: String) throws -> IRProgram {
           temp %0: Int
           temp %1: [2 of Int]
           temp %2: UInt
+          let %3 total: Int @1:1-1:2
         bb0:
         \(blocks)
         }
@@ -42,7 +44,7 @@ struct IRVerificationTests {
     }
 
     @Test(arguments: brokenInTheIREveryBuildChecks)
-    func `in a release build, the emitter's IR that breaks its types, blocks, indices or local lives stops the compile`(
+    func `in a release build, the emitter's IR that breaks a rule the emitter takes as given stops the compile`(
         broken: BrokenIR,
     ) throws {
         let program = try program(running: broken.blocks)
@@ -140,6 +142,19 @@ private let brokenInTheIREveryBuildChecks = [
         stage: .ownership,
         blocks: "  goto bb1\nbb1:\n  unreachable",
         message: "the IR reaches bb1, which ends in unreachable",
+    ),
+    BrokenIR(
+        testDescription: "the ownership stage's IR that begins a modify access to a 'let'",
+        stage: .ownership,
+        blocks: """
+              declare %3
+              %3 @1:1-1:2 = operand 1 @1:1-1:2
+              begin a0 modify %3 @1:1-1:2
+              end a0
+              retire %3
+              return
+            """,
+        message: "the IR begins a modify access to %3, the let 'total', which may not change so",
     ),
     BrokenIR(
         testDescription: "the ownership stage's IR that finds an element at an unchecked index",

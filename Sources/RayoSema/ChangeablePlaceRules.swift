@@ -5,15 +5,19 @@ import RayoSyntax
 
 /// The rules for a place that changes, whether an assignment changes it or `mutable` lends it for change, so the two
 /// decide alike which places can change. A temporary never changes, since it ends with its statement. Each conformer
-/// says what it reports for a place that starts from a `let` or a `ref let`.
+/// says how it changes its place, and what it reports for a `let` or a `ref let` that may not change so.
 protocol ChangeablePlaceRules: PlaceRules {
     var expressions: ExpressionChecker { get }
 
-    /// The error for a place that starts from the `let` called `name`, whole or part by part, or nil where it may.
-    func refusal(toChangeLet name: String, holdsParts: Bool) -> ErrorCode?
+    /// How these rules' place changes, which decides the locals it may start from.
+    var change: PlaceChange { get }
 
-    /// The error for a place that starts from the `ref let` called `name`, whole or part by part, or nil where it may.
-    func refusal(toChangeReferenceLet name: String, holdsParts: Bool) -> ErrorCode?
+    /// The error for a place that starts from the `let` called `name` and may not change so.
+    func refusal(toChangeLet name: String) -> ErrorCode
+
+    /// The error for a place that starts from the `ref let` called `name`, whole or part by part, and may not change
+    /// so.
+    func refusal(toChangeReferenceLet name: String, holdsParts: Bool) -> ErrorCode
 }
 
 extension ChangeablePlaceRules {
@@ -82,17 +86,15 @@ extension ChangeablePlaceRules {
         }
     }
 
-    /// The error for a place that starts from `local`, whole or part by part, or nil where it may.
+    /// The error for a place that starts from `local`, whole or part by part, or nil where it may change so.
     private func refusal(toChange local: LocalID, holdsParts: Bool) -> ErrorCode? {
         let declared = expressions.names[local]
-        return switch declared.kind {
-        // Each owns its value, or borrows its caller's place for change, so it may change whole or part by part.
-        case .var, .parameter(.owned), .parameter(.mutable): nil
-        // A `&T` parameter only reads its caller's place.
-        case .parameter(.borrowed):
+        return switch ChangedPlace(local: declared.kind, isPart: holdsParts).refusal(of: change) {
+        case nil: nil
+        case .borrowedParameter?:
             .changeOfBorrowedParameter(name: declared.name, type: expressions.typeName(of: declared.type))
-        case .let: refusal(toChangeLet: declared.name, holdsParts: holdsParts)
-        case .refLet: refusal(toChangeReferenceLet: declared.name, holdsParts: holdsParts)
+        case .let?: refusal(toChangeLet: declared.name)
+        case .refLet?: refusal(toChangeReferenceLet: declared.name, holdsParts: holdsParts)
         }
     }
 }
