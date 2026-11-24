@@ -470,8 +470,8 @@ public enum ErrorCode: Sendable, Hashable {
         "can't move '{field}' out of '{local}', which refers to a place; write 'copy' before it to take a copy")
     case moveFieldFromReference(field: String, local: String)
 
-    @Code(318, error: "the parameter '{name}' is never read; write '_ = consume {name}' to drop it")
-    case unreadParameter(name: String)
+    @Code(318, error: "the parameter '{drop.place}' is never read; write {drop} to drop it")
+    case unreadParameter(drop: DropStatement)
 }
 
 extension ErrorCode {
@@ -621,13 +621,32 @@ public enum DropMark: Sendable, Hashable, CustomStringConvertible {
     /// `_ = copy`, which drops a copy of a place's value, where the code can't move the value out of the place.
     case copy
 
-    public var description: String {
+    public var description: String { "'\(spelling)'" }
+
+    /// The mark as the source writes it, without the quotes an error puts around it.
+    var spelling: String {
         switch self {
-        case .bare: "'_ ='"
-        case .consume: "'_ = consume'"
-        case .copy: "'_ = copy'"
+        case .bare: "_ ="
+        case .consume: "_ = consume"
+        case .copy: "_ = copy"
         }
     }
+}
+
+/// The statement that drops the value of a place that no code uses, as an error names it: `'_ = n'` or
+/// `'_ = consume item'`.
+public struct DropStatement: Sendable, Hashable, CustomStringConvertible {
+    /// What the statement writes before the place.
+    public var mark: DropMark
+    /// The place as the source writes it, such as `n` or `item`.
+    public var place: String
+
+    public init(_ mark: DropMark, dropping place: String) {
+        self.mark = mark
+        self.place = place
+    }
+
+    public var description: String { "'\(mark.spelling) \(place)'" }
 }
 
 /// The marks that fit a place written bare where it needs one, as an error names them: `'consume boss' or 'copy boss'`,
