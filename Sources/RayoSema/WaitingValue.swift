@@ -12,8 +12,13 @@ protocol WaitingValue {
     /// `[]` can't.
     var defaultType: RayoType? { get }
 
-    /// Whether the value can settle to `type`, where `declarations` gives the members an implicit member names.
+    /// Whether the value fits `type`, as a call asks when it picks among overloads: it can settle to `type`, and
+    /// `type` holds each integer literal's value. `declarations` gives the members an implicit member names.
     func fits(_ type: RayoType, in declarations: Declarations) -> Bool
+
+    /// Whether settling the value to `type` gives a value of that type. A literal in it that `type` can't hold is
+    /// reported as it settles, so the value can settle to a type it doesn't fit.
+    func canSettle(to type: RayoType, in declarations: Declarations) -> Bool
 
     /// Whether the source writes the value as a `&` of a place.
     var lendsPlace: Bool { get }
@@ -44,6 +49,11 @@ protocol WaitingValue {
 }
 
 extension WaitingValue {
+    /// A value that holds no integer literal can settle to just the types it fits.
+    func canSettle(to type: RayoType, in declarations: Declarations) -> Bool {
+        fits(type, in: declarations)
+    }
+
     /// No value but a `&` of a place, or an `if` whose branches end in one, is written as a `&`.
     var lendsPlace: Bool { false }
 

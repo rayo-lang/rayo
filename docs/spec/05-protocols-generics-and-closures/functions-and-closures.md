@@ -20,13 +20,30 @@ each(enemies) { e in if e.hp <= 0 { dead += 1 } }        // error: a mutating cl
 
 1. It keeps the candidates whose parameters its arguments match by label, in order. A parameter that has a default may be left out ([01](../01-values-and-ownership/parameters.md#default-arguments)). Trailing closures are matched to each candidate's parameters by the trailing-closure scan, and a candidate the scan rejects drops out ([below](#trailing-closures)).
 2. It keeps those that its arguments typed without context fit. Each such argument is of its parameter's type, or converts to it implicitly ([Implicit conversions](implicit-conversions.md#implicit-conversions)). A generic candidate whose type arguments, bound from those arguments, fail its constraints drops out. So `min(v, w)` on two vectors picks the vector form, since `Simd` isn't `Comparable` ([04](../04-types/numbers-and-math.md#simd-and-math)).
-3. Each argument that needs context takes each remaining candidate's parameter type, and a candidate it doesn't fit drops out. Such an argument is a literal, a closure literal, a `.member`, a call whose type a default type argument would complete, as `alloc Map()`'s would ([Operators](operators.md#operators)), or a bare name whose match is a generic or overloaded function. The expected type resolves such a name as it resolves any overloaded name ([Function-typed values](#function-typed-values)).
+3. Each argument that needs context takes each remaining candidate's parameter type, and a candidate it doesn't fit drops out. An integer literal fits a parameter type only where the type holds its value, as the calls of `g` and `h` after these steps show. Such an argument is a literal, a closure literal, a `.member`, a call whose type a default type argument would complete, as `alloc Map()`'s would ([Operators](operators.md#operators)), or a bare name whose match is a generic or overloaded function. The expected type resolves such a name as it resolves any overloaded name ([Function-typed values](#function-typed-values)).
 4. If exactly one candidate needs no conversion, it wins. Among several candidates that need no conversion, the one that alone declares no type parameters of its own wins, as below. Otherwise exactly one candidate must remain, or the call is ambiguous.
 
 ```rayo
 func f(_ x: Int) { … }      // wins for an Int argument: it alone declares no type parameters
 func f<T>(_ x: T) { … }     // needs no conversion either, but declares T
 ```
+
+**A literal's value counts in step 3, so it can pick the overload.** A `-` on a literal is part of the literal, so `-1` fits no unsigned type ([04](../04-types/collections.md#literals)). Any other untyped value, such as `100 + 200`, fits by its type alone, since these steps work out no arithmetic. A `-` on such a value fits only a signed type, the only kind that has `-` ([04](../04-types/numbers-and-math.md#integer-overflow-division-and-shifts)).
+
+```rayo
+func g(_ x: UInt) { … }
+func g(_ x: Int) { … }
+func h(_ x: UInt) { … }
+func h(_ x: Bool) { … }
+
+g(-1)           // calls g(_: Int): a UInt doesn't hold -1
+g(-(1 + 2))     // calls g(_: Int): only a signed type has '-'
+g(5)            // error: both types hold 5, so the call is ambiguous
+g(100 + 200)    // error: arithmetic fits every integer type, so the call is ambiguous
+h(-1)           // error: no 'h' takes the arguments
+```
+
+**A type that takes a literal by conforming to `ExpressibleByIntegerLiteral` fits by its conformance alone.** Its initializer checks the literal's value at compile time ([04](../04-types/collections.md#literals)). A value that fails that check is the literal's own error, reported once the call has picked its overload, and plays no part in picking it.
 
 **A place lent where a `&T` is expected is a conversion, so of two overloads that differ only in whether they take an argument by reference, the one that takes it as written wins** ([Implicit conversions](implicit-conversions.md#places-lent-where-a-reference-is-expected)). A `&Int` converts to no `Int`, so `&a` picks the overload that takes a reference. A bare place of a type that isn't implicitly copyable picks the owning overload the same way, and then writes `consume` or `copy` as an owning parameter needs ([01](../01-values-and-ownership/references.md#places-given-to-a-position)).
 

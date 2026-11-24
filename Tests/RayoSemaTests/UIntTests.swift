@@ -41,6 +41,73 @@ struct UIntTests {
         #expect(ErrorCode.ambiguousCall(name: "f").message == "the call fits more than one 'f'")
     }
 
+    @Test(arguments: [
+        "g(-1)",
+        "g(-(1))",
+        "g(-(1 + 2))",
+        "g(-9223372036854775808)",
+        "g(if c { -1 } else { 1 })",
+        "g(if c { -(1 + 2) } else { 1 })",
+        "pair([1, -1])",
+    ])
+    func `a call picks the overload whose parameter type holds a literal's value, or has a sign for its '-'`(
+        call: String,
+    ) {
+        let source = mainSource("let c = true\nlet i: Int = \(call)\nprint(i)") + """
+
+            func g(_ i: Int) -> Int { 0 }
+            func g(_ u: UInt) -> UInt { 0 }
+            func pair(_ a: [2 of Int]) -> Int { 0 }
+            func pair(_ a: [2 of UInt]) -> UInt { 0 }
+            """
+        #expect(errors(source) == [])
+    }
+
+    @Test func `a call picks the UInt overload for a literal that only a UInt holds`() {
+        let source = mainSource("let u: UInt = g(18446744073709551615)\nprint(u)") + """
+
+            func g(_ i: Int) -> Int { 0 }
+            func g(_ u: UInt) -> UInt { 0 }
+            """
+        #expect(errors(source) == [])
+    }
+
+    @Test(arguments: ["g(5)", "g(100 + 200)", "g(1 - 2)", "g(1 + -2)"])
+    func `a literal both overloads hold, and arithmetic on literals, leave the call ambiguous`(call: String) {
+        let source = mainSource(call) + "\nfunc g(_ i: Int) {}\nfunc g(_ u: UInt) {}"
+        #expect(errors(source) == [.ambiguousCall(name: "g")])
+    }
+
+    @Test(arguments: ["h(-1)", "h(-(1 + 2))"])
+    func `a call whose negative argument no overload takes is reported as fitting none`(call: String) {
+        let source = mainSource(call) + "\nfunc h(_ u: UInt) {}\nfunc h(_ b: Bool) {}"
+        #expect(diagnostics(source).map(\.description) == [
+            "2:1: error[E0231]: no 'h' takes the arguments (Int)",
+        ])
+    }
+
+    @Test func `a negative literal passed to a function with no overload is reported at the literal`() {
+        let source = mainSource("k(-1)") + "\nfunc k(_ u: UInt) {}"
+        #expect(diagnostics(source).map(\.description) == [
+            "2:3: error[E0217]: the literal doesn't fit in a UInt",
+        ])
+    }
+
+    @Test(arguments: [
+        ("let u: UInt = if c { -1 } else { 2 }", "-1"),
+        ("let v: UInt = 2\nlet u = if c { -1 } else { v }", "-1"),
+        ("let v: UInt = 2\nprint(v + (if c { -1 } else { 2 }))", "-1"),
+        ("let v: UInt = 2\nprint(if c { -1 } else { v })", "-1"),
+        ("let a: [2 of UInt] = [1, -1]", "-1"),
+    ])
+    func `a negative literal inside a value that settles to UInt is reported at the literal`(
+        body: String, literal: String,
+    ) {
+        let (codes, covered) = codesAndCoverage(inMain: "let c = true\n\(body)")
+        #expect(codes == [.literalDoesntFit(type: "UInt")])
+        #expect(covered == [literal])
+    }
+
     @Test func `a literal with no position to type it is an Int`() {
         #expect(errors(mainSource("let x = 5\nlet u: UInt = x")) == [.typeMismatch(expected: "UInt", found: "Int")])
     }

@@ -116,8 +116,21 @@ extension UntypedValue: WaitingValue {
 
     var defaultType: RayoType? { .scalar(Self.integerDefault) }
 
-    /// Whether the value can settle to `type`. An integer literal fits every integer type, and nothing else.
+    /// Whether `type` is an integer type that takes the value as written, with no arithmetic worked out.
     func fits(_ type: RayoType, in _: Declarations) -> Bool {
+        guard case .scalar(let scalar) = type, let values = scalar.literalRange else { return false }
+        return switch self {
+        // A literal fits where its value is among the type's.
+        case .integer(let magnitude, let isNegative, _): values.contains(Self.value(magnitude, isNegative: isNegative))
+        // Only a signed type has `-`.
+        case .negation: scalar.isSigned
+        // Arithmetic fits every integer type, whatever its operands hold.
+        case .arithmetic: true
+        }
+    }
+
+    /// Whether `type` is an integer type, the only kind the value settles to.
+    func canSettle(to type: RayoType, in _: Declarations) -> Bool {
         type.isInteger
     }
 
@@ -126,9 +139,9 @@ extension UntypedValue: WaitingValue {
         let errors = expressions.file.errors
         let defaultType = RayoType.scalar(Self.integerDefault)
 
-        // A position whose type fits the value settles it to that type, and one that gives no type settles it to the
-        // default. A literal that type can't hold is reported, and keeps its value, since the value has that type.
-        guard let type, !fits(type, in: expressions.file.declarations) else {
+        // A position that expects an integer type settles the value to it, and one that gives no type settles it to
+        // the default. A literal that type can't hold is reported, and keeps its value, since the value has that type.
+        guard let type, !canSettle(to: type, in: expressions.file.declarations) else {
             let settledType = type ?? defaultType
             return settled(to: settledType, named: expressions.typeName(of: settledType), reporting: errors)
         }

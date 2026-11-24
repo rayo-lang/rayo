@@ -28,11 +28,16 @@ extension ArrayLiteral: WaitingValue {
         array(of: defaultElementType)
     }
 
-    /// Whether the literal can settle to `type`: an array of as many elements as the literal, each of which fits
-    /// its element type.
+    /// Whether `type` is an array of as many elements as the literal, each of which fits its element type.
     func fits(_ type: RayoType, in declarations: Declarations) -> Bool {
         guard case .array(let count, let element) = type, count == elements.count else { return false }
         return elements.allSatisfy { $0.fits(element, in: declarations) }
+    }
+
+    /// Whether `type` is an array of as many elements as the literal, each of which can settle to its element type.
+    func canSettle(to type: RayoType, in declarations: Declarations) -> Bool {
+        guard case .array(let count, let element) = type, count == elements.count else { return false }
+        return elements.allSatisfy { $0.canSettle(to: element, in: declarations) }
     }
 
     func settled(toward type: RayoType?, by expressions: ExpressionChecker) -> CheckedExpr? {
