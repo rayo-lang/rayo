@@ -135,6 +135,26 @@ struct AccessExtentTests {
         #expect(try checked(borrowingHit(then: blocks), beside: [pair]).errors == [damageMovedWhileBorrowed])
     }
 
+    @Test(arguments: [
+        // The move and the store in one statement, and the move in a statement of its own before the store.
+        "%1.0 @1:1-1:1 = operand move %0.0 @2:9-2:9 @1:1-1:1",
+        """
+        %2 @1:1-1:1 = operand move %0.0 @2:9-2:9 @1:1-1:1
+          %1.0 @1:1-1:1 = operand move %2 @1:1-1:1 @1:1-1:1
+        """,
+    ])
+    func `a move conflicts with no borrow once a store replaces all that later code reads of the dependent value`(
+        moveAndStore: String,
+    ) throws {
+        // The store replaces `r.damage`, the one part of `r` read later, so nothing reads what `r` borrowed of `h`.
+        let blocks = """
+              \(moveAndStore)
+              %2 @1:1-1:1 = operand read %1.0 @1:1-1:1 @1:1-1:1
+            """
+        let errors = try checked(borrowingHit(then: blocks)).errors
+        #expect(!errors.contains(damageMovedWhileBorrowed))
+    }
+
     @Test func `a read of a place that a live modify access overlaps conflicts with it`() throws {
         let blocks = """
             bb0:

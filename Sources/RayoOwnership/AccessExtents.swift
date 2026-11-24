@@ -48,9 +48,8 @@ struct AccessExtents {
         return holds
     }
 
-    /// The accesses live at each point of `block`, and just after each of `effects`, the block's as
-    /// `BasicBlock.effects` gives them: those that later code uses, those the values it reads depend on, and those
-    /// that these depend on in turn. Nil where no path reaches the block.
+    /// The accesses live at each point of `block`, and just after each of `effects`, which are the block's as
+    /// `BasicBlock.effects` gives them. Nil where no path reaches the block.
     func live(
         in block: BlockID, crossing effects: [[Effect]],
     ) -> (atPoints: [Set<AccessID>], afterEffects: [Set<AccessID>])? {
@@ -58,10 +57,10 @@ struct AccessExtents {
 
         // Walk back through what later code uses, keeping the accesses it uses and the locals it reads that may hold
         // a dependent value, before the block's first effect and after each of its effects.
-        var used = Array(repeating: LaterUses(accesses: [], readLocals: []), count: states)
+        var used = Array(repeating: LaterUses(accesses: [], readDependentLocals: []), count: states)
         let reached = uses.walkBetweenEffects(of: block) { effectsBefore, state in
-            let readLocals = state.values.readLocals.filter { holdsDependentValue[$0.index] }
-            used[effectsBefore] = LaterUses(accesses: state.accesses.ids, readLocals: readLocals)
+            let readDependentLocals = state.values.readLocals.filter { holdsDependentValue[$0.index] }
+            used[effectsBefore] = LaterUses(accesses: state.accesses.ids, readDependentLocals: readDependentLocals)
         }
         guard reached else { return nil }
 
@@ -141,7 +140,7 @@ struct AccessExtents {
         for access in uses.accesses {
             live.formUnion(dependencies.dependencies(of: access))
         }
-        for local in uses.readLocals {
+        for local in uses.readDependentLocals {
             live.formUnion(dependencies.dependencies(of: local))
         }
         return live
@@ -152,5 +151,5 @@ struct AccessExtents {
 /// hold a value that depends on an access.
 private struct LaterUses {
     var accesses: Set<AccessID>
-    var readLocals: [LocalID]
+    var readDependentLocals: [LocalID]
 }

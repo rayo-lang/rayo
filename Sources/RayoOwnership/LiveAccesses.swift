@@ -6,8 +6,13 @@ struct LiveAccesses: DataflowState {
 
     var direction: DataflowDirection { .backward }
 
+    /// The state at the end of a function, after which no code uses an access.
+    init() {
+        ids = []
+    }
+
     /// The accesses live where `ids` are.
-    init(_ ids: Set<AccessID> = []) {
+    private init(_ ids: Set<AccessID>) {
         self.ids = ids
     }
 
