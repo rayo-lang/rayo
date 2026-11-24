@@ -31,9 +31,13 @@ private let locals = """
 /// The errors that `statement`, after `locals` in `main`'s body, reports, each as its column, code and message. The
 /// statement is the line after the locals, so the line number says nothing more.
 private func messages(of statement: String) -> [String] {
-    errorLines(inMain: "\(locals)\n    \(statement)", beside: declarations).map { line in
-        String(line.drop { $0 != ":" }.dropFirst())
-    }
+    lineMessages(inMain: "\(locals)\n    \(statement)", beside: declarations)
+}
+
+/// The errors that `body`, as `main`'s body beside `declarations`, reports, each as its column, code and message,
+/// for a body whose errors are all on one line.
+private func lineMessages(inMain body: String, beside declarations: String) -> [String] {
+    errorLines(inMain: body, beside: declarations).map { line in String(line.drop { $0 != ":" }.dropFirst()) }
 }
 
 /// The errors that `declaration`, beside `declarations` and an empty `main`, reports, each as its position, code and
@@ -104,7 +108,6 @@ struct MutableParameterTests {
         ("heal(e)", 10, "heal", "mutable &Enemy", "e"), ("bump(e.stats.hp)", 10, "bump", "mutable &Int", "e.stats.hp"),
         ("heal(w.enemies[i])", 10, "heal", "mutable &Enemy", "w.enemies[i]"),
         ("bump(&a)", 10, "bump", "mutable &Int", "a"), ("bump(fixed)", 10, "bump", "mutable &Int", "fixed"),
-        ("bump(if c { a } else { mutable a })", 17, "bump", "mutable &Int", "a"),
     ])
     func `a place given to a 'mutable &T' parameter without 'mutable' names the 'mutable' to write`(
         statement: String, column: Int, callee: String, type: String, place: String,
@@ -118,6 +121,7 @@ struct MutableParameterTests {
         ("bump(1)", 10, "1"), ("bump(copy a)", 10, "copy a"), ("bump(a + 1)", 10, "a + 1"),
         ("heal(makeEnemy())", 10, "makeEnemy()"), ("bump(makeEnemy().stats.hp)", 10, "makeEnemy()"),
         ("bump(&makeEnemy().stats.hp)", 11, "makeEnemy()"),
+        ("bump(if c { a } else { e.stats.hp })", 10, "if c { a } else { e.stats.hp }"),
     ])
     func `a value given to a 'mutable &T' parameter is a temporary whose change does nothing`(
         statement: String, column: Int, temporary: String,
@@ -148,11 +152,16 @@ struct MutableParameterTests {
         #expect(messages(of: statement) == ["\(column): error[E0213]: expected \(expected), found \(found)"])
     }
 
-    // An `if` gives a value, and a call lends a parameter that borrows for change a place alone.
-    @Test func `an 'if' given to a 'mutable &T' parameter reports the 'mutable' of each branch as unsupported`() {
-        #expect(messages(of: "bump(if c { mutable a } else { mutable e.stats.hp })") == [
-            "17: error[E0289]: 'mutable' isn't supported", "36: error[E0289]: 'mutable' isn't supported",
-        ])
+    // An `if` gives a value, and a call lends a parameter that borrows for change a place alone, so each branch of
+    // the `if` takes no reference.
+    @Test(arguments: [
+        ("bump(if c { mutable a } else { mutable e.stats.hp })", [17, 36]),
+        ("bump(if c { a } else { mutable a })", [28]),
+    ])
+    func `an 'if' given to a 'mutable &T' parameter reports the 'mutable' of each branch as unsupported`(
+        statement: String, columns: [Int],
+    ) {
+        #expect(messages(of: statement) == columns.map { "\($0): error[E0289]: 'mutable' isn't supported" })
     }
 
     @Test func `functions whose parameters differ only in '&T' and 'mutable &T' are declared once each`() {
@@ -177,9 +186,6 @@ struct MutableParameterTests {
             func h(_ x: &Bool) {}
             func h(_ x: mutable &Bool) {}
             """
-        let reported = errorLines(inMain: "    var a = 1\n    \(call)", beside: overloads).map { line in
-            String(line.drop { $0 != ":" }.dropFirst())
-        }
-        #expect(reported == expected)
+        #expect(lineMessages(inMain: "    var a = 1\n    \(call)", beside: overloads) == expected)
     }
 }

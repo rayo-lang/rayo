@@ -117,16 +117,18 @@ extension ExpressionChecker {
     /// Reports `value`, written without a `mutable`, as the argument of `parameter`, which borrows its argument for
     /// change, and returns nil in its place. A place rooted in a local is reported with the `mutable` to write.
     func unmarkedLend(of value: CheckedExpr, to parameter: ArgumentParameter) -> CheckedExpr? {
-        if case .place(let place) = value.kind, place.local != nil {
-            let code = ErrorCode.unmarkedMutableLend(name: parameter.callee, type: spelling(of: parameter, value.type),
-                                                     place: file.spelling(of: place.range))
-            return refused(code, at: value.range)
-        }
-
+        let (code, range): (ErrorCode, SourceRange) = switch value.kind {
+        case .place(let place) where place.local != nil:
+            (.unmarkedMutableLend(name: parameter.callee, type: spelling(of: parameter, value.type),
+                                  place: file.spelling(of: place.range)), value.range)
         // Any other value is a temporary, or lies in one, so changing it would do nothing, since it dies with its
         // statement.
-        let temporary = if case .place(let place) = value.kind { place.root.range } else { value.range }
-        return refused(.assignToTemporary(temporary: file.spelling(of: temporary)), at: temporary)
+        case .place(let place):
+            (.assignToTemporary(temporary: file.spelling(of: place.root.range)), place.root.range)
+        default:
+            (.assignToTemporary(temporary: file.spelling(of: value.range)), value.range)
+        }
+        return refused(code, at: range)
     }
 
     /// The type of `parameter`, which takes a value of `type`, as an error names it: after the reference the

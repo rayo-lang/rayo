@@ -10,7 +10,7 @@ struct CallChecker {
     private typealias Match = (signature: Signature, arguments: [CheckedExpr])
 
     /// An argument as an error that names the call's arguments spells it.
-    private typealias TypedArgument = (label: String?, type: RayoType, reference: String)
+    private typealias TypedArgument = (label: String?, type: RayoType, convention: ParameterConvention)
 
     let expressions: ExpressionChecker
 
@@ -339,14 +339,14 @@ struct CallChecker {
     /// whether they take its `&` arguments.
     private func remaining(of fitting: [Signature],
                            passing values: [CheckedValue]) -> (candidates: [Signature], takeWrittenReferences: Bool) {
-        // A candidate whose parameters that borrow for change aren't those the call writes `mutable` for drops out;
-        // where all do, all stay, so the one reached reports how to write its arguments.
-        let lendingFit = fitting.filter { $0.takesLendsForChange(in: values) }
-        let marksFit = lendingFit.isEmpty ? fitting : lendingFit
+        // A candidate drops out where it borrows for change an argument written without `mutable`, or the other way
+        // round; where all do, all stay, so the one reached reports how to write its arguments.
+        let mutableLendsFit = fitting.filter { $0.takesMutableLends(in: values) }
+        let mutableFit = mutableLendsFit.isEmpty ? fitting : mutableLendsFit
         // A candidate that owns a `&` argument drops out; where all do, all stay, so the one reached reports how to
         // write it.
-        let takingReferences = marksFit.filter { $0.takesReferences(in: values) }
-        guard !takingReferences.isEmpty else { return (marksFit, false) }
+        let takingReferences = mutableFit.filter { $0.takesReferences(in: values) }
+        guard !takingReferences.isEmpty else { return (mutableFit, false) }
 
         // A candidate that needs a bare place lent drops out where another needs no conversion.
         let areReferences = countedAsReferences(values, by: takingReferences)
@@ -418,7 +418,7 @@ struct CallChecker {
             return
         }
         let typed = values.indices.map {
-            (label: labels[$0], type: types[$0], reference: writtenReference(of: values[$0]))
+            (label: labels[$0], type: types[$0], convention: writtenConvention(of: values[$0]))
         }
         errors.report(.noMatchingFunction(name: name, arguments: spelling(of: typed)), at: range)
     }
@@ -430,17 +430,16 @@ struct CallChecker {
         return expressions.settled(value, toward: nil)?.type
     }
 
-    /// The reference an error naming the call's arguments writes before `value`'s type: the one a parameter that
-    /// takes the value as the source writes it declares, such as `&` for a `&` of a place.
-    private func writtenReference(of value: CheckedValue) -> String {
-        let convention: ParameterConvention = if value.lendsForChange {
+    /// The convention of a parameter that takes `value` as the source writes it: one that borrows for change for a
+    /// `mutable`, one that borrows for a `&`, and one that owns for anything else.
+    private func writtenConvention(of value: CheckedValue) -> ParameterConvention {
+        if value.lendsForChange {
             .mutable
         } else if value.lendsPlace {
             .borrowed
         } else {
             .owned
         }
-        return convention.reference
     }
 
     /// Checks the values of `arguments` for their own errors, where no function's parameters take them.
@@ -454,7 +453,7 @@ struct CallChecker {
     private func spelling(of arguments: [TypedArgument]) -> String {
         let written = arguments.map { argument in
             let label = argument.label.map { "\($0): " } ?? ""
-            return label + argument.reference + "\(expressions.typeName(of: argument.type))"
+            return label + argument.convention.reference + "\(expressions.typeName(of: argument.type))"
         }
         return written.joined(separator: ", ")
     }
