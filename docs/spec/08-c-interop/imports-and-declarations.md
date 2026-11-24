@@ -62,7 +62,7 @@ import(c) "mylib.h" unsafe { struct sockaddr in "sys/socket.h" }   // take struc
 
 **Every imported C function is `unsafe` to call**, since a header can't say that a pointer outlives a call, or that a buffer holds `n` elements.
 
-**As a value, an imported function converts only to `@c` function pointer types**, whose calls are `unsafe` too ([05](../05-protocols-generics-and-closures/functions-and-closures.md#c-function-pointers)).
+**As a value, an imported function converts as any `unsafe func` does**: to `unsafe` function types and `Closure`s of them, and to `@c` function pointer types, whose calls all need `unsafe` ([05](../05-protocols-generics-and-closures/functions-and-closures.md#c-function-pointers)).
 
 **A `@safe` module can `import(c)` a header, to name its types and constants, but it can't call its functions or use its variables**, since both need `unsafe`, which such a module rejects ([10](../10-errors-and-safety/unsafe-code.md#safe-modules)).
 
@@ -257,4 +257,4 @@ extern(c) func pad_deadzone(_ v: Float) -> Float   // declared to Rayo; unsafe t
 
 **The declaration is an unverified promise that a library or object file the build links defines a C function of that name and signature** ([10](../10-errors-and-safety/unsafe-code.md#unverified-promises)). The compiler can't check it, since it never sees that function's source.
 
-**A C function's code comes from what the build links, never from a Rayo module.** A program's own C code is compiled apart from its Rayo modules, by a C compiler such as `cc`, and the compiler links the object files and libraries the build gives it ([09](../09-compile-time/attributes-and-runtime-data.md#what-a-build-declares)). The same holds for the functions an imported header declares. The only C that a build compiles itself is the `static` definitions that an import reaches ([above](#what-imports-as-what)).
+**A C function's code comes from what the build links, except the `static` definitions that an import compiles itself ([above](#what-imports-as-what)).** A program's own C code is compiled apart from its Rayo modules, by a C compiler such as `cc`, and the compiler links the object files and libraries the build gives it ([09](../09-compile-time/attributes-and-runtime-data.md#what-a-build-declares)). That holds for an `extern(c) func` and for the functions an imported header declares alike.

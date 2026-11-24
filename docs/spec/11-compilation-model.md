@@ -209,8 +209,6 @@ So an address passed on through any chain of threads, by `.relaxed` atomics incl
 
 **Every function the implementation supplies guards the stack as a Rayo frame does**, its runtime's and its software routines' included. It probes the stack as it grows it, or, where the platform has no guard pages, checks on entry that the stack it needs is left ([10](10-errors-and-safety/panics.md#running-out-of-stack)). So none of them writes past a stack's end.
 
-**No software routine allocates** ([06](06-memory-and-allocators/allocation-lifecycle.md#allocation-failure)).
-
 **A target needs no floating-point hardware**, since a floating-point operation its processor lacks is computed in software, with the same result ([04](04-types/numbers-and-math.md#floating-point)).
 
 ### WebAssembly

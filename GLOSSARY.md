@@ -525,7 +525,7 @@ A tagged union with one member per error type, written `(IoError | ParseError)`,
 The `Failure` of a `Result`, and of a function whose result type is one: the errors it can fail with, `Never` for none ([10](docs/spec/10-errors-and-safety/typed-errors.md#results)).
 
 **Guard page**:
-Memory below a stack that faults when touched, which the runtime turns into ending the program when the stack runs out ([10](docs/spec/10-errors-and-safety/panics.md#running-out-of-stack)).
+Memory below a stack whose fault, when code touches it, the runtime turns into ending the program, so running out of stack never writes past the stack's end ([10](docs/spec/10-errors-and-safety/panics.md#running-out-of-stack)).
 
 **Memory-safety check**:
 A run-time check, such as a bounds check, that keeps safe code sound; it is on in every build ([10](docs/spec/10-errors-and-safety/checks-and-build-modes.md#check-levels)).

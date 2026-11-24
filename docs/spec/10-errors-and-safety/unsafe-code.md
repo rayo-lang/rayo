@@ -43,7 +43,7 @@ let total = unsafe (a.pointee + b.pointee)  // covers both reads
 **No `unsafe` call is hidden**, so every promise that `unsafe` code makes is made at a visible `unsafe` site.
 
 - **An `unsafe` declaration** is used only inside `unsafe`, or through an `unsafe` function type, an `unsafe` requirement or a `: unsafe P` conformance. That holds for an `unsafe` declaration of any kind: a function, an initializer, an operator, a subscript or an accessor.
-- **An imported or `extern(c)` function** is used only inside `unsafe`, or through a `@c` pointer, whose calls need `unsafe` ([05](../05-protocols-generics-and-closures/functions-and-closures.md#c-function-pointers)).
+- **An imported or `extern(c)` function** is an `unsafe` function, so it is used only inside `unsafe`, or through an `unsafe` function type or a `@c` pointer, whose calls need `unsafe` ([05](../05-protocols-generics-and-closures/functions-and-closures.md#c-function-pointers)).
 
 So a call the language makes on the code's behalf is allowed only where the call written out would be. Examples are a `@converts` initializer under `try` ([Propagating errors with `try`](typed-errors.md#propagating-errors-with-try)), and the `==` of an expression pattern ([04](../04-types/enums.md#matching-with-when-and-choosing-with-if)).
 

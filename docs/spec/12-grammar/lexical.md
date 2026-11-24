@@ -13,8 +13,7 @@ float-literal= digits '.' digits exponent? | digits exponent ;      (* '_' allow
 exponent     = ('e' | 'E') ('+' | '-')? digits ;
 string-lit   = '"' (char | escape | '\(' expression ')')* '"'
              | '"""' newline (char | newline | escape | '\(' expression ')')* newline (' ' | '\t')* '"""' ;
-plain-string-lit = '"' (char | escape)* '"'
-             | '"""' newline (char | newline | escape)* newline (' ' | '\t')* '"""' ;   (* no interpolation: the strings C reads (08) *)
+plain-string-lit = '"' (char | escape)* '"' ;                     (* no interpolation: an import's header names and its prefix (08) *)
 escape       = '\' ('0' | 'n' | 'r' | 't' | '\' | '"' | "'" | 'u{' hexdigits '}') ;
 comment      = '//' to-end-of-line | '/*' nested-comment '*/' ;
 ```

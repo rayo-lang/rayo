@@ -188,15 +188,17 @@ f(mutable x)           // fine: if f panics, its borrow of x has ended by the ti
 
 ### Running out of stack
 
-**Running out of stack ends the program before anything is written past the stack's end.** Three things make sure of it:
+**Running out of stack ends the program before anything is written past the stack's end, by one of two means.** A platform that can protect memory below a stack guards each stack with a guard page. One that can't, as WebAssembly can't protect its linear memory, has each frame check its stack on entry instead ([below](#stacks-without-guard-pages)).
+
+**Where the platform can protect memory below a stack, three things catch it:**
 
 - **A guard page.** Every stack that Rayo code runs on has a **guard page** below it: at least a page of memory that faults when code touches it. The platform gives each thread's own stack one, and C that switches a thread to a stack of its own, as a fiber scheduler does, gives that stack one ([08](../08-c-interop/c-contract-and-embedding.md#what-c-must-uphold)).
-- **Probes.** A Rayo frame that grows the stack touches it at least once in each page, in order from the top, so it reaches the guard page before any memory below it. Every function the implementation supplies does the same ([11](../11-compilation-model.md#what-a-target-must-provide)).
-- **The fault handler.** The runtime turns a fault in a guard page into ending the program, with a report that the stack ran out ([above](#what-ends-the-program)). It runs on a stack of its own, since the stack that faulted has no room left. It tells the fault from any other by the bounds of the stack the thread runs on, which it knows for each thread's own stack and for each stack C declares ([08](../08-c-interop/c-contract-and-embedding.md#embedding-rayo-in-a-c-program)).
+- **Probes.** A Rayo frame that grows the stack touches it at least once in each page, in order from the top, so it reaches the guard page before any memory below it. The functions the implementation supplies guard the stack as Rayo frames do ([11](../11-compilation-model.md#what-a-target-must-provide)), and C's frames as C's contract asks ([08](../08-c-interop/c-contract-and-embedding.md#what-c-must-uphold)).
+- **The fault handler.** The runtime turns a fault in a guard page into ending the program, with a report that the stack ran out ([above](#what-ends-the-program)). The handler runs with stack space of its own, since the stack that faulted has none left: an alternate stack, or space the platform reserves below the guard page. It tells the fault from any other by the bounds of the stack the thread runs on, and passes any other fault on ([08](../08-c-interop/c-contract-and-embedding.md#what-the-runtime-needs-from-the-platform)).
 
-**C's frames run on the same stacks, and are C's to guard** ([08](../08-c-interop/c-contract-and-embedding.md#what-c-must-uphold)). C compiled with stack-clash protection probes its stack as Rayo frames do, so running out of stack in it reaches the guard page, and ends the program with the report too.
+#### Stacks without guard pages
 
-**A platform that can't protect memory below a stack has no guard pages, so there each Rayo frame checks on entry that the stack it needs is left.** The check reads the bounds the runtime knows for the stack, and ends the program with the report when too little is left. Every function the implementation supplies checks the same way there. WebAssembly is such a platform, for the stack in its linear memory. Its engine's own call stack isn't checked: there the engine traps, which ends the program without the report ([11](../11-compilation-model.md#webassembly)).
+**Where the platform can't protect memory below a stack, each Rayo frame checks on entry that the stack it needs is left.** The check reads the bounds the runtime knows for the stack, and ends the program with the report when too little is left. WebAssembly is such a platform, for the stack in its linear memory. Its engine's own call stack isn't checked: there the engine traps, which ends the program without the report ([11](../11-compilation-model.md#webassembly)).
 
 ## Catching a panic: `catchPanic`
 

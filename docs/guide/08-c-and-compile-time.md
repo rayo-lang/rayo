@@ -43,7 +43,7 @@ Rayo maps each C declaration to the closest Rayo form ([08](../spec/08-c-interop
 
 A C pointer imports as a raw pointer that may be null, `*T?`, unless the header marks it `_Nonnull` ([below](#raw-pointers)). C's `int` and `char` become `CInt` and `CChar`, whose size and signedness follow the target. In the same way `size_t` becomes `CSize`, which is as wide as the target's pointers: 32 bits on a 32-bit target, though Rayo's `Int` is 64 bits on every target. A C enum is **open**: it may hold any value of its underlying type, so a `when` over it needs an `else` ([08](../spec/08-c-interop/imports-and-declarations.md#structs-unions-and-enums)).
 
-Function-like macros do not import, such as the header's `PLATFORM_PAD_DEADZONE(v)`, which zeroes a stick reading near the center. To use one, wrap it in a C function of your own, and declare that function to Rayo with `extern(c) func` ([08](../spec/08-c-interop/imports-and-declarations.md#declaring-c-functions)):
+Function-like macros, such as the header's `PLATFORM_PAD_DEADZONE(v)`, which zeroes a stick reading near the center, do not import. To use one, wrap it in a C function of your own, and declare that function to Rayo with `extern(c) func` ([08](../spec/08-c-interop/imports-and-declarations.md#declaring-c-functions)):
 
 ```c
 // deadzone.c, the game's own C
