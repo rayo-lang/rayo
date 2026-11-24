@@ -27,17 +27,19 @@ func main() {
 func fight(_ hero: &Hero, against waves: &[2 of [3 of Enemy]]) -> [2 of UInt] {
     // The fight changes copies of the hero's health and of each wave, so the next hero meets the same waves.
     var hp = hero.hp
+
     ref let combo = &hero.combo
+    let sides: [2 of Int] = [-1, 1]
     var fellIn: [2 of UInt] = .init(repeating: 0)
     var round: UInt = 0
-    var next: UInt = 0
-    while hp > 0 && next < waves.count {
-        var wave = copy waves[next]
+    var wave: UInt = 0
+    while hp > 0 && wave < waves.count {
+        var enemies = copy waves[wave]
         while hp > 0 {
             // A wave has fallen once its strongest enemy has.
-            let target = strongest(in: wave)
-            if wave[target].hp <= 0 {
-                fellIn[next] = round
+            let target = strongest(in: enemies)
+            if enemies[target].hp <= 0 {
+                fellIn[wave] = round
                 break
             }
             round += 1
@@ -45,20 +47,19 @@ func fight(_ hero: &Hero, against waves: &[2 of [3 of Enemy]]) -> [2 of UInt] {
 
             // The hero's blows follow its combo, which starts over once it runs out.
             let blow = combo[(round - 1) % combo.count]
-            wave[target].hp -= damage(from: blow, on: wave[target])
-            print(wave[target].hp)
+            enemies[target].hp -= damage(from: blow, on: enemies[target])
+            print(enemies[target].hp)
 
             // The blow cleaves into each standing enemy beside the target for half as much. A target at either end
             // of the wave has no enemy on that side.
-            let sides: [2 of Int] = [-1, 1]
             var side: UInt = 0
             while side < sides.count {
                 let beside = Int(target) + sides[side]
-                if beside >= 0 && beside < Int(wave.count) {
+                if beside >= 0 && beside < Int(enemies.count) {
                     let enemy = UInt(beside)
-                    if wave[enemy].hp > 0 {
-                        wave[enemy].hp -= damage(from: blow / 2, on: wave[enemy])
-                        print(wave[enemy].hp)
+                    if enemies[enemy].hp > 0 {
+                        enemies[enemy].hp -= damage(from: blow / 2, on: enemies[enemy])
+                        print(enemies[enemy].hp)
                     }
                 }
                 side += 1
@@ -66,14 +67,14 @@ func fight(_ hero: &Hero, against waves: &[2 of [3 of Enemy]]) -> [2 of UInt] {
 
             // Each enemy still standing strikes the hero back.
             var enemy: UInt = 0
-            while enemy < wave.count {
-                ref let foe = &wave[enemy]
+            while enemy < enemies.count {
+                ref let foe = &enemies[enemy]
                 if foe.hp > 0 { hp -= foe.attack }
                 enemy += 1
             }
             print(hp)
         }
-        next += 1
+        wave += 1
     }
     return consume fellIn
 }
@@ -95,11 +96,11 @@ func damage(from strength: Int, on enemy: &Enemy) -> Int {
 }
 
 // Gives the index of the enemy with the most health, the first of them on a tie.
-func strongest(in wave: &[3 of Enemy]) -> UInt {
+func strongest(in enemies: &[3 of Enemy]) -> UInt {
     var strongest: UInt = 0
     var enemy: UInt = 1
-    while enemy < wave.count {
-        if wave[enemy].hp > wave[strongest].hp { strongest = enemy }
+    while enemy < enemies.count {
+        if enemies[enemy].hp > enemies[strongest].hp { strongest = enemy }
         enemy += 1
     }
     return strongest
