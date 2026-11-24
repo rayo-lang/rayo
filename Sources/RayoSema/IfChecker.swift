@@ -73,6 +73,13 @@ struct IfChecker {
 
     /// Settles each branch of `value` to the type `expected` names, reporting each branch of another type there.
     func settled(_ value: IfValue, expecting expected: Expectation) -> CheckedExpr? {
+        // A parameter that borrows its argument for change takes a place, which an `if` is not: its branches settle
+        // as a value's do, and the value it gives is a temporary.
+        if let parameter = expected.recipient?.mutableParameter {
+            let valueExpected = Expectation(expected.type, mismatch: expected.mismatch)
+            return settled(value, expecting: valueExpected).flatMap { expressions.unmarkedLend(of: $0, to: parameter) }
+        }
+
         // Both branches settle, so each one's errors are reported, before either failure fails the `if`.
         let then = settled(value.then, expecting: expected)
         let otherwise = settled(value.otherwise, expecting: expected)

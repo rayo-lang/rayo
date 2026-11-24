@@ -110,6 +110,12 @@ extension IfValue: WaitingValue {
         ends.contains { $0.isReached && ($0.value?.mayLendPlace ?? false) }
     }
 
+    /// Whether every branch that runs to its end ends in a `mutable` of a place.
+    var lendsForChange: Bool {
+        let reached = ends.filter(\.isReached)
+        return !reached.isEmpty && reached.allSatisfy { $0.value?.lendsForChange ?? false }
+    }
+
     func settled(toward type: RayoType?, by expressions: ExpressionChecker) -> CheckedExpr? {
         IfChecker(expressions: expressions).settled(self, toward: type, takenBy: nil)
     }

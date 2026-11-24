@@ -123,10 +123,11 @@ struct ReferenceParameterTests {
     }
 
     @Test(arguments: [
-        ("show(mutable e)", 10), ("read(mutable e.stats.hp)", 10), ("take(mutable a)", 10), ("_ = mutable a", 9),
-        ("let x = mutable a", 13), ("a = mutable a", 9), ("show(mutable makeEnemy())", 10),
+        ("_ = mutable a", 9), ("let x = mutable a", 13), ("a = mutable a", 9), ("show(mutable makeEnemy())", 10),
     ])
-    func `'mutable' outside a 'ref var' is reported as unsupported`(statement: String, column: Int) {
+    func `'mutable' outside a call's arguments and a 'ref var', or of a temporary, is reported as unsupported`(
+        statement: String, column: Int,
+    ) {
         #expect(messages(of: statement) == ["\(column): error[E0289]: 'mutable' isn't supported"])
     }
 
@@ -173,18 +174,6 @@ struct ReferenceParameterTests {
     ])
     func `a parameter may own or borrow a value of any type`(declaration: String) {
         #expect(declarationMessages(of: declaration) == [])
-    }
-
-    @Test func `a 'mutable &T' parameter is reported as unsupported`() {
-        #expect(declarationMessages(of: "func f(_ e: mutable &Enemy) {}") == [
-            "3:8: error[E0232]: 'mutable &' parameters aren't supported",
-        ])
-    }
-
-    @Test func `a call of a function whose parameter is 'mutable &T' reports nothing more`() {
-        let body = "    var x = 1\n    bump(x)\n    bump(&x)\n    bump(mutable x)\n    print(x)"
-        let source = "func main() {\n\(body)\n}\nfunc bump(_ n: mutable &Int) {}"
-        #expect(errors(source) == [.unsupportedConvention(convention: "mutable &")])
     }
 
     @Test func `a parameter that owns an Int may change, and one that borrows it can't`() {

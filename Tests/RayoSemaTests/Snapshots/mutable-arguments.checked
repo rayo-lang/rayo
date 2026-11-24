@@ -1,0 +1,51 @@
+struct Enemy {
+  var hp: Int
+}
+
+main "main()"
+
+init "Enemy(hp: Int)"(hp: Int) -> Enemy
+
+func "main()"() -> Void {
+  var %0 e: Enemy @2:9-2:10
+  bind %0 @2:9-2:10
+    call "Enemy(hp: Int)": Enemy @2:13-2:25
+      integer 1: Int @2:23-2:24
+  expression
+    call "heal(_: mutable &Enemy)": Void @3:5-3:20
+      mutable
+        place %0 @3:18-3:19
+  expression
+    call "heal(_: &Enemy)": Void @4:5-4:12
+      &
+        value: Enemy @4:10-4:11
+          place %0 @4:10-4:11
+  expression
+    call "bump(_: mutable &Int)": Void @5:5-5:23
+      mutable
+        place %0 @5:18-5:19 .0 @5:18-5:22
+}
+
+func "heal(_: mutable &Enemy)"(_: mutable &Enemy) -> Void {
+  param %0 e: mutable &Enemy @7:13-7:14
+  return
+    call "bump(_: mutable &Int)": Void @7:34-7:52
+      mutable
+        place %0 @7:47-7:48 .0 @7:47-7:51
+}
+
+func "heal(_: &Enemy)"(_: &Enemy) -> Void {
+  param %0 e: &Enemy @8:13-8:14
+  return
+    call builtin "print(_: &Int)": Void @8:26-8:37
+      &
+        value: Int @8:32-8:36
+          place %0 @8:32-8:33 .0 @8:32-8:36
+}
+
+func "bump(_: mutable &Int)"(_: mutable &Int) -> Void {
+  param %0 n: mutable &Int @9:13-9:14
+  compound-assign add
+    place %0 @9:32-9:33
+    integer 1: Int @9:37-9:38
+}

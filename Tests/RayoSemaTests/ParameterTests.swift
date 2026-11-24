@@ -108,16 +108,11 @@ struct ParameterTests {
             [.typeMismatch(expected: "Bool", found: "Int")])
     }
 
-    @Test("'mutable &' parameters and default values aren't supported", arguments: [
-        ("func f(x: mutable &Int) {}", [ErrorCode.unsupportedConvention(convention: "mutable &")],
-         ["x: mutable &Int"]),
-        ("func f(x: Int = 1 + 2) {}", [.defaultArgument], ["1 + 2"]),
-    ])
-    func unsupported(declaration: String, expected: [ErrorCode], covered: [String]) {
-        let source = "func main() {}\n" + declaration
+    @Test func `default values aren't supported, and the error covers the value`() {
+        let source = "func main() {}\nfunc f(x: Int = 1 + 2) {}"
         let reported = diagnostics(source)
-        #expect(reported.map(\.code) == expected)
-        #expect(coveredText(reported, in: source) == covered)
+        #expect(reported.map(\.code) == [.defaultArgument])
+        #expect(coveredText(reported, in: source) == ["1 + 2"])
     }
 
     @Test("a parameter can't have type Void, and the error covers its type, whether or not the function is called",

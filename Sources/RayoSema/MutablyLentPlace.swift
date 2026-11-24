@@ -2,7 +2,8 @@ import RayoCheckedProgram
 import RayoSource
 
 /// `mutable place`, checked on its own: the place it lends for change, the type of the value the place holds, and
-/// where the source writes it. It waits for its position, since only a `ref var`'s value takes it.
+/// where the source writes it. It waits for its position, since only the argument of a parameter that borrows for
+/// change, and a `ref var`'s value, take it.
 struct MutablyLentPlace {
     var place: CheckedPlace
     /// The type of the value the place holds.
@@ -25,6 +26,8 @@ extension MutablyLentPlace: WaitingValue {
     func fits(_ type: RayoType, in declarations: Declarations) -> Bool {
         TypeFit.fits(placeType, type)
     }
+
+    var lendsForChange: Bool { true }
 
     /// Reports the `mutable`, since a position that expects at most a type takes no reference.
     func settled(toward type: RayoType?, by expressions: ExpressionChecker) -> CheckedExpr? {

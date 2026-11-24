@@ -100,7 +100,8 @@ extension ExpressionChecker {
 
     /// `lent`, a `&` of a place, as the argument of `parameter`, of the type `expected` names. A parameter that
     /// borrows takes the place itself, where a local holds it. One that owns its argument reports the `&`, since
-    /// nothing written says whether the call copies the place's value or moves it.
+    /// nothing written says whether the call copies the place's value or moves it, and one that borrows it for change
+    /// reports it as a place written without its `mutable`.
     private func lent(_ lent: LentPlace, to parameter: ArgumentParameter, _ expected: Expectation) -> CheckedExpr? {
         switch parameter.convention {
         case .borrowed:
@@ -108,20 +109,49 @@ extension ExpressionChecker {
         case .owned:
             refused(.referenceToOwnedParameter(name: parameter.callee, type: typeName(of: expected.type)),
                     at: lent.range)
-        // Checking leaves a `mutable &` parameter that the source writes without a type, and no built-in or
-        // initializer takes its argument for change, so no argument stands where one is expected.
         case .mutable:
-            preconditionFailure("no parameter that checking declares borrows its argument for change")
+            typeFitted(lent.placeExpression, to: expected).flatMap { unmarkedLend(of: $0, to: parameter) }
         }
     }
 
-    /// `lent`, a `mutable` of a place, where a position expects what `expected` names. A `ref var` takes the place,
-    /// and any other position reports the `mutable`.
+    /// Reports `value`, written without a `mutable`, as the argument of `parameter`, which borrows its argument for
+    /// change, and returns nil in its place. A place rooted in a local is reported with the `mutable` to write.
+    func unmarkedLend(of value: CheckedExpr, to parameter: ArgumentParameter) -> CheckedExpr? {
+        let (code, range): (ErrorCode, SourceRange) = switch value.kind {
+        case .place(let place) where place.local != nil:
+            (.unmarkedMutableLend(name: parameter.callee, type: spelling(of: parameter, value.type),
+                                  place: file.spelling(of: place.range)), value.range)
+        // Any other value is a temporary, or lies in one, so changing it would do nothing, since it dies with its
+        // statement.
+        case .place(let place):
+            (.assignToTemporary(temporary: file.spelling(of: place.root.range)), place.root.range)
+        default:
+            (.assignToTemporary(temporary: file.spelling(of: value.range)), value.range)
+        }
+        return refused(code, at: range)
+    }
+
+    /// The type of `parameter`, which takes a value of `type`, as an error names it: after the reference the
+    /// parameter takes, such as `mutable &Enemy`.
+    private func spelling(of parameter: ArgumentParameter, _ type: RayoType) -> String {
+        parameter.convention.reference + "\(typeName(of: type))"
+    }
+
+    /// `lent`, a `mutable` of a place, where a position expects what `expected` names. A parameter that borrows its
+    /// argument for change, and a `ref var`, take the place. Any other parameter reports the `mutable` with the type
+    /// it takes, and any other position reports it as unsupported.
     func mutablyLent(_ lent: MutablyLentPlace, to expected: Expectation) -> CheckedExpr? {
         switch expected.recipient {
+        case .parameter(let parameter)? where parameter.convention == .mutable:
+            typeFitted(lent.placeExpression, to: expected)
         // The `ref var` itself is reported as unsupported, so its place reports nothing more.
-        case .declaration(.refVar)?: typeFitted(lent.placeExpression, to: expected)
-        default: refused(.unsupportedMutableReference, at: lent.range)
+        case .declaration(.refVar)?:
+            typeFitted(lent.placeExpression, to: expected)
+        case .parameter(let parameter)?:
+            refused(.mutableToNonMutableParameter(name: parameter.callee, type: spelling(of: parameter, expected.type)),
+                    at: lent.range)
+        default:
+            refused(.unsupportedMutableReference, at: lent.range)
         }
     }
 
