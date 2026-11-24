@@ -25,8 +25,8 @@ struct LivenessState: DataflowState {
     }
 
     /// The locals holding a value, in whole or in part, that some code reads later.
-    var readLocals: Set<LocalID> {
-        Set(live.keys)
+    var readLocals: some Collection<LocalID> {
+        live.keys
     }
 
     var direction: DataflowDirection { .backward }

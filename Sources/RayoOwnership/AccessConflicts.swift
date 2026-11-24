@@ -29,11 +29,10 @@ struct AccessConflicts {
         self.accesses = accesses
     }
 
-    /// Finds the conflicts at each effect of `block`'s statements and terminator, in their order, where `liveAfter`
-    /// holds the accesses live just after each, as `AccessExtents.liveAfterEffects(in:)` gives them. So a call's
-    /// operands meet the accesses it passes, and its store meets only those that outlive it.
-    mutating func check(_ block: BlockID, liveAfter: [Set<AccessID>]) {
-        let effects = places.body.blocks[block.index].effects.joined()
+    /// Finds the conflicts at each of `effects`, a block's in their order, where `liveAfter` holds the accesses live
+    /// just after each, as `AccessExtents` gives them. So a call's operands meet the accesses it passes, and its
+    /// store meets only those that outlive it.
+    mutating func check(_ effects: some Sequence<Effect>, liveAfter: [Set<AccessID>]) {
         for (effect, live) in zip(effects, liveAfter) {
             check(effect, against: live)
         }

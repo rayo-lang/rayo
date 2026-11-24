@@ -4,7 +4,7 @@ import RayoIR
 /// Where each access of a function is live: from where it begins through its last use on each path, and through the
 /// last use of every value that depends on it. Where paths join, an access is live if it is live on any of them.
 ///
-/// Each question is about the points of one block: index `i` is just before the statement at `i`, the number of
+/// Each question is about one block. Of its points, index `i` is just before the statement at `i`, the number of
 /// statements is just before the terminator, and the last index is just after it.
 struct AccessExtents {
     private let body: IRBody
@@ -14,11 +14,15 @@ struct AccessExtents {
     private let dependencies: DataflowResults<DependencyState>
     /// The accesses that some path to each point has not begun, carried forward.
     private let unbegun: DataflowResults<UnbegunAccessState>
+    /// Whether some statement makes a value in each local depend on an access, indexed by `LocalID`. A read of any
+    /// other local keeps no access live.
+    private let holdsDependentValue: [Bool]
 
     /// The extents of the accesses of `body`, where `uses` says what code after each of its points uses.
     init(_ body: IRBody, uses: DataflowResults<AccessUseState>) {
         self.body = body
         self.uses = uses
+        holdsDependentValue = Self.localsHoldingDependentValues(in: body)
 
         let (dependencyEntry, unbegunEntry) = Self.entryStates(of: body)
         dependencies = DataflowSolver.solve(from: dependencyEntry, through: body, knowing: ())
@@ -33,41 +37,48 @@ struct AccessExtents {
         return (DependencyState(entering: body, accessCount: accessCount), UnbegunAccessState(accessCount: accessCount))
     }
 
-    /// The accesses live at each point of `block`: those that code after the point uses, those the values it reads
-    /// depend on, and those that these depend on in turn. Nil where no path reaches the block.
-    func live(in block: BlockID) -> [Set<AccessID>]? {
-        let points = body.blocks[block.index].statements.count + 2
+    /// Whether some statement of `body` makes a value in each of its locals depend on an access, indexed by `LocalID`.
+    private static func localsHoldingDependentValues(in body: IRBody) -> [Bool] {
+        var holds = Array(repeating: false, count: body.locals.count)
+        for block in body.blocks {
+            for case .depend(let place, _) in block.statements {
+                holds[place.root.index] = true
+            }
+        }
+        return holds
+    }
 
-        // Walk back through what later code uses, keeping at each point the accesses it uses and the locals it reads.
-        var used = Array(repeating: LaterUses(accesses: [], readLocals: []), count: points)
-        let reached = uses.walk(block) { point, state in used[point] = LaterUses(state) }
+    /// The accesses live at each point of `block`, and just after each of `effects`, the block's as
+    /// `BasicBlock.effects` gives them: those that later code uses, those the values it reads depend on, and those
+    /// that these depend on in turn. Nil where no path reaches the block.
+    func live(
+        in block: BlockID, crossing effects: [[Effect]],
+    ) -> (atPoints: [Set<AccessID>], afterEffects: [Set<AccessID>])? {
+        let states = effects.joined().count + 1
+
+        // Walk back through what later code uses, keeping the accesses it uses and the locals it reads that may hold
+        // a dependent value, before the block's first effect and after each of its effects.
+        var used = Array(repeating: LaterUses(accesses: [], readLocals: []), count: states)
+        let reached = uses.walkBetweenEffects(of: block) { effectsBefore, state in
+            let readLocals = state.values.readLocals.filter { holdsDependentValue[$0.index] }
+            used[effectsBefore] = LaterUses(accesses: state.accesses.ids, readLocals: readLocals)
+        }
         guard reached else { return nil }
 
         // Walk forward through what values depend on, which carries the uses to the accesses behind them.
-        var live = Array(repeating: Set<AccessID>(), count: points)
-        dependencies.walk(block) { point, state in
-            live[point] = Self.live(using: used[point], dependingOn: state)
+        var live = Array(repeating: Set<AccessID>(), count: states)
+        dependencies.walkBetweenEffects(of: block) { effectsBefore, state in
+            live[effectsBefore] = Self.live(using: used[effectsBefore], dependingOn: state)
         }
-        return live
-    }
 
-    /// The accesses live just after each effect of `block`, by the rule `live(in:)` keeps between statements: one set
-    /// for each effect of its statements in turn, then of its terminator. Nil where no path reaches the block.
-    func liveAfterEffects(in block: BlockID) -> [Set<AccessID>]? {
-        // Walk back through what later code uses, keeping what the code after each effect uses, the last effect first.
-        var used: [LaterUses] = []
-        let reached = uses.walkEffects(of: block) { _, state in used.append(LaterUses(state)) }
-        guard reached else { return nil }
-
-        // Walk forward through what values depend on once each effect is done, which carries the uses after the
-        // effect to the accesses behind them.
-        var live: [Set<AccessID>] = []
-        dependencies.walkEffects(of: block) { effect, before in
-            var after = before
-            after.apply(effect, in: ())
-            live.append(Self.live(using: used[used.count - 1 - live.count], dependingOn: after))
+        // A point comes after every effect of the statements before it, and the last point after the terminator's.
+        var atPoints = [live[0]]
+        var effectsBefore = 0
+        for crossing in effects {
+            effectsBefore += crossing.count
+            atPoints.append(live[effectsBefore])
         }
-        return live
+        return (atPoints, Array(live.dropFirst()))
     }
 
     /// The accesses held at each point of each block, given those `live` there, or nil for a block that no path
@@ -137,18 +148,9 @@ struct AccessExtents {
     }
 }
 
-/// What the code after a point uses: the accesses it uses, and the locals it reads a value inside.
+/// What the code after a point uses: the accesses it uses, and the locals it reads a value inside, of those that may
+/// hold a value that depends on an access.
 private struct LaterUses {
     var accesses: Set<AccessID>
-    var readLocals: Set<LocalID>
-
-    init(accesses: Set<AccessID>, readLocals: Set<LocalID>) {
-        self.accesses = accesses
-        self.readLocals = readLocals
-    }
-
-    /// What the code after the point of `state` uses.
-    init(_ state: AccessUseState) {
-        self.init(accesses: state.accesses.ids, readLocals: state.values.readLocals)
-    }
+    var readLocals: [LocalID]
 }

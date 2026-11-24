@@ -15,18 +15,20 @@ enum ExclusivityChecker {
         let accesses = places.body.begunAccesses
         guard !accesses.isEmpty else { return (places.body, []) }
 
-        // Check each block that a path reaches, against the accesses live after each of its effects; a block that none
-        // reaches runs no access.
+        // Work out where each access is live, at each point of each block and after each of its effects.
         let extents = AccessExtents(places.body, uses: uses)
+        let effects = places.body.blocks.map(\.effects)
+        let live = effects.enumerated().map { extents.live(in: BlockID(index: $0), crossing: $1) }
+
+        // Check each block that a path reaches; one that none reaches runs no access.
         var conflicts = AccessConflicts(places: places, accesses: accesses)
-        for block in places.body.blocks.indices.map(BlockID.init) {
-            guard let liveAfter = extents.liveAfterEffects(in: block) else { continue }
-            conflicts.check(block, liveAfter: liveAfter)
+        for (blockEffects, blockLive) in zip(effects, live) {
+            guard let blockLive else { continue }
+            conflicts.check(blockEffects.joined(), liveAfter: blockLive.afterEffects)
         }
 
-        // Each access ends after the last point where it is held, given where it is live between statements.
-        let live = places.body.blocks.indices.map { extents.live(in: BlockID(index: $0)) }
-        let held = extents.held(given: live)
+        // Each access ends after the last point where it is held.
+        let held = extents.held(given: live.map { $0?.atPoints })
         return (AccessEnds.written(into: places.body, held: held), conflicts.errors)
     }
 }
