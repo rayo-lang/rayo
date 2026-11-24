@@ -45,8 +45,12 @@ enum LocalRetirements {
     /// The locals that some statement of `body` declares.
     private static func declaredLocals(in body: IRBody) -> Set<LocalID> {
         var declared: Set<LocalID> = []
-        for case .declare(let local) in body.blocks.flatMap(\.statements).flatMap(\.effects) {
-            declared.insert(local)
+        for block in body.blocks {
+            for statement in block.statements {
+                statement.forEachEffect { effect in
+                    if case .declare(let local) = effect { declared.insert(local) }
+                }
+            }
         }
         return declared
     }
@@ -61,7 +65,9 @@ enum LocalRetirements {
             // A local retires after the statement that it is in use before, or that declares it, where it isn't in
             // use after.
             var retiring = inUse[index]
-            for case .declare(let local) in statement.effects { retiring.insert(local) }
+            statement.forEachEffect { effect in
+                if case .declare(let local) = effect { retiring.insert(local) }
+            }
             statements += retirements(of: retiring.subtracting(inUse[index + 1]))
         }
         return BasicBlock(statements: statements, terminator: block.terminator)

@@ -24,7 +24,7 @@ enum InitializationChecker {
     /// `state` on entry to the block. It carries that one state through the block, so no statement copies it.
     private static func check(_ block: BasicBlock, from state: InitializationState, into errors: inout FunctionErrors) {
         var state = state
-        for effect in block.effects.joined() {
+        block.forEachEffect { effect in
             state.apply(
                 effect, use: { errors.use($0, at: $1, missing: $2) }, store: { errors.store(to: $0, holding: $1) },
             )

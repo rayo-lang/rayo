@@ -7,7 +7,7 @@ extension Statement {
     }
 
     /// Lends `visit` each of the statement's effects in turn, and stops where it throws.
-    func forEachEffect<Failure: Error>(_ visit: (Effect) throws(Failure) -> Void) throws(Failure) {
+    package func forEachEffect<Failure: Error>(_ visit: (Effect) throws(Failure) -> Void) throws(Failure) {
         switch self {
         case .compute(let destination, let value, _):
             try Self.forEachEffect(computing: value, storingIn: destination, visit)
