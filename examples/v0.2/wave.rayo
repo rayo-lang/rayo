@@ -1,100 +1,110 @@
-// A hero fights a wave of three enemies for five rounds, striking each enemy that still stands in turn.
+// Two heroes in turn fight the same two waves of enemies, the second wave coming on once the first has fallen. Each
+// round the hero strikes the enemy with the most health, and the blow cleaves into the enemies beside it. Then each
+// enemy still standing strikes the hero.
 //
-// The program prints which enemy is strongest and its health before the fight. Each round it prints the round's
-// number, then each enemy's health. After the fight it prints how many blows wounded and how many felled, the damage
-// each kind dealt, the damage the strongest enemy took, how many enemies survive, and whether each one does.
+// Each round prints its number, the health the blow leaves its target and then each enemy beside it, and the hero's
+// health once the wave has struck. After each fight the program prints the round each wave fell in, or 0 for a wave
+// still standing when the hero fell.
 
 func main() {
-    var wave = Wave(enemies: [
-        Enemy(stats: Stats(hp: 30, armor: 2)),
-        Enemy(stats: Stats(hp: 52, armor: 8)),
-        Enemy(stats: Stats(hp: 18, armor: 4)),
-    ])
+    // The first wave is a line of shield-bearers, all alike, and the second three different fighters.
+    let waves: [2 of [3 of Enemy]] = [
+        .init(repeating: Enemy(hp: 16, armor: 6, attack: 2)),
+        [Enemy(hp: 20, armor: 2, attack: 4), Enemy(hp: 30, armor: 4, attack: 6), Enemy(hp: 16, armor: 0, attack: 3)],
+    ]
 
-    // The strength of each round's blow is this table's entry at the round's number modulo 4, plus the round's
-    // number, so the hero's blows grow harder as the fight goes on.
-    let strengths: [4 of Int] = [7, 4, 10, 6]
+    // The swordsman's blows are steady, and the axeman's come as one heavy blow and two light ones.
+    let swordsman = Hero(hp: 44, combo: [16, 10, 22])
+    let axeman = Hero(hp: 44, combo: [30, 6, 6])
+    let bySwordsman = fight(swordsman, against: waves)
+    report(bySwordsman)
+    let byAxeman = fight(axeman, against: waves)
+    report(byAxeman)
+}
 
-    // A snapshot of the enemy with the most health, which the fight leaves as it is, so that the damage the enemy
-    // takes can be measured once the fight is over.
-    let strongest = indexOfStrongest(in: wave.enemies)
-    let before = copy wave.enemies[strongest]
-    print(strongest)
-    print(before.stats.hp)
+// Fights `hero` against each of `waves` in turn, and gives the round each wave fell in, or 0 for a wave still
+// standing when the hero fell.
+func fight(_ hero: &Hero, against waves: &[2 of [3 of Enemy]]) -> [2 of UInt] {
+    // The fight changes copies of the hero's health and of each wave, so the next hero meets the same waves.
+    var hp = hero.hp
 
-    // The ledger has a row for the blows that wound and a row for the blows that fell. Each row holds how many such
-    // blows landed, and the damage they dealt.
-    var ledger: [2 of [2 of Int]] = .init(repeating: .init(repeating: 0))
-    let wounding: UInt = 0
-    let felling: UInt = 1
-    let blows: UInt = 0
-    let dealt: UInt = 1
-
-    // Each round the hero strikes every enemy that still stands, in turn, and the ledger records each blow.
+    ref let combo = &hero.combo
+    let sides: [2 of Int] = [-1, 1]
+    var fellIn: [2 of UInt] = .init(repeating: 0)
     var round: UInt = 0
-    while round < 5 {
-        round += 1
-        print(round)
-        var i: UInt = 0
-        while i < wave.enemies.count {
-            if wave.enemies[i].stats.hp > 0 {
-                let taken = damage(from: strengths[round % 4] + Int(round), on: wave.enemies[i])
-                wave.enemies[i].stats.hp -= taken
-                ref let row = if wave.enemies[i].stats.hp > 0 { &wounding } else { &felling }
-                ledger[row][blows] += 1
-                ledger[row][dealt] += taken
+    var wave: UInt = 0
+    while hp > 0 && wave < waves.count {
+        var enemies = copy waves[wave]
+        while hp > 0 {
+            // A wave has fallen once its strongest enemy has.
+            let target = strongest(in: enemies)
+            if enemies[target].hp <= 0 {
+                fellIn[wave] = round
+                break
             }
-            print(wave.enemies[i].stats.hp)
-            i += 1
+            round += 1
+            print(round)
+
+            // The hero's blows follow its combo, which starts over once it runs out.
+            let blow = combo[(round - 1) % combo.count]
+            enemies[target].hp -= damage(from: blow, on: enemies[target])
+            print(enemies[target].hp)
+
+            // The blow cleaves into each standing enemy beside the target for half as much. A target at either end
+            // of the wave has no enemy on that side.
+            var side: UInt = 0
+            while side < sides.count {
+                let beside = Int(target) + sides[side]
+                if beside >= 0 && beside < Int(enemies.count) {
+                    let enemy = UInt(beside)
+                    if enemies[enemy].hp > 0 {
+                        enemies[enemy].hp -= damage(from: blow / 2, on: enemies[enemy])
+                        print(enemies[enemy].hp)
+                    }
+                }
+                side += 1
+            }
+
+            // Each enemy still standing strikes the hero back.
+            var enemy: UInt = 0
+            while enemy < enemies.count {
+                ref let foe = &enemies[enemy]
+                if foe.hp > 0 { hp -= foe.attack }
+                enemy += 1
+            }
+            print(hp)
         }
+        wave += 1
     }
+    return consume fellIn
+}
 
-    // The ledger, and the damage the strongest enemy took.
-    print(ledger[wounding][blows])
-    print(ledger[felling][blows])
-    print(ledger[wounding][dealt])
-    print(ledger[felling][dealt])
-    print(before.stats.hp - wave.enemies[strongest].stats.hp)
-
-    // How many enemies survive: every enemy but those a blow felled. Then whether each one does.
-    print(wave.enemies.count - UInt(ledger[felling][blows]))
-    let standing = survivors(of: wave.enemies)
-    var i: UInt = 0
-    while i < standing.count {
-        print(standing[i])
-        i += 1
+// Prints the round each wave fell in.
+func report(_ fellIn: &[2 of UInt]) {
+    var wave: UInt = 0
+    while wave < fellIn.count {
+        print(fellIn[wave])
+        wave += 1
     }
 }
 
 // Gives the damage a blow of `strength` deals `enemy`: armor at least as strong as the blow leaves it a scratch, and
-// weaker armor takes off half its own strength.
+// weaker armor takes its own strength off the blow.
 func damage(from strength: Int, on enemy: &Enemy) -> Int {
-    if enemy.stats.armor >= strength { return 1 }
-    return strength - enemy.stats.armor / 2
+    if enemy.armor >= strength { return 1 }
+    return strength - enemy.armor
 }
 
 // Gives the index of the enemy with the most health, the first of them on a tie.
-func indexOfStrongest(in enemies: &[3 of Enemy]) -> UInt {
+func strongest(in enemies: &[3 of Enemy]) -> UInt {
     var strongest: UInt = 0
-    var i: UInt = 1
-    while i < enemies.count {
-        if enemies[i].stats.hp > enemies[strongest].stats.hp { strongest = i }
-        i += 1
+    var enemy: UInt = 1
+    while enemy < enemies.count {
+        if enemies[enemy].hp > enemies[strongest].hp { strongest = enemy }
+        enemy += 1
     }
     return strongest
 }
 
-// Gives whether each enemy still stands.
-func survivors(of enemies: &[3 of Enemy]) -> [3 of Bool] {
-    var standing: [3 of Bool] = .init(repeating: false)
-    var i: UInt = 0
-    while i < enemies.count {
-        standing[i] = enemies[i].stats.hp > 0
-        i += 1
-    }
-    return standing
-}
-
-struct Wave(var enemies: [3 of Enemy])
-struct Enemy(var stats: Stats)
-struct Stats(var hp: Int, let armor: Int)
+struct Hero(let hp: Int, let combo: [3 of Int])
+struct Enemy(var hp: Int, let armor: Int, let attack: Int)
