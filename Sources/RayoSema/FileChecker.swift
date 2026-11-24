@@ -139,8 +139,8 @@ final class FileChecker {
 
     /// Makes the signature's parameter from the one the declaration writes: a `&T` parameter borrows its argument,
     /// a `mutable &T` one borrows it for change, and a `T` one owns it. Reports what rayoc doesn't support in it: a
-    /// default value, and a `mutable &T` parameter or the type Void, each of which leaves the parameter without a
-    /// type, so that its calls report nothing more.
+    /// default value, and the type Void, which leaves the parameter without a type, so that its calls report nothing
+    /// more.
     private func parameter(from parameter: Param) -> Parameter {
         // A default value is reported, since every call writes every argument.
         if let defaultValue = parameter.defaultValue { errors.report(.defaultArgument, at: defaultValue.range) }
@@ -152,12 +152,7 @@ final class FileChecker {
         case .mutable: .mutable
         }
         var type = declarations.resolve(parameter.type, reporting: errors)
-        // A `mutable &` parameter is reported and keeps no type, since rayoc doesn't support one.
-        if convention == .mutable {
-            errors.report(.unsupportedConvention(convention: ParamConvention.mutable.rawValue), at: parameter.range)
-            type = nil
-        }
-        // So is one of type Void, since no local holds a Void value.
+        // A parameter of type Void is reported and keeps no type, since no local holds a Void value.
         if type == .void {
             let code = ErrorCode.voidParameter(name: parameter.name, type: declarations.typeName(of: .void))
             errors.report(code, at: parameter.type.range)

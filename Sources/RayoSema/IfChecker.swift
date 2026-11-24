@@ -77,8 +77,23 @@ struct IfChecker {
         let then = settled(value.then, expecting: expected)
         let otherwise = settled(value.otherwise, expecting: expected)
         guard let then, let otherwise else { return nil }
+
+        // A parameter that borrows its argument for change takes the place a `mutable` lends, which an `if` is not, so
+        // each `mutable` its branches end in is reported.
+        if expected.recipient?.mutableParameter != nil {
+            return refusingLends(endingIn: [then, otherwise])
+        }
         let kind = CheckedExprKind.if(condition: value.condition, then: then, otherwise: otherwise)
         return CheckedExpr(kind: kind, type: expected.type, range: value.range)
+    }
+
+    /// Reports the `mutable` that each of `branches` ends in as unsupported, and returns nil in place of the `if`. A
+    /// parameter that borrows its argument for change takes nothing but a `mutable`, so each value is one.
+    private func refusingLends(endingIn branches: [CheckedBranch]) -> CheckedExpr? {
+        for case let lent? in branches.map(\.value) {
+            errors.report(.unsupportedMutableReference, at: lent.range)
+        }
+        return nil
     }
 
     /// Settles `branch`'s end to the type `expected` names.

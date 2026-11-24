@@ -37,6 +37,14 @@ struct Signature: CustomStringConvertible {
         }
     }
 
+    /// Whether each argument written as a `mutable` goes to a parameter that borrows its argument for change, and
+    /// each other argument to one that doesn't.
+    func takesLendsForChange(in arguments: [CheckedValue]) -> Bool {
+        parameters.count == arguments.count && zip(parameters, arguments).allSatisfy { parameter, argument in
+            (parameter.convention == .mutable) == argument.lendsForChange
+        }
+    }
+
     /// Whether each argument, given whether it counts as a reference, goes to a parameter that takes it so with no
     /// conversion: a reference to a borrowing one, and any other value to an owning one.
     func takesUnconverted(_ areReferences: [Bool]) -> Bool {

@@ -106,13 +106,13 @@ struct ExpressionChecker {
     }
 
     /// `mutable lent`, written at `range`, waiting for its position. A `&` as `lent` is reported, since the reference
-    /// it makes is a temporary.
+    /// it makes is a temporary, and so is a place that isn't changeable, wherever the `mutable` stands.
     private func mutablyLentValue(of lent: Expr, in range: SourceRange) -> CheckedValue? {
         switch lent.kind {
         case .reference(let operand):
             mutableOfReference(operand, referenceRange: lent.range, in: range)
         default:
-            place(lent, under: self).map {
+            changeablePlace(lent, lentAt: range).map {
                 .waiting(MutablyLentPlace(place: $0.place, placeType: $0.type, range: range))
             }
         }
@@ -154,12 +154,15 @@ struct ExpressionChecker {
     /// Makes `value` stand where a position expects what `expected` names, reporting its mismatch where it can't, and
     /// what takes it there can't take of it as the source writes it.
     func fitted(_ value: CheckedExpr, to expected: Expectation) -> CheckedExpr? {
-        typeFitted(value, to: expected).map { taken($0, by: expected.recipient) }
+        typeFitted(value, to: expected).flatMap { taken($0, by: expected.recipient) }
     }
 
     /// `value`, as `recipient` takes it, with what the recipient can't take of it as the source writes it reported,
     /// such as a struct's place written without the `consume` or `copy` that a parameter that owns it takes it with.
-    func taken(_ value: CheckedExpr, by recipient: Recipient?) -> CheckedExpr {
+    /// A parameter that borrows its argument for change takes only a place lent with `mutable`, so it fails any value
+    /// that reaches it here.
+    func taken(_ value: CheckedExpr, by recipient: Recipient?) -> CheckedExpr? {
+        if let parameter = recipient?.mutableParameter { return unmarkedLend(of: value, to: parameter) }
         reportUnmarked(value, to: recipient)
         return value
     }

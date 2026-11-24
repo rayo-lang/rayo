@@ -221,8 +221,7 @@ public enum ErrorCode: Sendable, Hashable {
     @Code(231, error: "no '{name}' takes the arguments ({arguments})")
     case noMatchingFunction(name: String, arguments: String)
 
-    @Code(232, error: "'{convention}' parameters aren't supported")
-    case unsupportedConvention(convention: String)
+    // 232 is unused, and stays so.
 
     @Code(233, error: "default arguments aren't supported")
     case defaultArgument
@@ -402,6 +401,12 @@ public enum ErrorCode: Sendable, Hashable {
 
     @Code(292, error: "'{name}' takes {type.withArticle}; write {marks}")
     case unmarkedOwnedArgument(name: String, type: TypeName, marks: PlaceMarks)
+
+    @Code(293, error: "'{name}' takes '{type}'; write 'mutable {place}'")
+    case unmarkedMutableLend(name: String, type: String, place: String)
+
+    @Code(294, error: "'{name}' takes '{type}', not a mutable reference; remove the 'mutable'")
+    case mutableToNonMutableParameter(name: String, type: String)
 
     // MARK: Ownership
 

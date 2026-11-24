@@ -127,6 +127,21 @@ struct CheckedProgramTests {
             """, toMatch: "always-holding-loops")
     }
 
+    @Test func `a 'mutable' argument passes its place for change, to the overload that borrows for change`() throws {
+        try expectChecking(of: """
+            func main() {
+                var e = Enemy(hp: 1)
+                heal(mutable e)
+                heal(e)
+                bump(mutable e.hp)
+            }
+            func heal(_ e: mutable &Enemy) { bump(mutable e.hp) }
+            func heal(_ e: &Enemy) { print(e.hp) }
+            func bump(_ n: mutable &Int) { n += 1 }
+            struct Enemy(var hp: Int)
+            """, toMatch: "mutable-arguments")
+    }
+
     @Test func `checking leaves a local written bare as its value, and a 'copy' of it as a copy`() throws {
         try expectChecking(of: """
             func main() {
