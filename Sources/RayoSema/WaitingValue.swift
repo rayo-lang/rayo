@@ -13,7 +13,8 @@ protocol WaitingValue {
     var defaultType: RayoType? { get }
 
     /// Whether the value fits `type`, as a call asks when it picks among overloads: it can settle to `type`, and
-    /// `type` holds each integer literal's value. `declarations` gives the members an implicit member names.
+    /// `type` holds the value of an integer literal that stands outside arithmetic. `declarations` gives the members
+    /// an implicit member names.
     func fits(_ type: RayoType, in declarations: Declarations) -> Bool
 
     /// Whether settling the value to `type` gives a value of that type. A literal in it that `type` can't hold is
@@ -49,7 +50,8 @@ protocol WaitingValue {
 }
 
 extension WaitingValue {
-    /// A value that holds no integer literal can settle to just the types it fits.
+    /// A value can settle to just the types it fits, unless it says otherwise, as one a literal's value keeps from
+    /// fitting does.
     func canSettle(to type: RayoType, in declarations: Declarations) -> Bool {
         fits(type, in: declarations)
     }

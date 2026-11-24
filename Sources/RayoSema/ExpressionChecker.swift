@@ -23,7 +23,7 @@ struct ExpressionChecker {
     }
 
     /// Checks `expr` as the value of a position that expects `expected` of it where it expects a type. An untyped
-    /// value takes the expected type where it fits it, and its default type where it doesn't.
+    /// value takes the expected type where it can settle to it, and its default type where it can't.
     func check(_ expr: Expr, expecting expected: Expectation? = nil) -> CheckedExpr? {
         // A value that failed was reported.
         guard let value = value(of: expr) else { return nil }
@@ -265,7 +265,7 @@ struct ExpressionChecker {
         }
 
         // Otherwise an untyped operand takes the type of the typed one beside it, which every operator takes on both
-        // sides, or its default type where it doesn't fit that type or both operands are untyped.
+        // sides, or its default type where it can't settle to that type or both operands are untyped.
         let settledLeft = settled(left, toward: right.type)
         let settledRight = settled(right, toward: left.type)
         // An operand that failed was reported.

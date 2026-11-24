@@ -46,7 +46,7 @@ indirect enum UntypedValue {
         isNegative ? -Int128(magnitude) : Int128(magnitude)
     }
 
-    /// Settles the value to `type`, which it fits, reporting each literal whose value `type` can't hold. An error
+    /// Settles the value to `type`, an integer type, reporting each literal whose value `type` can't hold. An error
     /// names `type` as `typeName`.
     func settled(to type: RayoType, named typeName: TypeName, reporting errors: ErrorList) -> CheckedExpr? {
         switch self {
@@ -134,7 +134,7 @@ extension UntypedValue: WaitingValue {
         type.isInteger
     }
 
-    /// Settles the value to `type` where it fits it, and to its default type where it doesn't or `type` is nil.
+    /// Settles the value to `type` where it can settle to it, and to its default type where it can't or `type` is nil.
     func settled(toward type: RayoType?, by expressions: ExpressionChecker) -> CheckedExpr? {
         let errors = expressions.file.errors
         let defaultType = RayoType.scalar(Self.integerDefault)

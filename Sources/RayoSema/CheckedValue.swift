@@ -24,7 +24,7 @@ enum CheckedValue {
     }
 
     /// Whether the value fits `type`, as a call asks when it picks among overloads, where `declarations` gives the
-    /// members an implicit member names. A value that waits fits only a type that holds its integer literals.
+    /// members an implicit member names. An integer literal's value counts, so it fits only a type that holds it.
     func fits(_ type: RayoType, in declarations: Declarations) -> Bool {
         switch self {
         case .typed(let value): TypeFit.fits(value.type, type)
