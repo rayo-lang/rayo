@@ -72,6 +72,15 @@ struct BorrowedPlaceTests {
         ])
     }
 
+    // `_ =` takes its value as any assignment does, so nothing written says whether it drops the place's value or a
+    // copy of it.
+    @Test(arguments: [("_ = e", "e"), ("_ = e.stats", "e.stats"), ("_ = g", "g"), ("_ = g[i]", "g[i]")])
+    func `a place dropped with '_ =' names the place, and says to write 'copy' or 'consume'`(
+        statement: String, place: String,
+    ) {
+        #expect(messages(of: statement) == ["9: error[E0278]: an assignment can't borrow '\(place)'; \(ownedFix)"])
+    }
+
     // An `if` hands its position to the branch that runs, so each branch that ends in a place is reported there.
     @Test func `each branch of an 'if' that gives a 'let', a 'var' or an assignment a place is reported`() {
         #expect(messages(of: "var x = if c { g[0] } else if !c { g[1] } else { copy g[0] }").map { $0.prefix(16) } == [
@@ -86,7 +95,7 @@ struct BorrowedPlaceTests {
     @Test(arguments: [
         "var x = copy a", "let x = consume a", "var x = a + 1", "let x = makeEnemy().stats.hp", "var x = e.slots.count",
         "var x = if c { copy a } else { 1 }", "b = copy a", "b = consume a", "b = makeEnemy().stats.hp", "b += a",
-        "e.stats = consume e.stats",
+        "e.stats = consume e.stats", "_ = consume e", "_ = copy e.slots", "_ = copy g[i]", "_ = makeEnemy().stats",
     ])
     func `a value, a copy, a consume or a place in a temporary needs nothing written`(statement: String) {
         #expect(messages(of: statement) == [])
@@ -132,7 +141,7 @@ struct BorrowedPlaceTests {
     // A `let`, a `var` or an assignment given a place of an implicitly copyable type takes a copy of its value.
     @Test(arguments: [
         "var x = a", "let x = e.stats.hp", "let x = g[i][0]", "var x = i", "let x = c", "b = a",
-        "e.stats.hp = g[0][1]", "var x = if c { a } else { b }",
+        "e.stats.hp = g[0][1]", "var x = if c { a } else { b }", "_ = a", "_ = i", "_ = c", "_ = e.stats.hp",
     ])
     func `a 'let', a 'var' or an assignment given an Int, a UInt or a Bool place needs nothing written`(
         statement: String,

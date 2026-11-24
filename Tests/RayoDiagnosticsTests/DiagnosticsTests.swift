@@ -163,8 +163,9 @@ struct ErrorCodeTests {
     }
 
     @Test(arguments: [
-        (ErrorCode.unusedValue(type: "Int"), "the Int value isn't used; write '_ =' before it to drop it"),
-        (.unusedValue(type: .shadowedPrelude("Int")),
+        (ErrorCode.unusedValue(type: "Int", drop: .plain),
+         "the Int value isn't used; write '_ =' before it to drop it"),
+        (.unusedValue(type: .shadowedPrelude("Int"), drop: .plain),
          "the prelude's Int value isn't used; write '_ =' before it to drop it"),
         (.literalDoesntFit(type: "Int"), "the literal doesn't fit in an Int"),
         (.literalDoesntFit(type: .shadowedPrelude("Int")), "the literal doesn't fit in the prelude's Int"),
@@ -178,5 +179,12 @@ struct ErrorCodeTests {
     ])
     func `a message names a type in the form its sentence needs`(code: ErrorCode, message: String) {
         #expect(code.message == message)
+    }
+
+    @Test(arguments: [(DropSpelling.plain, "'_ ='"), (.consume, "'_ = consume'"), (.copy, "'_ = copy'")])
+    func `an unused value is dropped with '_ =' alone, or with 'consume' or 'copy' after it`(
+        drop: DropSpelling, text: String,
+    ) {
+        #expect(drop.description == text)
     }
 }

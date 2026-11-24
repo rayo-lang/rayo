@@ -44,6 +44,16 @@ extension ExpressionChecker {
         file.errors.report(code, at: handed.place.range)
     }
 
+    /// What a statement writes before `value`, which no code uses, to drop it. `_ =` takes a place in a local bare
+    /// only where its type is implicitly copyable, so any other such place is dropped with `consume` where the code
+    /// may move the value out of it, and with `copy` where it can't. Any other value is dropped as it stands.
+    func dropSpelling(of value: CheckedExpr) -> DropSpelling {
+        guard case .place(let place) = value.kind, let local = place.local, !value.type.isImplicitlyCopyable else {
+            return .plain
+        }
+        return mayMove(outOf: HandedPlace(local: local, place: place)) ? .consume : .copy
+    }
+
     /// Whether code may move the value out of `handed`.
     private func mayMove(outOf handed: HandedPlace) -> Bool {
         let liesInElement = handed.place.steps.contains {

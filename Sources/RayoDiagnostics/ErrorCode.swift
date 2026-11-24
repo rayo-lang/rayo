@@ -229,8 +229,8 @@ public enum ErrorCode: Sendable, Hashable {
     @Code(234, error: "the parameter '{name}' can't have {type.typePhrase}")
     case voidParameter(name: String, type: TypeName)
 
-    @Code(235, error: "{type.definite} value isn't used; write '_ =' before it to drop it")
-    case unusedValue(type: TypeName)
+    @Code(235, error: "{type.definite} value isn't used; write {drop} before it to drop it")
+    case unusedValue(type: TypeName, drop: DropSpelling)
 
     @Code(236, error: "'{name}' needs a type or a value")
     case missingLocalType(name: String)
@@ -466,7 +466,7 @@ public enum ErrorCode: Sendable, Hashable {
         "can't move '{field}' out of '{local}', which refers to a place; write 'copy' before it to take a copy")
     case moveFieldFromReference(field: String, local: String)
 
-    @Code(318, error: "the parameter '{name}' is never read; write '_ = {name}' to drop it")
+    @Code(318, error: "the parameter '{name}' is never read; write '_ = consume {name}' to drop it")
     case unreadParameter(name: String)
 }
 
@@ -602,6 +602,25 @@ public struct ElementPart: Sendable, Hashable, CustomStringConvertible {
         case .element: "an element out of \(array)"
         case .named(let part): "'\(part)' out of an element of \(array)"
         case .unnamed: "a part out of an element of \(array)"
+        }
+    }
+}
+
+/// What a statement writes before a value that no code uses, to drop it, as an error names it: `'_ ='`,
+/// `'_ = consume'` or `'_ = copy'`.
+public enum DropSpelling: Sendable, Hashable, CustomStringConvertible {
+    /// `_ =` alone, which drops a value that no place holds, or a copy of a place's implicitly copyable value.
+    case plain
+    /// `_ = consume`, which moves the value out of a place and drops it.
+    case consume
+    /// `_ = copy`, which drops a copy of a place's value, where the code can't move the value out of the place.
+    case copy
+
+    public var description: String {
+        switch self {
+        case .plain: "'_ ='"
+        case .consume: "'_ = consume'"
+        case .copy: "'_ = copy'"
         }
     }
 }

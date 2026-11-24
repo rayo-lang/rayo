@@ -97,11 +97,11 @@ struct ArrayLiteralTests {
         "let a: [2 of Int] = [1, -2]\n_ = sum(&a)",
         "_ = Holder(hits: [Hit(damage: 1), Hit(damage: 2)])",
         "let a: [0 of Bool] = []\nnone(&a)",
-        "var a = [[1, 2], [3, 4]]\n_ = a\na = [[5, 6], [7, 8]]\n_ = a",
+        "var a = [[1, 2], [3, 4]]\n_ = consume a\na = [[5, 6], [7, 8]]\n_ = consume a",
         "let h = Hit(damage: 1)\n_ = [h, Hit(damage: 2)]",
         "let n = 3\n_ = [1, n]",
         "let a: [3 of Int] = [1, 2, 3]\npick(&a)",
-        "let a: [2 of UInt] = [1, 2]\n_ = a\nlet b: [1 of [2 of UInt]] = [[3, 4]]\n_ = b",
+        "let a: [2 of UInt] = [1, 2]\n_ = consume a\nlet b: [1 of [2 of UInt]] = [[3, 4]]\n_ = consume b",
         "_ = [if true { 1 } else { 2 }, 3]",
     ])
     func `an array literal takes its type from its position, or from its elements`(body: String) {
@@ -144,15 +144,15 @@ struct ArrayLiteralTests {
 
 struct ArrayInitializerTests {
     @Test(arguments: [
-        "var a: [3 of Int] = .init(repeating: 0)\n_ = a",
-        "let a: [2 of UInt] = .init(repeating: 7)\n_ = a",
+        "var a: [3 of Int] = .init(repeating: 0)\n_ = consume a",
+        "let a: [2 of UInt] = .init(repeating: 7)\n_ = consume a",
         "let a: [2 of Int] = .init(repeating: 1)\n_ = sum(&a)",
         "let a: [0 of Bool] = .init(repeating: true)\nnone(&a)",
-        "var a: [2 of Int] = [1, 2]\n_ = a\na = .init(repeating: 3)\n_ = a",
+        "var a: [2 of Int] = [1, 2]\n_ = consume a\na = .init(repeating: 3)\n_ = consume a",
         "_ = Holder(hits: .init(repeating: Hit(damage: 1)))",
-        "let a: [2 of [2 of Int]] = [.init(repeating: 1), [2, 3]]\n_ = a",
-        "let a: [2 of [3 of Bool]] = .init(repeating: .init(repeating: true))\n_ = a",
-        "let n = 3\nlet a: [2 of Int] = .init(repeating: n + 1)\n_ = a",
+        "let a: [2 of [2 of Int]] = [.init(repeating: 1), [2, 3]]\n_ = consume a",
+        "let a: [2 of [3 of Bool]] = .init(repeating: .init(repeating: true))\n_ = consume a",
+        "let n = 3\nlet a: [2 of Int] = .init(repeating: n + 1)\n_ = consume a",
     ])
     func `.init(repeating:) makes the array its position expects`(body: String) {
         #expect(errorLines(inMain: body, beside: declarations) == [])

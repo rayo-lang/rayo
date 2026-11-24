@@ -93,19 +93,19 @@ struct ErrorContainmentTests {
                 print(y)
             }
             """
-        #expect(errors(source) == [.unusedValue(type: "Int"), .usedAfterMove(name: "x")])
+        #expect(errors(source) == [.unusedValue(type: "Int", drop: .plain), .usedAfterMove(name: "x")])
     }
 
     @Test(arguments: [
         ("let a = [1, 2, 3]\n    _ = copy a[3]", ErrorCode.indexOutOfRange(index: 3, type: "[3 of Int]")),
-        ("var a = [1, 2, 3]\n    a[3] = 4\n    _ = a", .indexOutOfRange(index: 3, type: "[3 of Int]")),
+        ("var a = [1, 2, 3]\n    a[3] = 4\n    _ = consume a", .indexOutOfRange(index: 3, type: "[3 of Int]")),
         ("let n: Int = 9223372036854775808\n    _ = n", .literalDoesntFit(type: "Int")),
         ("let u: UInt = -1\n    _ = u", .literalDoesntFit(type: "UInt")),
         ("let n = 9223372036854775808\n    _ = n", .literalDoesntFit(type: "Int")),
         ("let a = [1, 2, 3]\n    _ = copy a[-1]", .literalDoesntFit(type: "UInt")),
-        ("var a = [1, 2, 3]\n    a[-1] = 4\n    _ = a", .literalDoesntFit(type: "UInt")),
+        ("var a = [1, 2, 3]\n    a[-1] = 4\n    _ = consume a", .literalDoesntFit(type: "UInt")),
         // An unused local is read where it stands, never moved, so a later use of it reports nothing more.
-        ("let a = [1, 2, 3]\n    a\n    _ = a", .unusedValue(type: "[3 of Int]")),
+        ("let a = [1, 2, 3]\n    a\n    _ = consume a", .unusedValue(type: "[3 of Int]", drop: .consume)),
     ])
     func `an error that leaves a body's meaning whole lets the ownership checks run on it`(
         body: String, error: ErrorCode,

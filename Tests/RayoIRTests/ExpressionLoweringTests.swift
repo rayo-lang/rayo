@@ -29,7 +29,7 @@ struct ExpressionLoweringTests {
                 let a = Hit(damage: 1)
                 var b = Hit(damage: 2)
                 b = consume a
-                _ = b
+                _ = consume b
                 let t = true
                 let d = Hit(damage: 3)
                 let e = if t { consume d } else { Hit(damage: 4) }
@@ -45,12 +45,11 @@ struct ExpressionLoweringTests {
     @Test func `a position that takes an Int, a UInt or a Bool from a place copies it, so the place keeps its value`()
         throws {
         // A `_ =`, an initializer's argument, an array literal's element, a branch of an `if` in such a position and
-        // a `return` each read the place. Each would move a value of any other type, as `_ =` moves the array of Ints.
+        // a `return` each read the place.
         let source = """
             func main() {}
-            func kept(_ n: Int, _ level: UInt, _ alive: Bool, _ row: &[2 of Int]) -> Int {
+            func kept(_ n: Int, _ level: UInt, _ alive: Bool) -> Int {
                 _ = alive
-                _ = row
                 let s = Score(points: n, level: level)
                 let all = [n, if alive { n } else { 0 }]
                 return n
