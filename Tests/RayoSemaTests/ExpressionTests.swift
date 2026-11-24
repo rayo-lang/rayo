@@ -13,7 +13,7 @@ struct LineTests {
     func leadingOperator() {
         let source = "func main() {\nlet a = 3\n-2\n}"
         let reported = diagnostics(source)
-        #expect(reported.map(\.code) == [.unusedValue(type: "Int", drop: .plain)])
+        #expect(reported.map(\.code) == [.unusedValue(type: "Int", drop: .bare)])
         #expect(coveredText(reported, in: source) == ["-2"])
     }
 }

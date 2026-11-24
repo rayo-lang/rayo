@@ -230,7 +230,7 @@ public enum ErrorCode: Sendable, Hashable {
     case voidParameter(name: String, type: TypeName)
 
     @Code(235, error: "{type.definite} value isn't used; write {drop} before it to drop it")
-    case unusedValue(type: TypeName, drop: DropSpelling)
+    case unusedValue(type: TypeName, drop: DropMark)
 
     @Code(236, error: "'{name}' needs a type or a value")
     case missingLocalType(name: String)
@@ -357,9 +357,8 @@ public enum ErrorCode: Sendable, Hashable {
         "a '{keyword}' can't borrow '{place}'; write 'copy' or 'consume' before it, or '&' and declare 'ref let'")
     case ownerBorrowsPlace(keyword: String, place: String)
 
-    @Code(278, error:
-        "an assignment can't borrow '{place}'; write 'copy' before it to take a copy, or 'consume' to move it")
-    case assignmentBorrowsPlace(place: String)
+    @Code(278, error: "an assignment can't borrow '{marks.place}'; write {marks}")
+    case assignmentBorrowsPlace(marks: PlaceMarks)
 
     @Code(279, error:
         "'{place}' ends with its block before '{binding}' does; declare 'let' and write 'copy' or 'consume' before it")
@@ -608,9 +607,10 @@ public struct ElementPart: Sendable, Hashable, CustomStringConvertible {
 
 /// What a statement writes before a value that no code uses, to drop it, as an error names it: `'_ ='`,
 /// `'_ = consume'` or `'_ = copy'`.
-public enum DropSpelling: Sendable, Hashable, CustomStringConvertible {
-    /// `_ =` alone, which drops a value that no place holds, or a copy of a place's implicitly copyable value.
-    case plain
+public enum DropMark: Sendable, Hashable, CustomStringConvertible {
+    /// `_ =` before the value bare, which drops a value that no place holds, or a copy of a place's implicitly
+    /// copyable value.
+    case bare
     /// `_ = consume`, which moves the value out of a place and drops it.
     case consume
     /// `_ = copy`, which drops a copy of a place's value, where the code can't move the value out of the place.
@@ -618,7 +618,7 @@ public enum DropSpelling: Sendable, Hashable, CustomStringConvertible {
 
     public var description: String {
         switch self {
-        case .plain: "'_ ='"
+        case .bare: "'_ ='"
         case .consume: "'_ = consume'"
         case .copy: "'_ = copy'"
         }

@@ -5,13 +5,15 @@ import RayoSyntax
 
 extension ExpressionChecker {
     /// Reports each place rooted in a local that `value` hands its position to, with the error `code` gives for the
-    /// place's name. A position that takes its value but can't borrow it, such as a `let`'s or `var`'s declaration or
-    /// an assignment, has its places reported so, since nothing written says whether to copy the value or move it. A
-    /// value of an implicitly copyable type is copied there, so it has none reported.
-    func reportHandedPlaces(of value: CheckedExpr, as code: (String) -> ErrorCode) {
+    /// marks that fit the place. A position that takes its value but can't borrow it, such as a `let`'s or `var`'s
+    /// declaration or an assignment, has its places reported so, since nothing written says whether to copy the value
+    /// or move it. A value of an implicitly copyable type is copied there, so it has none reported.
+    func reportHandedPlaces(of value: CheckedExpr, as code: (PlaceMarks) -> ErrorCode) {
         guard !value.type.isImplicitlyCopyable else { return }
         for handed in value.handedPlaces {
-            file.errors.report(code(file.spelling(of: handed.place.range)), at: handed.place.range)
+            let marks = PlaceMarks(file.spelling(of: handed.place.range), mayMove: mayMove(outOf: handed),
+                                   mayLend: false)
+            file.errors.report(code(marks), at: handed.place.range)
         }
     }
 
@@ -44,13 +46,17 @@ extension ExpressionChecker {
         file.errors.report(code, at: handed.place.range)
     }
 
-    /// What a statement writes before `value`, which no code uses, to drop it. `_ =` takes a place in a local bare
-    /// only where its type is implicitly copyable, so any other such place is dropped with `consume` where the code
-    /// may move the value out of it, and with `copy` where it can't. Any other value is dropped as it stands.
-    func dropSpelling(of value: CheckedExpr) -> DropSpelling {
+    /// What a statement writes before `value`, which no code uses, to drop it.
+    func dropMark(of value: CheckedExpr) -> DropMark {
+        // `_ =` takes a value that no local holds as it stands, and a place in a local bare only where its type is
+        // implicitly copyable. An `if` that ends in places is dropped as it stands too, since `consume` and `copy`
+        // take a place, and `_ =` names the mark each branch needs.
         guard case .place(let place) = value.kind, let local = place.local, !value.type.isImplicitlyCopyable else {
-            return .plain
+            return .bare
         }
+
+        // Any other place is dropped with `consume` where the code may move the value out of it, and with `copy`
+        // where it can't.
         return mayMove(outOf: HandedPlace(local: local, place: place)) ? .consume : .copy
     }
 

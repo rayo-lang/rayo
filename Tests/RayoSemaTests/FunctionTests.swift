@@ -34,7 +34,7 @@ struct FunctionTests {
         #expect(errors("func main() { let x = say() }\nfunc say() { print(1) }") ==
             [.voidLocal(name: "x", type: "Void")])
         #expect(errors("func main() { let x = f() }\nfunc f() {\n    print(1)\n    3\n}") ==
-            [.voidLocal(name: "x", type: "Void"), .unusedValue(type: "Int", drop: .plain)])
+            [.voidLocal(name: "x", type: "Void"), .unusedValue(type: "Int", drop: .bare)])
     }
 
     @Test(arguments: [

@@ -93,7 +93,7 @@ struct ErrorContainmentTests {
                 print(y)
             }
             """
-        #expect(errors(source) == [.unusedValue(type: "Int", drop: .plain), .usedAfterMove(name: "x")])
+        #expect(errors(source) == [.unusedValue(type: "Int", drop: .bare), .usedAfterMove(name: "x")])
     }
 
     @Test(arguments: [

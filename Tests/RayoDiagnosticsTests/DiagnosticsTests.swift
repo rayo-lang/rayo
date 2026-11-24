@@ -163,9 +163,9 @@ struct ErrorCodeTests {
     }
 
     @Test(arguments: [
-        (ErrorCode.unusedValue(type: "Int", drop: .plain),
+        (ErrorCode.unusedValue(type: "Int", drop: .bare),
          "the Int value isn't used; write '_ =' before it to drop it"),
-        (.unusedValue(type: .shadowedPrelude("Int"), drop: .plain),
+        (.unusedValue(type: .shadowedPrelude("Int"), drop: .bare),
          "the prelude's Int value isn't used; write '_ =' before it to drop it"),
         (.literalDoesntFit(type: "Int"), "the literal doesn't fit in an Int"),
         (.literalDoesntFit(type: .shadowedPrelude("Int")), "the literal doesn't fit in the prelude's Int"),
@@ -181,10 +181,16 @@ struct ErrorCodeTests {
         #expect(code.message == message)
     }
 
-    @Test(arguments: [(DropSpelling.plain, "'_ ='"), (.consume, "'_ = consume'"), (.copy, "'_ = copy'")])
-    func `an unused value is dropped with '_ =' alone, or with 'consume' or 'copy' after it`(
-        drop: DropSpelling, text: String,
-    ) {
-        #expect(drop.description == text)
+    @Test(arguments: [
+        (ErrorCode.unusedValue(type: "Enemy", drop: .consume),
+         "the Enemy value isn't used; write '_ = consume' before it to drop it"),
+        (.unusedValue(type: "Enemy", drop: .copy), "the Enemy value isn't used; write '_ = copy' before it to drop it"),
+        (.assignmentBorrowsPlace(marks: PlaceMarks("e", mayMove: true, mayLend: false)),
+         "an assignment can't borrow 'e'; write 'consume e' or 'copy e'"),
+        (.assignmentBorrowsPlace(marks: PlaceMarks("g[0]", mayMove: false, mayLend: false)),
+         "an assignment can't borrow 'g[0]'; write 'copy g[0]'"),
+    ])
+    func `a message about a place written bare names the marks that fit it`(code: ErrorCode, message: String) {
+        #expect(code.message == message)
     }
 }
