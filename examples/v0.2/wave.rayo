@@ -1,72 +1,89 @@
-// A hero fights a column of enemies two ranks deep and three files wide. Each round the hero strikes the enemy with
-// the most health, and the blow cleaves into the enemies in front of, behind and beside it. Then each enemy still
-// standing in the front rank strikes the hero. The fight ends when the hero or the whole column falls.
+// Two heroes in turn fight the same two waves of enemies, the second wave coming on once the first has fallen. Each
+// round the hero strikes the enemy with the most health, and the blow cleaves into the enemies beside it. Then each
+// enemy still standing strikes the hero.
 //
-// Each round prints its number, the health the blow leaves each enemy it reaches, the target first, and then the
-// hero's health once the front rank has struck. After the fight the program prints whether the hero stands, and the
-// round each enemy fell in, or 0 for one still standing, the front rank first.
+// Each round prints its number, the health the blow leaves its target and then each enemy beside it, and the hero's
+// health once the wave has struck. After each fight the program prints the round each wave fell in, or 0 for a wave
+// still standing when the hero fell.
 
 func main() {
-    var hero = Hero(hp: 50, combo: [16, 10, 22])
-    var column: [2 of [3 of Enemy]] = [
-        [Enemy(hp: 20, armor: 5, attack: 3), Enemy(hp: 28, armor: 6, attack: 5), Enemy(hp: 14, armor: 0, attack: 2)],
-        [Enemy(hp: 12, armor: 3, attack: 3), Enemy(hp: 24, armor: 1, attack: 4), Enemy(hp: 18, armor: 4, attack: 3)],
+    // The first wave is a line of shield-bearers, all alike, and the second three different fighters.
+    let waves: [2 of [3 of Enemy]] = [
+        .init(repeating: Enemy(hp: 16, armor: 6, attack: 2)),
+        [Enemy(hp: 20, armor: 2, attack: 4), Enemy(hp: 30, armor: 4, attack: 6), Enemy(hp: 16, armor: 0, attack: 3)],
     ]
 
-    // A blow's reach, as steps of rank and file from its target. The target, at the first step, takes the whole
-    // blow, and the enemies around it take half.
-    let reach: [5 of [2 of Int]] = [[0, 0], [-1, 0], [1, 0], [0, -1], [0, 1]]
+    // The swordsman's blows are steady, and the axeman's come as one heavy blow and two light ones.
+    let swordsman = Hero(hp: 44, combo: [16, 10, 22])
+    let axeman = Hero(hp: 44, combo: [30, 6, 6])
+    let bySwordsman = fight(swordsman, against: waves)
+    report(bySwordsman)
+    let byAxeman = fight(axeman, against: waves)
+    report(byAxeman)
+}
 
-    // The round each enemy fell in, by rank and file, which stays 0 while the enemy stands.
-    var fellIn: [2 of [3 of UInt]] = .init(repeating: .init(repeating: 0))
-
-    // The whole column has fallen once its strongest enemy has.
+// Fights `hero` against each of `waves` in turn, and gives the round each wave fell in, or 0 for a wave still
+// standing when the hero fell.
+func fight(_ hero: &Hero, against waves: &[2 of [3 of Enemy]]) -> [2 of UInt] {
+    // The fight changes copies of the hero's health and of each wave, so the next hero meets the same waves.
+    var hp = hero.hp
+    ref let combo = &hero.combo
+    var fellIn: [2 of UInt] = .init(repeating: 0)
     var round: UInt = 0
-    var target = strongest(in: column)
-    while hero.hp > 0 && column[target[0]][target[1]].hp > 0 {
-        round += 1
-        print(round)
-
-        // The hero's blows follow its combo, which starts over once it runs out. A step off the column's edge
-        // reaches no one, and neither does one onto an enemy that has fallen.
-        let blow = hero.combo[(round - 1) % hero.combo.count]
-        var step: UInt = 0
-        while step < reach.count {
-            let r = Int(target[0]) + reach[step][0]
-            let f = Int(target[1]) + reach[step][1]
-            if r >= 0 && r < Int(column.count) && f >= 0 && f < Int(column[0].count) {
-                let rank = UInt(r)
-                let file = UInt(f)
-                if column[rank][file].hp > 0 {
-                    let strength = if step == 0 { blow } else { blow / 2 }
-                    column[rank][file].hp -= damage(from: strength, on: column[rank][file])
-                    print(column[rank][file].hp)
-                    if column[rank][file].hp <= 0 { fellIn[rank][file] = round }
-                }
+    var next: UInt = 0
+    while hp > 0 && next < waves.count {
+        var wave = copy waves[next]
+        while hp > 0 {
+            // A wave has fallen once its strongest enemy has.
+            let target = strongest(in: wave)
+            if wave[target].hp <= 0 {
+                fellIn[next] = round
+                break
             }
-            step += 1
-        }
+            round += 1
+            print(round)
 
-        // Only the front rank reaches the hero to strike back.
-        var file: UInt = 0
-        while file < column[0].count {
-            ref let foe = &column[0][file]
-            if foe.hp > 0 { hero.hp -= foe.attack }
-            file += 1
+            // The hero's blows follow its combo, which starts over once it runs out.
+            let blow = combo[(round - 1) % combo.count]
+            wave[target].hp -= damage(from: blow, on: wave[target])
+            print(wave[target].hp)
+
+            // The blow cleaves into each standing enemy beside the target for half as much. A target at either end
+            // of the wave has no enemy on that side.
+            let sides: [2 of Int] = [-1, 1]
+            var side: UInt = 0
+            while side < sides.count {
+                let beside = Int(target) + sides[side]
+                if beside >= 0 && beside < Int(wave.count) {
+                    let enemy = UInt(beside)
+                    if wave[enemy].hp > 0 {
+                        wave[enemy].hp -= damage(from: blow / 2, on: wave[enemy])
+                        print(wave[enemy].hp)
+                    }
+                }
+                side += 1
+            }
+
+            // Each enemy still standing strikes the hero back.
+            var enemy: UInt = 0
+            while enemy < wave.count {
+                ref let foe = &wave[enemy]
+                if foe.hp > 0 { hp -= foe.attack }
+                enemy += 1
+            }
+            print(hp)
         }
-        print(hero.hp)
-        target = strongest(in: column)
+        next += 1
     }
+    return consume fellIn
+}
 
-    print(hero.hp > 0)
-    var rank: UInt = 0
-    while rank < fellIn.count {
-        var file: UInt = 0
-        while file < fellIn[rank].count {
-            print(fellIn[rank][file])
-            file += 1
-        }
-        rank += 1
+// Prints the round each wave fell in.
+func report(_ fellIn: &[2 of UInt]) {
+    var wave: UInt = 0
+    while wave < fellIn.count {
+        print(fellIn[wave])
+        wave += 1
     }
 }
 
@@ -77,25 +94,16 @@ func damage(from strength: Int, on enemy: &Enemy) -> Int {
     return strength - enemy.armor
 }
 
-// Gives the rank and the file of the enemy with the most health, the first of them on a tie.
-func strongest(in column: &[2 of [3 of Enemy]]) -> [2 of UInt] {
-    var at: [2 of UInt] = [0, 0]
-    var most = column[0][0].hp
-    var rank: UInt = 0
-    while rank < column.count {
-        ref let enemies = &column[rank]
-        var file: UInt = 0
-        while file < enemies.count {
-            if enemies[file].hp > most {
-                most = enemies[file].hp
-                at = [rank, file]
-            }
-            file += 1
-        }
-        rank += 1
+// Gives the index of the enemy with the most health, the first of them on a tie.
+func strongest(in wave: &[3 of Enemy]) -> UInt {
+    var strongest: UInt = 0
+    var enemy: UInt = 1
+    while enemy < wave.count {
+        if wave[enemy].hp > wave[strongest].hp { strongest = enemy }
+        enemy += 1
     }
-    return consume at
+    return strongest
 }
 
-struct Hero(var hp: Int, let combo: [3 of Int])
+struct Hero(let hp: Int, let combo: [3 of Int])
 struct Enemy(var hp: Int, let armor: Int, let attack: Int)
