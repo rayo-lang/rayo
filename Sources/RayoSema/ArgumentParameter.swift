@@ -7,10 +7,8 @@ struct ArgumentParameter {
     var convention: ParameterConvention
     /// Whether a bare value that no local holds may be lent to the parameter as a temporary.
     var borrowsTemporaries: Bool
-    /// Whether a bare place of a type that isn't implicitly copyable moves into the parameter, as it does into an
-    /// initializer's. A function's own parameter that owns its argument takes such a place only marked with
-    /// `consume` or `copy`.
-    var movesBarePlaces: Bool
+    /// What the parameter, where it owns its argument, does with a bare place of a type that isn't implicitly copyable.
+    var barePlaceUse: BarePlaceUse
     /// Whether a function of the callee's name, among those whose labels and types the call's arguments fit, borrows
     /// the argument, so that a `&` of it reaches that function.
     var isBorrowedByOverload: Bool

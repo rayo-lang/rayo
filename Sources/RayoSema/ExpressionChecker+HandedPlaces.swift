@@ -23,7 +23,7 @@ extension ExpressionChecker {
         switch recipient {
         case .parameter(let parameter)? where parameter.convention == .borrowed:
             reportUnlendable(value, to: parameter)
-        case .parameter(let parameter)? where parameter.convention == .owned && !parameter.movesBarePlaces:
+        case .parameter(let parameter)? where parameter.convention == .owned && parameter.barePlaceUse == .needsMark:
             reportUnmarkedOwned(value, to: parameter)
         case .declaration(.refLet)?:
             reportUnreferenced(value)
