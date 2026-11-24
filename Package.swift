@@ -135,7 +135,7 @@ let package = Package(
         .target(name: "RayoSource"),
         .target(name: "RayoDiagnostics", dependencies: ["RayoDiagnosticsMacros", "RayoSource"]),
         .target(name: "RayoSyntax", dependencies: ["RayoDiagnostics", "RayoSource"]),
-        .target(name: "RayoCheckedProgram", dependencies: ["RayoSource"]),
+        .target(name: "RayoCheckedProgram", dependencies: ["RayoDiagnostics", "RayoSource"]),
         .target(name: "RayoSema", dependencies: ["RayoCheckedProgram", "RayoDiagnostics", "RayoSource", "RayoSyntax"]),
         .target(name: "RayoIR", dependencies: ["RayoCheckedProgram", "RayoSource"]),
         .target(name: "RayoOwnership", dependencies: [

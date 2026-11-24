@@ -9,17 +9,17 @@ extension FunctionLowering {
 
     private mutating func lower(_ statement: CheckedStmt) {
         switch statement {
-        // An expression statement, `_ =` included, takes its value and drops it.
+        // An expression statement, `_ =` included, computes its value and drops it.
         case .expression(let expr):
-            compute(expr, into: nil, as: .take)
+            compute(expr, into: nil)
 
         // A declaration starts its local's life.
         case .binding(let local, let range, let value):
             lowerDeclaration(of: local, at: range, givenBy: value)
 
-        // An assignment computes its value into its place, which takes it.
+        // An assignment computes its value into its place.
         case .assign(let target, let value):
-            compute(value, into: Destination(place(of: target), at: target.range), as: .take)
+            compute(value, into: Destination(place(of: target), at: target.range))
 
         // A compound assignment applies its operator to its place and the value.
         case .compoundAssign(let target, let op, let value):
@@ -49,7 +49,7 @@ extension FunctionLowering {
         _ target: CheckedPlace, _ op: CheckedBinaryOperator, _ value: CheckedExpr,
     ) {
         let place = place(of: target)
-        let operand = operand(of: value, as: .read)
+        let operand = operand(of: value)
         let destination = Destination(place, at: target.range)
         let value = Rvalue.binary(IRBinaryOperator(op), .read(place, at: target.range), operand)
         builder.emit(value, into: destination, range: target.range)
@@ -59,11 +59,9 @@ extension FunctionLowering {
     private mutating func lowerDeclaration(of local: LocalID, at range: SourceRange, givenBy value: CheckedExpr?) {
         builder.emit(.declare(local))
 
-        // A local declared without a value holds none until it is assigned. A `ref let` borrows the place its
-        // value names, and any other local takes its value.
+        // A local declared without a value holds none until it is assigned.
         guard let value else { return }
-        let use: ValueUse = builder.isBorrowing(local) ? .borrow : .take
-        compute(value, into: Destination(Place(root: local), at: range), as: use)
+        compute(value, into: Destination(Place(root: local), at: range))
     }
 
     /// Leaves the function with `value`.
@@ -88,8 +86,8 @@ extension FunctionLowering {
     /// and returns nil.
     private mutating func returnedOperand(of value: CheckedExpr) -> Operand? {
         // A value of any other type is the result.
-        guard value.type == .void else { return operand(of: value, as: .take) }
-        compute(value, into: nil, as: .take)
+        guard value.type == .void else { return operand(of: value) }
+        compute(value, into: nil)
         return nil
     }
 
@@ -120,6 +118,6 @@ extension FunctionLowering {
         testing condition: CheckedExpr, alwaysHolds: Bool, body: BlockID, exit: BlockID,
     ) -> Terminator {
         if alwaysHolds { return .goto(body) }
-        return .branch(operand(of: condition, as: .read), then: body, otherwise: exit)
+        return .branch(operand(of: condition), then: body, otherwise: exit)
     }
 }

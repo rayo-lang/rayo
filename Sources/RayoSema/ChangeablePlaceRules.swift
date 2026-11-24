@@ -25,7 +25,8 @@ extension ChangeablePlaceRules {
     /// goes on from it has the root refused last, after the rest of the place.
     func root(_ expr: Expr, holdsParts: Bool) -> TypedPlace? {
         // A value that failed was reported, and so is one too large for the stack.
-        guard let value = expressions.check(expr), let temporary = expressions.temporary(holding: value) else {
+        guard let value = expressions.check(expr, at: .operand), let temporary = expressions.temporary(holding: value)
+        else {
             return nil
         }
         guard holdsParts else { return refuse(refusal(toChange: value), at: expr.range) }

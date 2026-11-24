@@ -11,9 +11,15 @@ struct LentPlace {
     /// Where the source writes the `&` and the place.
     var range: SourceRange
 
-    /// The place itself, as the value of a position that takes it, where the source writes the `&`.
-    var placeExpression: CheckedExpr {
-        CheckedExpr(kind: .place(place), type: placeType, range: range)
+    /// The place itself, as the value of a position that takes it and makes `use` of it, where the source writes the
+    /// `&`.
+    func placeExpression(as use: PlaceUse) -> CheckedExpr {
+        CheckedExpr(kind: .place(place, use), type: placeType, range: range)
+    }
+
+    /// The place as the source writes it after the `&`, where a position takes it as a place written bare.
+    var barePlace: BarePlace {
+        BarePlace(place: place, placeType: placeType, range: range)
     }
 }
 
@@ -29,19 +35,14 @@ extension LentPlace: WaitingValue {
 
     var lendsPlace: Bool { true }
 
-    /// Reports the `&`, since a position that expects at most a type takes no reference.
-    func settled(toward type: RayoType?, by expressions: ExpressionChecker) -> CheckedExpr? {
-        expressions.file.errors.report(.unsupportedReference, at: range)
-        return nil
+    /// The place, where `position` takes a reference, as a position that expects the place's type does, since the
+    /// place's type is its own wherever it stands.
+    func settled(toward type: RayoType?, at position: Position, by expressions: ExpressionChecker) -> CheckedExpr? {
+        expressions.lent(self, to: Expectation(placeType, at: position))
     }
 
     func settled(expecting expected: Expectation, by expressions: ExpressionChecker) -> CheckedExpr? {
         expressions.lent(self, to: expected)
-    }
-
-    /// The place, where `recipient` takes a reference, as a position that expects the place's type does.
-    func settled(takenBy recipient: Recipient, by expressions: ExpressionChecker) -> CheckedExpr? {
-        expressions.lent(self, to: Expectation(placeType, recipient: recipient))
     }
 
     /// Reports nothing: the place was checked as the source wrote it, and what the `&` gives it to failed for

@@ -22,17 +22,29 @@ struct ExpressionChecker {
         file.declarations.typeName(of: type)
     }
 
-    /// Checks `expr` as the value of a position that expects `expected` of it where it expects a type. An untyped
-    /// value takes the expected type where it can settle to it, and its default type where it can't.
-    func check(_ expr: Expr, expecting expected: Expectation? = nil) -> CheckedExpr? {
+    /// Checks `expr` as the value of a position that expects what `expected` names of it. An untyped value takes the
+    /// expected type where it can settle to it, and its default type where it can't.
+    func check(_ expr: Expr, expecting expected: Expectation) -> CheckedExpr? {
         // A value that failed was reported.
         guard let value = value(of: expr) else { return nil }
-        guard let expected else { return settled(value, toward: nil) }
         return settled(value, expecting: expected)
     }
 
+    /// Checks `expr` as the value of `position`, which expects no type of it.
+    func check(_ expr: Expr, at position: Position) -> CheckedExpr? {
+        // A value that failed was reported.
+        guard let value = value(of: expr) else { return nil }
+        return settled(value, toward: nil, at: position)
+    }
+
+    /// Checks `expr` as the value of `position`, which expects `type` of it where the type is known.
+    func check(_ expr: Expr, expecting type: RayoType?, at position: Position) -> CheckedExpr? {
+        guard let type else { return check(expr, at: position) }
+        return check(expr, expecting: Expectation(type, at: position))
+    }
+
     /// Checks `expr` on its own, leaving it to wait for its position where it is an untyped value, an array literal,
-    /// an implicit member, an `if`, a `&` or a `mutable`.
+    /// an implicit member, a place written bare, an `if`, a `&` or a `mutable`.
     func value(of expr: Expr) -> CheckedValue? {
         switch expr.kind {
         // An integer literal is untyped until its position settles it.
@@ -55,15 +67,14 @@ struct ExpressionChecker {
         case .boolLiteral(let value):
             .typed(CheckedExpr(kind: .boolLiteral(value), type: .bool, range: expr.range))
 
-        // A name reads the local it names, and an element the element of the array its base names.
+        // A name gives the local it names, and an element the element of the array its base names, as places that
+        // wait for their position to say what it does with them.
         case .name, .element:
-            place(expr, under: self).map {
-                .typed(CheckedExpr(kind: .place($0.place), type: $0.type, range: expr.range))
-            }
+            place(expr, under: self).map { .waiting(BarePlace(place: $0.place, placeType: $0.type, range: expr.range)) }
 
-        // A member reads a property of the value its base names: a field, or a value such as an array's count.
+        // A member gives a property of the value its base names: a field's place, or a value such as an array's count.
         case .member(let base, let name, let nameRange):
-            member(named: name, at: nameRange, of: base, in: expr.range, under: self).map { .typed($0) }
+            member(named: name, at: nameRange, of: base, in: expr.range, under: self)
 
         // A call reaches one of the functions its callee names, or one of the initializers of the type it names. A
         // call of an implicit member waits for its position to give the type whose member it calls.
@@ -118,11 +129,12 @@ struct ExpressionChecker {
         }
     }
 
-    /// Settles `value` toward `type`, where it waits for one. A typed value is given back as it is.
-    func settled(_ value: CheckedValue, toward type: RayoType?) -> CheckedExpr? {
+    /// Settles `value` toward `type`, where it waits for one, as `position` takes it, reporting what the position can't
+    /// take of it as the source writes it.
+    func settled(_ value: CheckedValue, toward type: RayoType?, at position: Position) -> CheckedExpr? {
         switch value {
-        case .typed(let typed): typed
-        case .waiting(let waiting): waiting.settled(toward: type, by: self)
+        case .typed(let typed): taken(typed, by: position)
+        case .waiting(let waiting): waiting.settled(toward: type, at: position, by: self)
         }
     }
 
@@ -142,29 +154,10 @@ struct ExpressionChecker {
         }
     }
 
-    /// Settles `value` where its position gives no type, and `recipient` takes it, reporting what the recipient can't
-    /// take of it as the source writes it.
-    func settled(_ value: CheckedValue, takenBy recipient: Recipient) -> CheckedExpr? {
-        switch value {
-        case .typed(let typed): taken(typed, by: recipient)
-        case .waiting(let waiting): waiting.settled(takenBy: recipient, by: self)
-        }
-    }
-
     /// Makes `value` stand where a position expects what `expected` names, reporting its mismatch where it can't, and
-    /// what takes it there can't take of it as the source writes it.
+    /// what the position can't take of it as the source writes it.
     func fitted(_ value: CheckedExpr, to expected: Expectation) -> CheckedExpr? {
-        typeFitted(value, to: expected).flatMap { taken($0, by: expected.recipient) }
-    }
-
-    /// `value`, as `recipient` takes it, with what the recipient can't take of it as the source writes it reported,
-    /// such as a struct's place written without the `consume` or `copy` that a parameter that owns it takes it with.
-    /// A parameter that borrows its argument for change takes only a place lent with `mutable`, so it fails any value
-    /// that reaches it here.
-    func taken(_ value: CheckedExpr, by recipient: Recipient?) -> CheckedExpr? {
-        if let parameter = recipient?.mutableParameter { return unmarkedLend(of: value, to: parameter) }
-        reportUnmarked(value, to: recipient)
-        return value
+        typeFitted(value, to: expected).flatMap { taken($0, by: expected.position) }
     }
 
     /// `value` as a value of the type `expected` names, or nil, with its mismatch reported, where it is of another
@@ -222,7 +215,7 @@ struct ExpressionChecker {
         case .waiting(let untyped as UntypedValue): .waiting(untyped.negated(at: range))
         case .typed(let typed): negation(of: typed, in: range)
         // Any other value that waits settles as it would where its position gives no type.
-        case .waiting: settled(operand, toward: nil).flatMap { negation(of: $0, in: range) }
+        case .waiting: settled(operand, toward: nil, at: .operand).flatMap { negation(of: $0, in: range) }
         }
     }
 
@@ -239,7 +232,7 @@ struct ExpressionChecker {
 
     /// Checks `!operandExpr`, which takes a Bool, a type no untyped value fits.
     private func not(_ operandExpr: Expr, in range: SourceRange) -> CheckedValue? {
-        let operand = check(operandExpr, expecting: Expectation(.bool))
+        let operand = check(operandExpr, expecting: Expectation(.bool, at: .operand))
         return operand.map { .typed(CheckedExpr(kind: .unary(.not, $0), type: .bool, range: range)) }
     }
 
@@ -266,8 +259,8 @@ struct ExpressionChecker {
 
         // Otherwise an untyped operand takes the type of the typed one beside it, which every operator takes on both
         // sides, or its default type where it can't settle to that type or both operands are untyped.
-        let settledLeft = settled(left, toward: right.type)
-        let settledRight = settled(right, toward: left.type)
+        let settledLeft = settled(left, toward: right.type, at: .operand)
+        let settledRight = settled(right, toward: left.type, at: .operand)
         // An operand that failed was reported.
         guard let settledLeft, let settledRight else { return nil }
         return binary(checkedOp, settledLeft, settledRight, spelled: op.rawValue, in: range).map { .typed($0) }
@@ -370,18 +363,20 @@ struct ExpressionChecker {
     /// field, or, where the rules let a place hold it, of a value property's value.
     private func memberPlace(named name: String, at nameRange: SourceRange, of base: Expr, in range: SourceRange,
                              under rules: some PlaceRules) -> TypedPlace? {
-        // A member that failed was reported.
-        guard let member = member(named: name, at: nameRange, of: base, in: range, under: rules) else { return nil }
-        if case .place(let place) = member.kind { return (place, member.type) }
-        return rules.place(holding: member, at: nameRange)
+        switch member(named: name, at: nameRange, of: base, in: range, under: rules) {
+        case .waiting(let field as BarePlace)?: (field.place, field.placeType)
+        case .typed(let property)?: rules.place(holding: property, at: nameRange)
+        // A member that failed was reported, and no other value is a member.
+        case .waiting?, nil: nil
+        }
     }
 
     /// Checks `base.name`, which the source writes at `range`, under the rules of the position it stands in: the
     /// property called `name` of the value its base names, as the value it gives. A field gives the part of the base's
-    /// place that holds it, and a value property, such as an array's count, the value it computes. Reports a name
-    /// that names no property of the base's type.
+    /// place that holds it, which waits for its position, and a value property, such as an array's count, the value
+    /// it computes. Reports a name that names no property of the base's type.
     private func member(named name: String, at nameRange: SourceRange, of base: Expr, in range: SourceRange,
-                        under rules: some PlaceRules) -> CheckedExpr? {
+                        under rules: some PlaceRules) -> CheckedValue? {
         // A base that failed was reported.
         guard let holder = place(base, under: rules, holdsParts: true) else { return nil }
 
@@ -391,11 +386,11 @@ struct ExpressionChecker {
         case .field(let index, let field)?:
             guard rules.admits(field, at: nameRange) else { return nil }
             let place = holder.place.appending(.field(index, range: range))
-            return CheckedExpr(kind: .place(place), type: field.type, range: range)
+            return .waiting(BarePlace(place: place, placeType: field.type, range: range))
 
         // An array's count is a UInt that the array's type fixes.
         case .count(let count)?:
-            return CheckedExpr(kind: .arrayCount(holder.place, count: count), type: .uint, range: range)
+            return .typed(CheckedExpr(kind: .arrayCount(holder.place, count: count), type: .uint, range: range))
 
         // A type's initializers are no property of a value of it, and nor is a name the type lacks.
         case .initializers?, nil:
@@ -411,7 +406,8 @@ struct ExpressionChecker {
                          under rules: some PlaceRules) -> TypedPlace? {
         // The base and the index are both checked, so each one's errors are reported; a literal index is a UInt.
         let holder = place(base, under: rules, holdsParts: true)
-        let index = check(indexExpr, expecting: Expectation(.uint) { _, found in .indexNotUInt(found: found) })
+        let indexExpected = Expectation(.uint, at: .operand) { _, found in .indexNotUInt(found: found) }
+        let index = check(indexExpr, expecting: indexExpected)
         guard let holder else { return nil }
 
         // Only an array has elements.
@@ -552,11 +548,10 @@ private extension CheckedBinaryOperator {
 /// from any value property, whose value it holds as a call's result.
 extension ExpressionChecker: PlaceRules {
     func root(_ expr: Expr, holdsParts: Bool) -> TypedPlace? {
-        // A value roots the place in a temporary that holds the value, unless the value is a place itself. A `copy`
-        // of a place is a value like any other, so a part taken from it moves out of the copy and leaves the place
-        // whole. A value that failed was reported.
-        guard let value = check(expr) else { return nil }
-        if case .place(let place) = value.kind { return (place, value.type) }
+        // A value roots the place in a temporary that holds the value, which is only read from. A `copy` of a place
+        // is a value like any other, so a part taken from it moves out of the copy and leaves the place whole. A value
+        // that failed was reported.
+        guard let value = check(expr, at: .operand) else { return nil }
         return temporary(holding: value)
     }
 

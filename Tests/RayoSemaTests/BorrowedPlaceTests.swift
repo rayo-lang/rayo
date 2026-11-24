@@ -73,6 +73,14 @@ struct BorrowedPlaceTests {
         ])
     }
 
+    // The value of an assignment is checked even where its target can't be assigned, so its mistakes are reported.
+    @Test func `an assignment to a target that fails still reports the place its value gives`() {
+        #expect(messages(of: "nope = e") == [
+            "5: error[E0206]: 'nope' isn't declared",
+            "12: error[E0278]: an assignment can't borrow 'e'; write 'consume e' or 'copy e'",
+        ])
+    }
+
     // `_ =` takes its value as any assignment does, so nothing written says whether it drops the place's value or a
     // copy of it.
     @Test(arguments: [
@@ -222,5 +230,11 @@ struct BorrowedPlaceTests {
 
     @Test func `a 'var' of '_' is reported for its name alone, whatever its value`() {
         #expect(messages(of: "var _ = a").map { $0.prefix(16) } == ["9: error[E0218]:"])
+    }
+
+    // A binding of `_` declares no local, so nothing takes its value, and a place it is given needs no mark.
+    @Test(arguments: [("var _ = e", 9), ("let _ = e.stats", 9), ("ref let _ = e", 13), ("let _ = &e", 9)])
+    func `a declaration of '_' given a struct's place is reported for its name alone`(statement: String, column: Int) {
+        #expect(messages(of: statement).map { $0.prefix { $0 != "'" } } == ["\(column): error[E0218]: "])
     }
 }

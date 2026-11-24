@@ -21,9 +21,9 @@ func "add(_: Int, to: Int)"(_: Int, to: Int) -> Int {
   param %1 b: Int @6:23-6:24
   return
     binary add: Int @6:40-6:45
-      value: Int @6:40-6:41
+      value copied: Int @6:40-6:41
         place %0 @6:40-6:41
-      value: Int @6:44-6:45
+      value copied: Int @6:44-6:45
         place %1 @6:44-6:45
 }
 
@@ -31,7 +31,7 @@ func "isZero(_: Int)"(_: Int) -> Bool {
   param %0 n: Int @7:15-7:16
   return
     binary equal: Bool @8:12-8:18
-      value: Int @8:12-8:13
+      value copied: Int @8:12-8:13
         place %0 @8:12-8:13
       integer 0: Int @8:17-8:18
 }

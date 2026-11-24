@@ -18,7 +18,7 @@ func "main()"() -> Void {
   expression
     call builtin "print(_: &Int)": Void @4:5-4:17
       &
-        value: Int @4:11-4:16
+        value lent: Int @4:11-4:16
           place %0 @4:11-4:16
   bind %1 @5:9-5:13
     copy: Int @5:16-5:26
@@ -27,7 +27,7 @@ func "main()"() -> Void {
     call builtin "print(_: &Int)": Void @6:5-6:22
       &
         call "next(_: Int)": Int @6:11-6:21
-          value: Int @6:16-6:20
+          value copied: Int @6:16-6:20
             place %1 @6:16-6:20
   expression
     call builtin "print(_: &Int)": Void @7:5-7:18
@@ -43,7 +43,7 @@ func "main()"() -> Void {
   expression
     call builtin "print(_: &Int)": Void @11:5-11:13
       &
-        value: Int @11:11-11:12
+        value lent: Int @11:11-11:12
           place %2 @11:11-11:12
 }
 
@@ -61,7 +61,7 @@ func "sum(_: Int)"(_: Int) -> Int {
   expression
     if: Void @15:5-15:29
       binary equal: Bool @15:8-15:16
-        value: Int @15:8-15:11
+        value copied: Int @15:8-15:11
           place %0 @15:8-15:11
         integer 0: Int @15:15-15:16
     then
@@ -70,11 +70,11 @@ func "sum(_: Int)"(_: Int) -> Int {
     else
   return
     binary add: Int @16:12-16:30
-      value: Int @16:12-16:15
+      value copied: Int @16:12-16:15
         place %0 @16:12-16:15
       call "sum(_: Int)": Int @16:18-16:30
         binary subtract: Int @16:22-16:29
-          value: Int @16:22-16:25
+          value copied: Int @16:22-16:25
             place %0 @16:22-16:25
           integer 1: Int @16:28-16:29
 }
@@ -84,6 +84,6 @@ func "show(print: Int)"(print: Int) -> Void {
   return
     call builtin "print(_: &Int)": Void @18:25-18:37
       &
-        value: Int @18:31-18:36
+        value lent: Int @18:31-18:36
           place %0 @18:31-18:36
 }

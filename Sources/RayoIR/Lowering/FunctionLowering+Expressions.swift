@@ -4,60 +4,63 @@ import RayoSource
 /// Lowers expressions, from the current block on, as the operations that compute them and the operands that hold
 /// their values.
 extension FunctionLowering {
-    /// Lowers `expr`, the value of a position that `use`s it, as the computation of its value into `destination`, or,
-    /// where `destination` is nil, of a value that is dropped.
-    mutating func compute(_ expr: CheckedExpr, into destination: Destination?, as use: ValueUse) {
+    /// Lowers `expr` as the computation of its value into `destination`, or, where `destination` is nil, of a value
+    /// that is dropped.
+    mutating func compute(_ expr: CheckedExpr, into destination: Destination?) {
+        switch expr.kind {
         // A borrow makes the value of the local it declares depend on what it borrows, so it needs the local.
-        if use == .borrow, let destination { return borrow(expr, into: destination) }
+        case .place(let place, .borrow):
+            borrow(place, at: expr.range, into: destination)
 
         // An `if` whose value is dropped runs the branch its condition picks, and computes that branch's value for
-        // what it does, so a Void `if` needs no temporary.
-        if destination == nil, case .if(let condition, let then, let otherwise) = expr.kind {
-            return lowerIf(condition, then, otherwise, into: nil, as: use)
-        }
+        // what it does, so a Void `if` needs no temporary. An `if` that a `ref let` takes has the branch that runs
+        // compute its value into the local itself, so the local depends on the access of whichever branch ran.
+        case .if(let condition, let then, let otherwise) where computesBranches(into: destination):
+            lowerIf(condition, then, otherwise, into: destination)
 
         // Any other value is one operation, whose operands are computed first.
-        let value = rvalue(of: expr, as: use)
-        builder.emit(value, into: destination, range: expr.range)
-    }
-
-    /// Lowers `expr`, the value of a `ref let`, into `destination`, the local it declares.
-    private mutating func borrow(_ expr: CheckedExpr, into destination: Destination) {
-        switch expr.kind {
-        // A place that a local holds is read through a read access, which the local's value then depends on, so the
-        // access lasts for as long as the local is used.
-        case .place(let place) where place.local != nil:
-            let borrowed = self.place(of: place)
-            let access = builder.begin(Access(.read, to: borrowed, at: expr.range))
-            builder.emit(.operand(.read(borrowed, at: expr.range)), into: destination, range: expr.range)
-            builder.emit(.depend(destination.place, on: access))
-
-        // An `if` hands the borrow to the branch that runs, which computes its value into the local itself, so the
-        // local depends on the access of whichever branch ran.
-        case .if(let condition, let then, let otherwise):
-            lowerIf(condition, then, otherwise, into: destination, as: .borrow)
-
-        // Checking reports any other value given to a `ref let`, which has no place to refer to.
         default:
-            preconditionFailure("a 'ref let' is given a value that no local holds")
+            builder.emit(rvalue(of: expr), into: destination, range: expr.range)
         }
     }
 
-    /// Lowers `expr`, the value of a position that `use`s it, to an operand that holds its value, computing it into a
-    /// new temporary unless it is a constant or a place.
-    mutating func operand(of expr: CheckedExpr, as use: ValueUse) -> Operand {
+    /// Whether an `if` has its branches compute its value into `destination` itself: where it drops the value, and
+    /// where the destination is the whole of a `ref let`, which borrows it.
+    private func computesBranches(into destination: Destination?) -> Bool {
+        guard let destination else { return true }
+        return destination.place.steps.isEmpty && builder.isBorrowing(destination.place.root)
+    }
+
+    /// Lowers the borrow of `place`, which the source names at `range`, into `destination`, the local of the `ref let`
+    /// that borrows it. The place is read through a read access, which the local's value then depends on, so the
+    /// access lasts for as long as the local is used.
+    private mutating func borrow(_ place: CheckedPlace, at range: SourceRange, into destination: Destination?) {
+        // Checking gives only a `ref let` a place it borrows, and reports one that no local holds, which has no place
+        // to refer to.
+        guard let destination, place.local != nil else {
+            preconditionFailure("only a 'ref let' borrows a place, and only one that a local holds")
+        }
+
+        let borrowed = self.place(of: place)
+        let access = builder.begin(Access(.read, to: borrowed, at: range))
+        builder.emit(.operand(.read(borrowed, at: range)), into: destination, range: range)
+        builder.emit(.depend(destination.place, on: access))
+    }
+
+    /// Lowers `expr` to an operand that holds its value, computing it into a new temporary unless it is a constant or
+    /// a place.
+    mutating func operand(of expr: CheckedExpr) -> Operand {
         switch expr.kind {
         // An integer is a constant operand.
         case .integerLiteral(let value, let type): .constant(.integer(value, type))
         // So is a Bool.
         case .boolLiteral(let value): .constant(.bool(value))
-        // A place written on its own gives its value up where its position takes it, and keeps it where it reads it.
-        // A position that takes a value of an implicitly copyable type takes a copy, so the place keeps it there too.
-        case .place(let place):
+        // A place written on its own is read where its position copies its value or is lent it, and moved out of
+        // where its position takes the value.
+        case .place(let place, let use):
             switch use {
-            case .read: .read(self.place(of: place), at: expr.range)
-            case .take where expr.type.isImplicitlyCopyable: .read(self.place(of: place), at: expr.range)
-            case .take: .move(self.place(of: place), at: expr.range)
+            case .copy, .lend: .read(self.place(of: place), at: expr.range)
+            case .move: .move(self.place(of: place), at: expr.range)
             case .borrow: preconditionFailure("a borrow is lowered into the local it declares, as no operand")
             }
         // An array's count is a constant, which the type of the array it counts fixes.
@@ -72,7 +75,7 @@ extension FunctionLowering {
         // So a copy is made, and a move made, where the source writes it: a later operand that changes the copied
         // place leaves the copy as it was, and one that uses the consumed place finds it moved.
         case .copy, .consume, .unary, .binary, .call, .if, .arrayLiteral, .filledArray:
-            .read(temporary(holding: expr, as: use), at: expr.range)
+            .read(temporary(holding: expr), at: expr.range)
         }
     }
 
@@ -82,7 +85,7 @@ extension FunctionLowering {
     mutating func place(of place: CheckedPlace) -> Place {
         let root = switch place.root {
         case .local(let local, _): local
-        case .temporary(let value): temporary(holding: value, as: .read).root
+        case .temporary(let value): temporary(holding: value).root
         }
 
         var lowered = Place(root: root)
@@ -111,7 +114,7 @@ extension FunctionLowering {
         }
 
         let checked = builder.newTemporary(.uint)
-        let value = operand(of: index, as: .read)
+        let value = operand(of: index)
         builder.emit(.index(value, below: count), into: Destination(checked, at: index.range), range: index.range)
         return .elementAt(checked.root)
     }
@@ -126,23 +129,22 @@ extension FunctionLowering {
         return .constant(.integer(Int128(count), .uint))
     }
 
-    /// Computes `expr`, the value of a position that `use`s it, into a new temporary, or, for an `if`, has the branch
-    /// that runs compute its value there, and returns the temporary's place.
-    private mutating func temporary(holding expr: CheckedExpr, as use: ValueUse) -> Place {
-        // An `if` computes its value on the path of the branch that runs, which uses it as the `if`'s position does.
+    /// Computes `expr` into a new temporary, or, for an `if`, has the branch that runs compute its value there, and
+    /// returns the temporary's place.
+    private mutating func temporary(holding expr: CheckedExpr) -> Place {
+        // An `if` computes its value on the path of the branch that runs.
         if case .if(let condition, let then, let otherwise) = expr.kind {
-            return lowerIf(condition, then, otherwise, intoTemporaryOf: expr.type, at: expr.range, as: use)
+            return lowerIf(condition, then, otherwise, intoTemporaryOf: expr.type, at: expr.range)
         }
         return lowerIntoTemporary(expr)
     }
 
-    /// Lowers `expr`, the value of a position that `use`s it, to the operation that computes its value, computing its
-    /// operands first.
-    private mutating func rvalue(of expr: CheckedExpr, as use: ValueUse) -> Rvalue {
+    /// Lowers `expr` to the operation that computes its value, computing its operands first.
+    private mutating func rvalue(of expr: CheckedExpr) -> Rvalue {
         switch expr.kind {
         // A constant or a place is an operand as it is, and so is `&&`, `||` or an `if`, which lowers to branches.
         case .integerLiteral, .boolLiteral, .place, .arrayCount, .binary(.and, _, _), .binary(.or, _, _), .if:
-            .operand(operand(of: expr, as: use))
+            .operand(operand(of: expr))
         // A copy reads the place it copies, whatever its position does with the value.
         case .copy(let place):
             .operand(.read(self.place(of: place), at: expr.range))
@@ -151,19 +153,19 @@ extension FunctionLowering {
             .operand(.move(self.place(of: place), at: expr.range))
         // A unary operation applies to its operand, computed first.
         case .unary(let op, let value):
-            .unary(IRUnaryOperator(op), operand(of: value, as: .read))
+            .unary(IRUnaryOperator(op), operand(of: value))
         // The left operand is computed before the right one, in the order the source reads.
         case .binary(let op, let left, let right):
-            .binary(IRBinaryOperator(op), operand(of: left, as: .read), operand(of: right, as: .read))
+            .binary(IRBinaryOperator(op), operand(of: left), operand(of: right))
         // So are the arguments of a call, from first to last.
         case .call(let callee, let arguments):
             .call(callee, arguments: passed(arguments))
-        // An array takes its elements, from first to last, as a primary initializer takes its fields.
+        // An array takes its elements, from first to last.
         case .arrayLiteral(let elements):
-            .array(elements.map { operand(of: $0, as: .take) }, of: arrayShape(of: expr).element)
-        // A filled array reads its value once, and copies it into each element.
+            .array(elements.map { operand(of: $0) }, of: arrayShape(of: expr).element)
+        // A filled array computes its value once, and copies it into each element.
         case .filledArray(let value):
-            .filledArray(operand(of: value, as: .read), count: arrayShape(of: expr).count)
+            .filledArray(operand(of: value), count: arrayShape(of: expr).count)
         }
     }
 
@@ -195,54 +197,53 @@ extension FunctionLowering {
     /// Evaluates `argument`, and returns what the call passes for it, before the call's accesses begin.
     private mutating func evaluate(_ argument: CheckedArgument) -> EvaluatedArgument {
         switch argument {
-        case .borrowed(let value): .borrowing(operand(of: value, as: .read))
-        case .owned(let value): .value(operand(of: value, as: .take))
+        case .borrowed(let value): .borrowing(operand(of: value))
+        case .owned(let value): .value(operand(of: value))
         case .mutable(let place): .place(self.place(of: place), at: place.range, .modify)
         }
     }
 
-    /// Lowers `condition` and the branches it chooses between, computing the value of the branch that runs, which
-    /// the `if`'s position `use`s, into a new temporary of `type` at `range`, and returns the temporary's place.
+    /// Lowers `condition` and the branches it chooses between, computing the value of the branch that runs into a
+    /// new temporary of `type` at `range`, and returns the temporary's place.
     private mutating func lowerIf(_ condition: CheckedExpr, _ then: CheckedBranch, _ otherwise: CheckedBranch,
-                                  intoTemporaryOf type: RayoType, at range: SourceRange, as use: ValueUse) -> Place {
+                                  intoTemporaryOf type: RayoType, at range: SourceRange) -> Place {
         let temporary = builder.newTemporary(type)
-        lowerIf(condition, then, otherwise, into: Destination(temporary, at: range), as: use)
+        lowerIf(condition, then, otherwise, into: Destination(temporary, at: range))
         return temporary
     }
 
-    /// Lowers `condition` and the branches it chooses between, computing the value of the branch that runs, which
-    /// the `if`'s position `use`s, into `destination`, or dropping it where `destination` is nil.
+    /// Lowers `condition` and the branches it chooses between, computing the value of the branch that runs into
+    /// `destination`, or dropping it where `destination` is nil.
     private mutating func lowerIf(_ condition: CheckedExpr, _ then: CheckedBranch, _ otherwise: CheckedBranch,
-                                  into destination: Destination?, as use: ValueUse) {
+                                  into destination: Destination?) {
         // Compute the condition, and make the blocks of the two branches and of the join after them.
-        let conditionValue = operand(of: condition, as: .read)
+        let conditionValue = operand(of: condition)
         let thenBlock = builder.newBlock()
         let elseBlock = builder.newBlock()
         let join = builder.newBlock()
 
         // Each branch runs its statements and computes its value, then goes on to the join.
         builder.end(with: .branch(conditionValue, then: thenBlock, otherwise: elseBlock), continuingIn: thenBlock)
-        lower(then, into: destination, as: use)
+        lower(then, into: destination)
         builder.end(with: .goto(join), continuingIn: elseBlock)
-        lower(otherwise, into: destination, as: use)
+        lower(otherwise, into: destination)
         builder.end(with: .goto(join), continuingIn: join)
     }
 
-    /// Lowers `branch`'s statements, then computes its value, where it gives one, into `destination`, which uses it
-    /// as the `if`'s position `use`s it.
-    private mutating func lower(_ branch: CheckedBranch, into destination: Destination?, as use: ValueUse) {
+    /// Lowers `branch`'s statements, then computes its value, where it gives one, into `destination`.
+    private mutating func lower(_ branch: CheckedBranch, into destination: Destination?) {
         lower(branch.statements)
 
         // A branch that gives no value computes none.
         guard let value = branch.value else { return }
-        compute(value, into: destination, as: use)
+        compute(value, into: destination)
     }
 
     /// Computes `expr`, an operation that is neither a place nor an `if`, into a new temporary that an operand reads,
     /// and returns the temporary's place.
     private mutating func lowerIntoTemporary(_ expr: CheckedExpr) -> Place {
         let temporary = builder.newTemporary(expr.type)
-        compute(expr, into: Destination(temporary, at: expr.range), as: .read)
+        compute(expr, into: Destination(temporary, at: expr.range))
         return temporary
     }
 
@@ -254,7 +255,7 @@ extension FunctionLowering {
         // The result starts as `left`'s value, which is the result when it is `decidingValue`.
         let result = Destination(builder.newTemporary(.bool), at: range)
         let resultValue = Operand.read(result.place, at: range)
-        let leftValue = operand(of: left, as: .read)
+        let leftValue = operand(of: left)
         builder.emit(.operand(leftValue), into: result, range: range)
 
         // A `left` that decides goes on to the join, and any other to a block of its own that evaluates `right`.
@@ -266,7 +267,7 @@ extension FunctionLowering {
         builder.end(with: branch, continuingIn: evaluateRight)
 
         // There `right`'s value becomes the result, and both paths meet at the join, where lowering goes on.
-        let rightValue = operand(of: right, as: .read)
+        let rightValue = operand(of: right)
         builder.emit(.operand(rightValue), into: result, range: range)
         builder.end(with: .goto(join), continuingIn: join)
         return resultValue

@@ -1,8 +1,8 @@
 import RayoCheckedProgram
 
 /// A value checked on its own that waits for the position it stands in: an untyped value, an array literal or an
-/// implicit member, whose type the position settles, a `&` or a `mutable` of a place, which only some positions
-/// take, or an `if` whose branches end in such values.
+/// implicit member, whose type the position settles, a place written bare, which the position decides what to do with,
+/// a `&` or a `mutable` of a place, which only some positions take, or an `if` whose branches end in such values.
 protocol WaitingValue {
     /// The type a part of the value fixes, whatever position it stands in, such as the type of an `if`'s typed
     /// branch; nil where only its position can give it one.
@@ -30,19 +30,15 @@ protocol WaitingValue {
     /// Whether the source writes the value as a `mutable` of a place.
     var lendsForChange: Bool { get }
 
-    /// Settles the value toward `type`: to `type` where it can, and otherwise as it would where its position gives
-    /// no type. Reports what keeps it from settling, and returns nil then. An error that still leaves the value a
+    /// Settles the value toward `type` where it stands in `position`: to `type` where it can, and otherwise as it
+    /// would where its position gives no type. Reports what keeps it from settling, and what the position can't take
+    /// of it as the source writes it, and returns nil where either fails it. An error that still leaves the value a
     /// meaning, such as a literal that `type` can't hold, is reported, and the value settles all the same.
-    func settled(toward type: RayoType?, by expressions: ExpressionChecker) -> CheckedExpr?
+    func settled(toward type: RayoType?, at position: Position, by expressions: ExpressionChecker) -> CheckedExpr?
 
     /// Settles the value to the type `expected` names, reporting each part of it that can't take that type with the
-    /// error `expected` gives.
+    /// error `expected` gives, and what its position can't take of it.
     func settled(expecting expected: Expectation, by expressions: ExpressionChecker) -> CheckedExpr?
-
-    /// Settles the value where its position gives no type, and `recipient` takes it, as a declaration takes its value
-    /// where no annotation gives its type. Reports each part of it that the recipient can't take as the source writes
-    /// it.
-    func settled(takenBy recipient: Recipient, by expressions: ExpressionChecker) -> CheckedExpr?
 
     /// Reports the errors the value's parts give on their own, where the expression that holds it fails for another
     /// reason and so never settles it.
@@ -64,22 +60,8 @@ extension WaitingValue {
     /// No value but a `mutable` of a place, or an `if` whose branches end in one, is written as a `mutable`.
     var lendsForChange: Bool { false }
 
-    /// Reports the errors that settling the value where its position gives no type reports.
+    /// Reports the errors that settling the value reports where its position gives no type and only reads it.
     func reportErrors(by expressions: ExpressionChecker) {
-        _ = settled(toward: nil, by: expressions)
-    }
-
-    /// Settles the value toward the expected type, then makes the whole value fit it.
-    func settled(expecting expected: Expectation, by expressions: ExpressionChecker) -> CheckedExpr? {
-        // A value that failed to settle was reported.
-        guard let settled = settled(toward: expected.type, by: expressions) else { return nil }
-        return expressions.fitted(settled, to: expected)
-    }
-
-    /// Settles the value as it would where its position gives no type, then hands the whole value to `recipient`.
-    func settled(takenBy recipient: Recipient, by expressions: ExpressionChecker) -> CheckedExpr? {
-        // A value that failed to settle was reported.
-        guard let settled = settled(toward: nil, by: expressions) else { return nil }
-        return expressions.taken(settled, by: recipient)
+        _ = settled(toward: nil, at: .operand, by: expressions)
     }
 }

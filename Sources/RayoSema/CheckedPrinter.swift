@@ -115,7 +115,7 @@ public struct CheckedPrinter: ~Copyable {
         switch expression.kind {
         case .integerLiteral, .boolLiteral:
             break
-        case .place(let place), .copy(let place), .consume(let place), .arrayCount(let place, _):
+        case .place(let place, _), .copy(let place), .consume(let place), .arrayCount(let place, _):
             write(place, depth: depth + 1)
         case .unary(_, let operand), .filledArray(let operand):
             write(operand, depth: depth + 1)
@@ -140,7 +140,7 @@ public struct CheckedPrinter: ~Copyable {
         switch kind {
         case .integerLiteral(let value, _): "integer \(value)"
         case .boolLiteral(let value): "bool \(value)"
-        case .place: "value"
+        case .place(_, let use): "value \(participle(of: use))"
         case .copy: "copy"
         case .consume: "consume"
         case .arrayCount(_, let count): "count \(count)"
@@ -150,6 +150,16 @@ public struct CheckedPrinter: ~Copyable {
         case .if: "if"
         case .arrayLiteral: "array"
         case .filledArray: "filled array"
+        }
+    }
+
+    /// What a position does with a place written bare, as a word after `value`, such as `value moved`.
+    private func participle(of use: PlaceUse) -> String {
+        switch use {
+        case .copy: "copied"
+        case .move: "moved"
+        case .lend: "lent"
+        case .borrow: "borrowed"
         }
     }
 

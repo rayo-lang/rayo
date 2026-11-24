@@ -33,7 +33,7 @@ struct ArrayLiteralChecker {
         }
         // Nor has one whose elements are each an empty literal, or hold only empty literals; each is reported.
         guard let element = literal.defaultElementType else {
-            for element in literal.elements { _ = expressions.settled(element, toward: nil) }
+            for element in literal.elements { _ = expressions.settled(element, toward: nil, at: .arrayElement) }
             return nil
         }
         return settled(literal, toArrayOf: literal.elements.count, element, mismatch: ErrorCode.elementTypesDiffer)
@@ -57,7 +57,7 @@ struct ArrayLiteralChecker {
         }
 
         // Every element is settled, so each one's errors are reported, before any failure fails the literal.
-        let expected = Expectation(element, mismatch: mismatch)
+        let expected = Expectation(element, at: .arrayElement, mismatch: mismatch)
         let settled = literal.elements.map { expressions.settled($0, expecting: expected) }
         let elements = settled.compactMap { $0 }
         guard hasCount, elements.count == settled.count else { return nil }
