@@ -27,4 +27,15 @@ public enum Effect: Equatable, Sendable {
     case retire(LocalID)
     /// Leaves the function, after which its caller reads what each parameter it passed by access holds.
     case exit
+
+    /// The place the effect names: the one it reads, moves, stores to, begins an access to or makes depend on one.
+    /// Nil for an effect that names only an access or a local, or none.
+    public var place: Place? {
+        switch self {
+        case .read(let place, _), .move(let place, _), .depend(let place, _): place
+        case .store(let destination): destination.place
+        case .begin(_, let access): access.place
+        case .use, .end, .declare, .retire, .exit: nil
+        }
+    }
 }
