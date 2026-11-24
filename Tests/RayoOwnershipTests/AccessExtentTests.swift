@@ -151,8 +151,9 @@ struct AccessExtentTests {
               \(moveAndStore)
               %2 @1:1-1:1 = operand read %1.0 @1:1-1:1 @1:1-1:1
             """
-        let errors = try checked(borrowingHit(then: blocks)).errors
-        #expect(!errors.contains(damageMovedWhileBorrowed))
+        // The one error is for the value `r` first held, which the store leaves unread.
+        let unreadBorrow = Diagnostic(.unreadValue(name: "r"), at: at(1))
+        #expect(try checked(borrowingHit(then: blocks)).errors == [unreadBorrow])
     }
 
     @Test func `a read of a place that a live modify access overlaps conflicts with it`() throws {
@@ -372,8 +373,9 @@ struct AccessExtentTests {
     }
 }
 
-/// A function that stores a new `Hit` in the `var` `h` (`%0`), borrows it at column 3 into the `ref` `r` (`%1`), whose
-/// value depends on that borrow, and then runs `statements`, which may use an Int temporary (`%2`), before it returns.
+/// A function that stores a new `Hit` in the `var` `h` (`%0`), borrows it at column 3 into the `ref` `r` (`%1`), which
+/// it stores at column 1 and whose value depends on that borrow, and then runs `statements`, which may use an Int
+/// temporary (`%2`), before it returns.
 private func borrowingHit(then statements: String) -> (name: String, text: String) {
     let text = """
         func "f()"() -> Void {
@@ -383,7 +385,7 @@ private func borrowingHit(then statements: String) -> (name: String, text: Strin
         bb0:
           %0 @1:1-1:1 = call "Hit(damage: Int)"(1) @1:1-1:1
           begin a0 read %0 @2:3-2:3
-          %1 @1:1-1:1 = operand read %0 @1:1-1:1 @1:1-1:1
+          %1 @2:1-2:1 = operand read %0 @1:1-1:1 @1:1-1:1
           depend %1 on a0
         \(statements)
           return
