@@ -1,0 +1,122 @@
+// Between two fights, a party of three heroes makes camp. Each hero still standing eats from the party's rations and
+// heals, and twin recruits come looking for the place a hero who fell left. The twin the party takes in leads it.
+// Then the smith hones the weapons the last fight left, and offers each hero the one in its own place on the rack.
+//
+// The program prints each hero's health after resting and the rations left, whether each twin is taken in, the
+// health of the two heroes in front once the recruit leads, and the might of each hero's weapon once the party has
+// re-armed.
+
+func main() {
+    var party = Party(heroes: [
+        Hero(hp: 9, maxHp: 30, weapon: Weapon(power: 8, edge: 1)),
+        Hero(hp: 0, maxHp: 24, weapon: Weapon(power: 6, edge: 0)),
+        Hero(hp: 17, maxHp: 20, weapon: Weapon(power: 5, edge: 2)),
+    ], rations: 5)
+
+    // Each hero rests in turn, so the first to eat may leave the others too little.
+    var hero: UInt = 0
+    while hero < party.heroes.count {
+        rest(mutable party.heroes[hero], on: mutable party.rations)
+        print(party.heroes[hero].hp)
+        hero += 1
+    }
+    print(party.rations)
+
+    // The party has room for one twin, and turns the other away.
+    let twin = Hero(hp: 16, maxHp: 16, weapon: Weapon(power: 4, edge: 0))
+    print(enlist(copy twin, in: mutable party))
+    print(enlist(consume twin, in: mutable party))
+
+    // The recruit, fresh to the fight, takes the lead, and the hero who led falls back behind it.
+    trade(mutable party.heroes[0], mutable party.heroes[1])
+    print(party.heroes[0].hp)
+    print(party.heroes[1].hp)
+
+    // The rack holds a sword, the club the troll fell with, and a dagger.
+    rearm(mutable party, from: [
+        Weapon(power: 7, edge: 0),
+        loot(Enemy(hp: 0, weapon: Weapon(power: 9, edge: 1))),
+        Weapon(power: 3, edge: 0),
+    ])
+}
+
+// Feeds `hero` from `rations`, a meal for each 5 health it lacks, while the rations last, and heals it 5 for each
+// meal it eats. A hero who fell eats nothing.
+func rest(_ hero: mutable &Hero, on rations: mutable &Int) {
+    if hero.hp <= 0 { return }
+    var meals = (hero.maxHp - hero.hp + 4) / 5
+    if meals > rations { meals = rations }
+    rations -= meals
+    heal(mutable hero.hp, by: meals * 5, upTo: hero.maxHp)
+}
+
+// Heals `hp` by `amount`, but never past `most`.
+func heal(_ hp: mutable &Int, by amount: Int, upTo most: Int) {
+    hp += amount
+    if hp > most { hp = most }
+}
+
+// Takes `recruit` into the first place in `party` that a hero who fell left, and gives whether it found one.
+func enlist(_ recruit: Hero, in party: mutable &Party) -> Bool {
+    var place: UInt = 0
+    while place < party.heroes.count {
+        if party.heroes[place].hp <= 0 {
+            party.heroes[place] = consume recruit
+            return true
+        }
+        place += 1
+    }
+
+    // With no place left, the recruit is turned away.
+    _ = consume recruit
+    return false
+}
+
+// Swaps `ahead` and `behind`, so each takes the other's place.
+func trade(_ ahead: mutable &Hero, _ behind: mutable &Hero) {
+    let leader = copy ahead
+    ahead = copy behind
+    behind = consume leader
+}
+
+// Gives the weapon that `enemy` fell with.
+func loot(_ enemy: Enemy) -> Weapon {
+    return consume enemy.weapon
+}
+
+// Hones the weapons on `rack`, and offers each to the hero in the same place in `party`. Prints the might of each
+// hero's weapon once it has been offered one.
+func rearm(_ party: mutable &Party, from rack: [3 of Weapon]) {
+    let honed = hone(consume rack)
+    var hero: UInt = 0
+    while hero < honed.count {
+        offer(copy honed[hero], to: mutable party.heroes[hero])
+        print(might(of: party.heroes[hero]))
+        hero += 1
+    }
+}
+
+// Sharpens each weapon on `rack` by 2.
+func hone(_ rack: [3 of Weapon]) -> [3 of Weapon] {
+    var weapon: UInt = 0
+    while weapon < rack.count {
+        rack[weapon].edge += 2
+        weapon += 1
+    }
+    return consume rack
+}
+
+// Gives `hero` `weapon` in place of its own, if `weapon` is the mightier of the two.
+func offer(_ weapon: Weapon, to hero: mutable &Hero) {
+    if weapon.power + weapon.edge > might(of: hero) { hero.weapon = consume weapon }
+}
+
+// Gives the might of the weapon `hero` holds: its power and its edge together.
+func might(of hero: &Hero) -> Int {
+    return hero.weapon.power + hero.weapon.edge
+}
+
+struct Party(var heroes: [3 of Hero], var rations: Int)
+struct Hero(var hp: Int, let maxHp: Int, var weapon: Weapon)
+struct Weapon(let power: Int, var edge: Int)
+struct Enemy(let hp: Int, var weapon: Weapon)
