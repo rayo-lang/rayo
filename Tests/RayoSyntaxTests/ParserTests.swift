@@ -121,17 +121,24 @@ struct ParserErrorTests {
         #expect(errors(source) == [])
     }
 
+    // Checking says which of these is a place that can change.
+    @Test(arguments: [
+        "func f() { g(mutable 1) }", "func f() { g(mutable -1) }", "func f() { g(mutable [1, 2][0]) }",
+        "func f() { g(mutable (e).hp) }", "func f() { g(mutable !c) }", "func f() { g(mutable copy e.hp) }",
+    ])
+    func `'mutable' takes any unary expression`(source: String) {
+        #expect(errors(source) == [])
+    }
+
     @Test(arguments: [
         ("func f() { g(&) }", ErrorCode.missingLentName(found: .token(")"))),
         ("func f() { g(&(e).hp) }", .missingLentName(found: .token("("))),
         ("func f() { g(&1) }", .missingLentName(found: .token("1"))),
         ("func f() { g(mutable &1) }", .missingLentName(found: .token("1"))),
-        ("func f() { g(mutable) }", .missingMutablyLentName(found: .token(")"))),
-        ("func f() { g(mutable (e).hp) }", .missingMutablyLentName(found: .token("("))),
-        ("func f() { g(mutable 1) }", .missingMutablyLentName(found: .token("1"))),
+        ("func f() { g(mutable) }", .missingExpression(found: .token(")"))),
         ("func f() {\n    a & b\n}", .unendedStatement(found: .token("&"))),
     ])
-    func `'&' and 'mutable' need a name first, and '&' stands only before a place`(
+    func `'&' needs a name first, 'mutable' an expression, and '&' stands only before a place`(
         source: String, expected: ErrorCode,
     ) {
         #expect(errors(source) == [expected])

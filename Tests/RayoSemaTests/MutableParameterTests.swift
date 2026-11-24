@@ -138,11 +138,6 @@ struct MutableParameterTests {
         ])
     }
 
-    @Test(arguments: [("heal(mutable makeEnemy())", 10), ("bump(mutable makeEnemy().stats.hp)", 10)])
-    func `'mutable' of a temporary is reported as unsupported`(statement: String, column: Int) {
-        #expect(messages(of: statement) == ["\(column): error[E0289]: 'mutable' isn't supported"])
-    }
-
     @Test(arguments: ["heal(mutable e)", "bump(mutable e.stats.hp)", "bump(mutable e.slots[0])"])
     func `'mutable' of a '&T' parameter, or of a part of one, says to take it as 'mutable &T'`(statement: String) {
         #expect(declarationMessages(of: "func f(_ e: &Enemy) { \(statement) }") == [
@@ -172,10 +167,7 @@ struct MutableParameterTests {
     func `a value given to a 'mutable &T' parameter is a temporary whose change does nothing`(
         statement: String, column: Int, temporary: String,
     ) {
-        #expect(messages(of: statement) == [
-            "\(column): error[E0291]: changing '\(temporary)' does nothing, since it's dropped right after; "
-                + "store it in a 'var' first",
-        ])
+        #expect(messages(of: statement) == [changedTemporary(temporary, at: "\(column)")])
     }
 
     @Test(arguments: [

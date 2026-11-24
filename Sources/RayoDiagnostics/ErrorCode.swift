@@ -127,8 +127,7 @@ public enum ErrorCode: Sendable, Hashable {
     @Code(136, error: "expected a name after '&', found {found}")
     case missingLentName(found: FoundToken)
 
-    @Code(137, error: "expected a name after 'mutable', found {found}")
-    case missingMutablyLentName(found: FoundToken)
+    // 137 is unused, and stays so.
 
     // MARK: Checking
 
