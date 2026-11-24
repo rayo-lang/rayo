@@ -11,18 +11,4 @@ public struct BasicBlock: Equatable, Sendable {
     public var effects: [[Effect]] {
         statements.map(\.effects) + [terminator.effects]
     }
-
-    /// The operands the block uses, in the order it evaluates them: its statements' in turn, then its terminator's.
-    public var operands: [Operand] {
-        // A computation uses its value's operands, and no other statement uses one.
-        let statementOperands = statements.flatMap { statement in
-            switch statement {
-            case .compute(_, let value, _): value.operands
-            case .declare, .retire, .begin, .end, .depend: [Operand]()
-            }
-        }
-
-        // The terminator's operand, where it has one, is the block's last.
-        return statementOperands + [terminator.operand].compactMap { $0 }
-    }
 }
