@@ -80,21 +80,6 @@ struct AccessBeginningTests {
     }
 }
 
-/// A program whose `main` assigns its Int local `%0` and then runs `blocks`, and which declares `f(_: &Int)`, which
-/// borrows its one Int.
-private func borrowing(_ blocks: String) -> String {
-    """
-    main "main()"
-    func "main()"() -> Void {
-      var %0 x: Int @1:1-1:2
-    bb0:
-      %0 @1:1-1:2 = operand 1 @1:1-1:2
-    \(blocks)
-    }
-    func "f(_: &Int)"(_: &Int) -> Void
-    """
-}
-
 /// Bodies that begin an access in a block after one that uses it. Every path to the use begins the access first,
 /// except in the block that no path reaches.
 private let accessesUsedInAnEarlierBlock = [

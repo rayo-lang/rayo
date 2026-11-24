@@ -101,7 +101,8 @@ extension Compiler {
             IRVerifier.verify(program, from: stage)
 
         // The emitter takes its IR's rules as given, so every build checks them, but for two. Of an access it needs
-        // where it begins and not where it ends, and it never receives lowering's IR, so a release build checks neither.
+        // where it begins and not where it ends, and it never receives lowering's IR, so a release build checks
+        // neither.
         case (.release, .ownership):
             IRVerifier.verifyEmitterRules(program)
         case (.release, .lowering):

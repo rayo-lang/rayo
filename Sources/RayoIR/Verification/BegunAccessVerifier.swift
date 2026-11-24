@@ -1,6 +1,6 @@
-/// Checks that one function's body begins each access before the emitter needs its address. The emitter walks the
-/// blocks in the order of their indices, and keeps one address for each access, found where the access begins, for
-/// every use of it. So one statement begins each access, ahead of each use in that order and on every path to it.
+/// Checks that one statement begins each access in one function's body, ahead of each use of it in the order of the
+/// blocks and on every path to it. The emitter walks the blocks in that order, and keeps the one address it finds
+/// where an access begins.
 struct BegunAccessVerifier {
     private let body: IRBody
     /// The name of the function whose body this is, which a violation names.
@@ -28,8 +28,8 @@ struct BegunAccessVerifier {
                     throw violation("the IR begins a\(id.index) at bb\(index), after another statement that begins it")
                 }
                 if let used = Self.access(usedBy: effect), !begun.contains(used) {
-                    let use = "the IR uses a\(used.index) at bb\(index)"
-                    throw violation("\(use), before its beginning in the order of the blocks")
+                    throw violation("the IR uses a\(used.index) at bb\(index), before its beginning in the order of "
+                        + "the blocks")
                 }
             }
         }
