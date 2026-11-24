@@ -77,7 +77,7 @@ A packed struct can put a field at a misaligned address, where a load or store o
 **A C library's function recurses deeply, and a plugin's callback is documented to need 1 MiB of stack.** Running out of stack ends the program before anything is written past the stack's end. Where the platform can protect memory, a guard page below each stack catches it ([10](../../spec/10-errors-and-safety/panics.md#running-out-of-stack)), and elsewhere a check on entry to each Rayo frame does ([10](../../spec/10-errors-and-safety/panics.md#stacks-without-guard-pages)).
 
 - **Must accept** calling each with nothing declared about its stack, on a thread whose stack holds what it needs. State how a program runs the callback on a stack of at least 1 MiB, such as on a thread started through the platform's API, or on a fiber stack that C declares.
-- **Must hold:** when either runs out of stack, having been compiled with stack-clash protection, the program ends with the report, and nothing is written past the stack's end. State what C's contract asks of C compiled without it ([08](../../spec/08-c-interop/c-contract-and-embedding.md#what-c-must-uphold)).
+- **Must hold:** where the platform has guard pages, when either runs out of stack, having been compiled with stack-clash protection, the program ends with the report, and nothing is written past the stack's end. State what C's contract asks of C compiled without it ([08](../../spec/08-c-interop/c-contract-and-embedding.md#what-c-must-uphold)).
 
 ### E8 · One library on 32-bit and 64-bit targets
 
