@@ -9,6 +9,16 @@ struct UnusedValueTests {
         ])
     }
 
+    @Test(arguments: [("func f(_ e: Enemy) {}", "e"), ("func f(_ a: [2 of Int]) {}", "a")])
+    func `a parameter that owns a struct or an array, which no code reads, is reported where it is declared`(
+        function: String, name: String,
+    ) {
+        let source = "func main() {}\n\(function)\nstruct Enemy(var hp: Int)"
+        #expect(diagnostics(source).map(\.description) == [
+            "2:10: error[E0318]: the parameter '\(name)' is never read; write '_ = \(name)' to drop it",
+        ])
+    }
+
     // A parameter that borrows its argument holds a value its caller owns, so nothing is lost when no code reads it.
     @Test(arguments: ["func show(_ n: Int) {\n    _ = n\n}", "func show(_ n: &Int) {}"])
     func `a parameter dropped with '_ =', or one that borrows its argument, needs no read`(function: String) {

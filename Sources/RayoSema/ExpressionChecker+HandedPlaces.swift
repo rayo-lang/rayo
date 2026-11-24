@@ -15,16 +15,42 @@ extension ExpressionChecker {
         }
     }
 
-    /// Reports `value`, written without a `&`, where `recipient` borrows it and can't take it so.
-    func reportUnlent(_ value: CheckedExpr, to recipient: Recipient?) {
+    /// Reports `value`, written without a mark, where `recipient` can't take it so: where it borrows the value, and
+    /// where a parameter owns it and takes a place only marked.
+    func reportUnmarked(_ value: CheckedExpr, to recipient: Recipient?) {
         switch recipient {
         case .parameter(let parameter)? where parameter.convention == .borrowed:
             reportUnlendable(value, to: parameter)
+        case .parameter(let parameter)? where parameter.convention == .owned && !parameter.movesBarePlaces:
+            reportUnmarkedOwned(value, to: parameter)
         case .declaration(.refLet)?:
             reportUnreferenced(value)
         default:
             break
         }
+    }
+
+    /// Reports a place given bare to a parameter that owns its argument, where the place's type isn't implicitly
+    /// copyable, so nothing written says whether the call copies the value or moves it. The error names the marks
+    /// that fit: `consume` where the code may move out of the place, `copy`, and `&` where a function of the callee's
+    /// name that the arguments fit borrows the argument.
+    private func reportUnmarkedOwned(_ value: CheckedExpr, to parameter: ArgumentParameter) {
+        // A value that stands here is no `if`, since each branch of an `if` stands in its place on its own.
+        guard !value.type.isImplicitlyCopyable, let handed = value.handedPlaces.first else { return }
+
+        let marks = PlaceMarks(file.spelling(of: handed.place.range), mayMove: mayMove(outOf: handed),
+                               mayLend: parameter.isBorrowedByOverload)
+        let code = ErrorCode.unmarkedOwnedArgument(name: parameter.callee, type: typeName(of: value.type), marks: marks)
+        file.errors.report(code, at: handed.place.range)
+    }
+
+    /// Whether code may move the value out of `handed`: the local it lies in owns its value, and the place lies in no
+    /// array's element, which its array holds for as long as the array holds a value.
+    private func mayMove(outOf handed: HandedPlace) -> Bool {
+        let isInElement = handed.place.steps.contains {
+            if case .element = $0 { true } else { false }
+        }
+        return names[handed.local].kind.ownsValue && !isInElement
     }
 
     /// Reports a temporary given to a borrowing parameter that takes none.

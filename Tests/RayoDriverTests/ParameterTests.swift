@@ -129,3 +129,103 @@ struct ParameterTests {
         #expect(run(source, options: mode) == CommandResult(exitCode: 0, output: "6765\n0\n5000050000\n", errors: ""))
     }
 }
+
+/// A struct and an array type, and functions that make values of them, for programs whose functions own them.
+private let ownedTypes = """
+    struct Enemy(var stats: Stats, var slots: [2 of Int])
+    struct Stats(var hp: Int)
+    func makeEnemy(hp: Int) -> Enemy { Enemy(stats: Stats(hp: copy hp), slots: [1, 2]) }
+    """
+
+struct OwningParameterTests {
+    @Test(arguments: [["--debug"], ["--release"]])
+    func `a parameter that owns a struct or an array takes a moved place, a copy, or a value`(mode: [String]) {
+        let source = """
+            func main() {
+                let boss = makeEnemy(hp: 7)
+                print(keep(copy boss))
+                print(keep(makeEnemy(hp: 3)))
+                print(keep(Enemy(stats: Stats(hp: 4), slots: [5, 6])))
+                print(keep(consume boss))
+                let slots: [2 of Int] = [10, 20]
+                print(total(copy slots))
+                print(total([30, 40]))
+                print(total(consume slots))
+            }
+            func keep(_ e: Enemy) -> Int { e.stats.hp }
+            func total(_ a: [2 of Int]) -> Int { a[0] + a[1] }
+            \(ownedTypes)
+            """
+        #expect(run(source, options: mode) == CommandResult(exitCode: 0, output: "7\n3\n4\n7\n30\n70\n30\n",
+                                                            errors: ""))
+    }
+
+    // The caller's copy stays as it was, whatever the function does with its own.
+    @Test func `a function changes and lends the struct its parameter owns, and its fields and elements`() {
+        let source = """
+            func main() {
+                let boss = makeEnemy(hp: 7)
+                print(changed(copy boss))
+                print(boss.stats.hp + boss.slots[0])
+                print(replaced(consume boss))
+            }
+            func changed(_ e: Enemy) -> Int {
+                e.stats.hp += 10
+                e.slots[0] = 100
+                e.stats = Stats(hp: e.stats.hp * 2)
+                return hpOf(e) + e.slots[0] + e.slots[1]
+            }
+            func hpOf(_ e: &Enemy) -> Int { e.stats.hp }
+            func replaced(_ e: Enemy) -> Int {
+                print(e.stats.hp)
+                e = makeEnemy(hp: 40)
+                return e.stats.hp
+            }
+            \(ownedTypes)
+            """
+        #expect(run(source) == CommandResult(exitCode: 0, output: "136\n8\n7\n40\n", errors: ""))
+    }
+
+    @Test func `a function passes the struct its parameter owns on, stores it, and returns it`() {
+        let source = """
+            func main() {
+                let squad = enlist(makeEnemy(hp: 5))
+                print(squad.lead.stats.hp)
+                let back = handBack(makeEnemy(hp: 6))
+                print(back.stats.hp)
+                print(passOn(makeEnemy(hp: 8)))
+                print(splitStats(makeEnemy(hp: 9)).hp)
+            }
+            struct Squad(var lead: Enemy)
+            func enlist(_ e: Enemy) -> Squad { Squad(lead: consume e) }
+            func handBack(_ e: Enemy) -> Enemy {
+                e.stats.hp += 1
+                return consume e
+            }
+            func passOn(_ e: Enemy) -> Int { keep(consume e) }
+            func keep(_ e: Enemy) -> Int { e.stats.hp * 10 }
+            func splitStats(_ e: Enemy) -> Stats {
+                let s = consume e.stats
+                print(e.slots[1])
+                return consume s
+            }
+            \(ownedTypes)
+            """
+        #expect(run(source) == CommandResult(exitCode: 0, output: "5\n7\n80\n2\n9\n", errors: ""))
+    }
+
+    @Test func `a lent struct reaches the overload that borrows it, and a moved one the overload that owns it`() {
+        let source = """
+            func main() {
+                let boss = makeEnemy(hp: 3)
+                show(&boss)
+                show(copy boss)
+                show(consume boss)
+            }
+            func show(_ e: Enemy) { print(e.stats.hp + 10) }
+            func show(_ e: &Enemy) { print(e.stats.hp + 20) }
+            \(ownedTypes)
+            """
+        #expect(run(source) == CommandResult(exitCode: 0, output: "23\n13\n13\n", errors: ""))
+    }
+}

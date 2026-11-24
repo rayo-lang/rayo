@@ -123,6 +123,41 @@ struct MoveTests {
         ])
     }
 
+    @Test func `a place moved into a parameter that owns it can't be used after the call`() {
+        let source = """
+            func main() {
+                let boss = Enemy(stats: Stats(hp: 1))
+                keep(consume boss)
+                print(boss.stats.hp)
+            }
+            func keep(_ e: Enemy) { print(e.stats.hp) }
+            struct Enemy(var stats: Stats)
+            struct Stats(var hp: Int)
+            """
+        let found = diagnostics(source)
+        #expect(found.map(\.description) == ["4:11: error[E0302]: 'boss' was moved"])
+        #expect(found.flatMap(\.notes) == ["3:10: note: moved here"])
+    }
+
+    @Test func `a field moved out of a parameter that owns it leaves the parameter unusable as a whole`() {
+        let source = """
+            func main() {}
+            func f(_ x: Enemy) -> Stats {
+                let s = consume x.stats
+                keep(consume x)
+                return consume s
+            }
+            func keep(_ e: Enemy) { print(e.stats.hp) }
+            struct Enemy(var stats: Stats)
+            struct Stats(var hp: Int)
+            """
+        let found = diagnostics(source)
+        #expect(found.map(\.description) == [
+            "4:10: error[E0309]: 'x.stats' was moved out of 'x', so 'x' can't be used as a whole",
+        ])
+        #expect(found.flatMap(\.notes) == ["3:13: note: moved here"])
+    }
+
     // A `copy` is a value, not a place. As with any temporary, its elements can't be moved out of it; `copy a[0]`
     // copies the element instead. The source gives the copy no name, so the error names it as an array.
     @Test func `an element taken from a copy can't be moved out of the copy`() {
