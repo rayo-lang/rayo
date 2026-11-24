@@ -32,10 +32,12 @@ public struct Place: Hashable, Sendable {
         }
     }
 
-    /// The reads that finding the place makes, where the source names it at `range`: one of each local that holds an
-    /// index it finds an element by, in the order of its steps.
-    func indexReads(at range: SourceRange) -> [Effect] {
-        indexLocals.map { .read(Place(root: $0), at: range) }
+    /// Lends `visit` each read that finding the place makes, where the source names it at `range`: one of each local
+    /// that holds an index it finds an element by, in the order of its steps.
+    func forEachIndexRead<Failure: Error>(
+        at range: SourceRange, _ visit: (Effect) throws(Failure) -> Void,
+    ) throws(Failure) {
+        for local in indexLocals { try visit(.read(Place(root: local), at: range)) }
     }
 
     /// The type of the value at the place in `body`, a body of a program whose structs `types` holds, and which holds

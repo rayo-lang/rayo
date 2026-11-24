@@ -41,22 +41,26 @@ public enum Rvalue: Equatable, Sendable {
     /// range` where the value is `count` or more.
     case index(Operand, below: Int)
 
-    /// The operands, in the order the operation evaluates them. A call argument that passes an access, rather than a
-    /// value, isn't an operand.
-    public var operands: [Operand] {
+    /// Lends `visit` each operand in turn, in the order the operation evaluates them. A call argument that passes an
+    /// access, rather than a value, isn't an operand.
+    func forEachOperand<Failure: Error>(_ visit: (Operand) throws(Failure) -> Void) throws(Failure) {
         switch self {
-        case .operand(let operand), .unary(_, let operand), .filledArray(let operand, _),
-             .index(let operand, _): [operand]
-        case .binary(_, let left, let right): [left, right]
-        case .call(_, let arguments): arguments.compactMap(\.operand)
-        case .array(let elements, _): elements
+        case .operand(let operand), .unary(_, let operand), .filledArray(let operand, _), .index(let operand, _):
+            try visit(operand)
+        case .binary(_, let left, let right):
+            try visit(left)
+            try visit(right)
+        case .call(_, let arguments):
+            for case .operand(let operand) in arguments { try visit(operand) }
+        case .array(let elements, _):
+            for element in elements { try visit(element) }
         }
     }
 
-    /// The accesses a call passes, in the order of its arguments; none for any other operation.
-    public var accesses: [AccessID] {
-        guard case .call(_, let arguments) = self else { return [] }
-        return arguments.compactMap(\.access)
+    /// Lends `visit` each access a call passes in turn, in the order of its arguments; none for any other operation.
+    func forEachAccess<Failure: Error>(_ visit: (AccessID) throws(Failure) -> Void) throws(Failure) {
+        guard case .call(_, let arguments) = self else { return }
+        for case .access(let access) in arguments { try visit(access) }
     }
 
     /// The type of the value the operation makes, in the given body of a program with the given structs and

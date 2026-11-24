@@ -27,10 +27,14 @@ struct ElementIndexVerifier {
         changes = Self.changes(in: body)
     }
 
-    /// Throws for the first element step found whose index isn't checked against its array's count.
+    /// Throws for the first element step found whose index isn't checked against its array's count, in the places
+    /// that the body's effects name, in the order of its blocks and of the effects in each.
     func verify() throws(IRViolation) {
-        for place in Self.places(in: body) {
-            try verifyIndices(in: place)
+        for block in body.blocks {
+            try block.forEachEffect { effect throws(IRViolation) in
+                guard let place = effect.place else { return }
+                try verifyIndices(in: place)
+            }
         }
     }
 
@@ -88,11 +92,6 @@ struct ElementIndexVerifier {
     private static func change(storing value: Rvalue) -> Change {
         guard case .index(_, let count) = value else { return .unchecked }
         return .checked(below: count)
-    }
-
-    /// The places that the effects of `body` name, in the order of its blocks and of the effects in each.
-    private static func places(in body: IRBody) -> [Place] {
-        body.blocks.flatMap(\.effects).joined().compactMap(\.place)
     }
 
     /// The violation that `message` says, in this function.

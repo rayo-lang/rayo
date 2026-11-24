@@ -18,13 +18,18 @@ public enum Operand: Equatable, Sendable {
         }
     }
 
-    /// What finding the operand's value does: nothing for a constant, and otherwise the reads that finding its place
-    /// makes, then the read or the move of the place.
-    var effects: [Effect] {
+    /// Lends `visit` each thing that finding the operand's value does, in turn: nothing for a constant, and otherwise
+    /// the reads that finding its place makes, then the read or the move of the place.
+    func forEachEffect<Failure: Error>(_ visit: (Effect) throws(Failure) -> Void) throws(Failure) {
         switch self {
-        case .constant: []
-        case .read(let place, let range): place.indexReads(at: range) + [.read(place, at: range)]
-        case .move(let place, let range): place.indexReads(at: range) + [.move(place, at: range)]
+        case .constant:
+            break
+        case .read(let place, let range):
+            try place.forEachIndexRead(at: range, visit)
+            try visit(.read(place, at: range))
+        case .move(let place, let range):
+            try place.forEachIndexRead(at: range, visit)
+            try visit(.move(place, at: range))
         }
     }
 
