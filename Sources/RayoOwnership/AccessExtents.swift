@@ -119,7 +119,9 @@ struct AccessExtents {
                 next[block.statements.count].formUnion(next[block.statements.count + 1])
                 for statement in block.statements.indices.reversed() {
                     var after = next[statement + 1]
-                    for case .begin(let id, _) in block.statements[statement].effects { after.remove(id) }
+                    block.statements[statement].forEachEffect { effect in
+                        if case .begin(let id, _) = effect { after.remove(id) }
+                    }
                     next[statement].formUnion(after)
                 }
 

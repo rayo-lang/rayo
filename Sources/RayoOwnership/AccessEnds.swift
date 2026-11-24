@@ -34,7 +34,9 @@ enum AccessEnds {
             // An access ends after the statement that it is held before, or that begins it, where it isn't held
             // after.
             var ending = held[index]
-            for case .begin(let id, _) in statement.effects { ending.insert(id) }
+            statement.forEachEffect { effect in
+                if case .begin(let id, _) = effect { ending.insert(id) }
+            }
             statements += ends(of: ending.subtracting(held[index + 1]))
         }
 

@@ -10,7 +10,13 @@ enum MoveChecker {
     /// element, or out of a part inside any of them, in every block of the body whose places `places` gives the types
     /// of, whether or not a path reaches it.
     static func errors(in places: PlaceTypes) -> [Diagnostic] {
-        places.body.blocks.flatMap { $0.effects.joined() }.compactMap { error(at: $0, in: places) }
+        var errors: [Diagnostic] = []
+        for block in places.body.blocks {
+            block.forEachEffect { effect in
+                if let diagnostic = error(at: effect, in: places) { errors.append(diagnostic) }
+            }
+        }
+        return errors
     }
 
     /// The error at `effect` where it moves a value out of a place that can't give it up, or nil where it doesn't.
