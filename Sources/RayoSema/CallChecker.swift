@@ -310,9 +310,9 @@ struct CallChecker {
         return nil
     }
 
-    /// What each of `chosen`'s parameters expects of its argument, where the call names the function as `name`, with
-    /// whether one of `fitting`, the candidates whose labels and types the arguments fit, borrows the argument, so
-    /// that a `&` of it reaches that one. A parameter whose type isn't known expects nothing, and is left out.
+    /// What each of `chosen`'s parameters expects of its argument, where the call names the function as `name`. Each
+    /// notes whether one of `fitting`, the candidates the arguments fit, borrows the argument. A parameter whose type
+    /// isn't known expects nothing, and is left out.
     private func expectations(of chosen: Signature, named name: String,
                               among fitting: [Signature]) -> [Expectation] {
         chosen.parameters.indices.compactMap { index in

@@ -15,39 +15,40 @@ enum MoveChecker {
 
     /// The error at `effect` where it moves a value out of a place that can't give it up, or nil where it doesn't.
     private static func error(at effect: Effect, in places: PlaceTypes) -> Diagnostic? {
-        // Only a move takes a value out of its place.
+        // Only a move takes a value out of its place, and one out of a place that can give its value up is allowed.
         guard case .move(let place, let range) = effect else { return nil }
+        let root = places.body.locals[place.root.index]
+        let source = MoveSource(local: root.sourceKind, liesInElement: place.steps.contains(where: \.isElement))
+        guard !source.allowsMove else { return nil }
 
-        // An element, wherever its array lies, is the array's for as long as the array holds a value.
+        // The error names an element by the array it lies in.
         if let innermost = place.steps.lastIndex(where: \.isElement) {
             let part = part(of: place, innermostElementAt: innermost, in: places)
             return Diagnostic(.moveFromElement(part: part), at: range)
         }
 
-        // Only a local of the source may not own its value; a temporary owns what lowering stores in it.
-        guard case .source(let local, let kind, _, _) = places.body.locals[place.root.index] else { return nil }
-
-        guard let name = places.sourceName(of: place) else {
-            preconditionFailure("a local of the source names each place inside it")
+        // Any other place that can't give its value up lies in a local of the source that doesn't own its value.
+        guard case .source(let local, let kind, _, _) = root, let name = places.sourceName(of: place) else {
+            preconditionFailure("a temporary owns its value, and a local of the source names each place inside it")
         }
 
         // The error names the whole local, or the part moved out of it as the source writes it.
         let part = place.steps.isEmpty ? nil : name
-        return code(movingOutOf: local, of: kind, part: part).map { Diagnostic($0, at: range) }
+        return Diagnostic(code(movingOutOf: local, of: kind, part: part), at: range)
     }
 
-    /// The error for a move out of the local `local` of `kind`, or out of `part` of it where that is given, or nil
-    /// where the local owns its value and may give it up.
-    private static func code(movingOutOf local: String, of kind: LocalKind, part: String?) -> ErrorCode? {
+    /// The error for a move out of the local `local` of `kind`, which doesn't own its value, or out of `part` of it
+    /// where that is given.
+    private static func code(movingOutOf local: String, of kind: LocalKind, part: String?) -> ErrorCode {
         switch kind {
         // A parameter that doesn't own its value can't give it up.
-        case .parameter(let convention) where !convention.allowsMove:
+        case .parameter:
             part.map { .moveFieldFromParameter(field: $0, parameter: local) } ?? .moveFromParameter(name: local)
         // Nor can a `ref let`, whose value is the place's it refers to.
         case .refLet:
             part.map { .moveFieldFromReference(field: $0, local: local) } ?? .moveFromReference(name: local)
-        case .let, .var, .parameter:
-            nil
+        case .let, .var:
+            preconditionFailure("a 'let' or a 'var' owns its value")
         }
     }
 
@@ -67,6 +68,16 @@ enum MoveChecker {
             else if let name = places.partName(of: place, after: depth + 1) { .named(name) }
             else { .unnamed }
         return ElementPart(taken, of: array)
+    }
+}
+
+private extension IRLocal {
+    /// The kind the source declares the local with, or nil where lowering adds it as a temporary.
+    var sourceKind: LocalKind? {
+        switch self {
+        case .source(_, let kind, _, _): kind
+        case .temporary: nil
+        }
     }
 }
 

@@ -28,15 +28,6 @@ public enum LocalKind: Equatable, Sendable {
         }
     }
 
-    /// Whether the local owns its value, so that code may move the value out of it: a `let`, a `var`, or a parameter
-    /// that owns its argument. A `ref let` and a borrowing parameter hold a value another place owns.
-    package var ownsValue: Bool {
-        switch self {
-        case .let, .var, .parameter(.owned): true
-        case .refLet, .parameter(.borrowed), .parameter(.mutable): false
-        }
-    }
-
     /// `type` as the source declares the local with it: after the reference a parameter takes where the local is one
     /// that borrows its argument, and on its own otherwise.
     package func spelling(of type: RayoType) -> String {
