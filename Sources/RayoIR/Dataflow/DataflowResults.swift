@@ -74,4 +74,36 @@ package struct DataflowResults<State: DataflowState> {
         }
         return true
     }
+
+    /// Walks `block` from its boundary in the analysis's direction, and lends `visit` the state before the block's
+    /// first effect and after each of its effects in turn, with the number of its effects that come before the state.
+    /// Returns whether a state reaches the block; where none does, it visits nothing.
+    @discardableResult
+    package func walkBetweenEffects(
+        of block: BlockID, visit: (_ effectsBefore: Int, _ state: State) -> Void,
+    ) -> Bool {
+        guard var state = boundaryStates[block.index] else { return false }
+        let crossings = effects[block.index].joined()
+
+        switch state.direction {
+        case .forward:
+            var effectsBefore = 0
+            for effect in crossings {
+                visit(effectsBefore, state)
+                state.apply(effect, in: function)
+                effectsBefore += 1
+            }
+            visit(effectsBefore, state)
+
+        case .backward:
+            var effectsBefore = crossings.count
+            for effect in crossings.reversed() {
+                visit(effectsBefore, state)
+                state.apply(effect, in: function)
+                effectsBefore -= 1
+            }
+            visit(effectsBefore, state)
+        }
+        return true
+    }
 }

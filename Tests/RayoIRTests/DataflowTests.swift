@@ -119,6 +119,27 @@ struct DataflowTests {
         #expect(visited.map(\.columns) == expected)
     }
 
+    // Each statement reads, and the return reads and then leaves the function, so the block has four effects.
+    @Test(arguments: [
+        (DataflowDirection.forward, [0, 1, 2, 3, 4], [[], [1], [1, 2], [1, 2, 3], [1, 2, 3]]),
+        (DataflowDirection.backward, [4, 3, 2, 1, 0], [[], [], [3], [2, 3], [1, 2, 3]]),
+    ] as [(DataflowDirection, [Int], [Set<Int>])])
+    func `a walk between effects lends the state before a block's first effect, and after each of its effects`(
+        direction: DataflowDirection, counts: [Int], expected: [Set<Int>],
+    ) throws {
+        let blocks = """
+            bb0:
+              \(reading(1))
+              \(reading(2))
+              return read %0 @2:3-2:3
+            """
+        let results = try solve(EvaluatedOperands(direction: direction), blocks, result: "Int")
+        var visited: [(effectsBefore: Int, columns: Set<Int>)] = []
+        results.walkBetweenEffects(of: BlockID(index: 0)) { visited.append(($0, $1.columns)) }
+        #expect(visited.map(\.effectsBefore) == counts)
+        #expect(visited.map(\.columns) == expected)
+    }
+
     // Going forward, the block after the last loop holds every loop's reads; going backward, the entry block does.
     @Test(arguments: [
         (DataflowDirection.forward, 7), (.backward, 0),

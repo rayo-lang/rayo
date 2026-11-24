@@ -29,28 +29,11 @@ struct AccessConflicts {
         self.accesses = accesses
     }
 
-    /// Finds the conflicts at each statement of `block`, and at its terminator, where `live` holds the accesses live
-    /// at each point of the block, as `AccessExtents.live(in:)` gives them.
-    mutating func check(_ block: BlockID, live: [Set<AccessID>]) {
-        for (index, effects) in places.body.blocks[block.index].effects.enumerated() {
-            check(effects, liveAfter: live[index + 1])
-        }
-    }
-
-    /// Finds the conflicts of `effects`, those of one statement or terminator, where `liveAfter` are the accesses live
-    /// just after it. Each effect conflicts with the accesses live just after it: so a call's operands meet the
-    /// accesses it passes, and its store meets only those that outlive it.
-    private mutating func check(_ effects: [Effect], liveAfter: Set<AccessID>) {
-        // Walk back from the point after the statement, to find the accesses live just after each effect.
-        var live = LiveAccesses(liveAfter)
-        var liveAfterEach: [Set<AccessID>] = []
-        for effect in effects.reversed() {
-            liveAfterEach.append(live.ids)
-            live.apply(effect, in: ())
-        }
-
-        // Check the effects in their order, so that each statement's errors keep it.
-        for (effect, live) in zip(effects, liveAfterEach.reversed()) {
+    /// Finds the conflicts at each of `effects`, a block's in their order, where `liveAfter` holds the accesses live
+    /// just after each, as `AccessExtents` gives them. So a call's operands meet the accesses it passes, and its
+    /// store meets only those that outlive it.
+    mutating func check(_ effects: some Sequence<Effect>, liveAfter: [Set<AccessID>]) {
+        for (effect, live) in zip(effects, liveAfter) {
             check(effect, against: live)
         }
     }
