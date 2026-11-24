@@ -9,4 +9,11 @@ extension IRBody {
         }
         return accesses
     }
+
+    /// How many IDs span every access the body begins: one more than the highest of them, so that a table of that
+    /// many entries has one for each access.
+    package var accessCount: Int {
+        let highestID = begunAccesses.keys.max()
+        return highestID.map { $0.index + 1 } ?? 0
+    }
 }

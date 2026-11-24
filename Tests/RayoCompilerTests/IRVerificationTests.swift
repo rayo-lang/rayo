@@ -175,6 +175,22 @@ private let brokenInTheIREveryBuildChecks = [
         blocks: retiredUse + "\n  return",
         message: retiredUseMessage,
     ),
+    BrokenIR(
+        testDescription: "the ownership stage's IR that uses an access in a block before the one that begins it",
+        stage: .ownership,
+        blocks: """
+              %0 @1:1-1:2 = operand 1 @1:1-1:2
+              goto bb2
+            bb1:
+              _ = call "f(_: &Int)"(a0) @1:1-1:2
+              end a0
+              return
+            bb2:
+              begin a0 read %0 @1:1-1:2
+              goto bb1
+            """,
+        message: "the IR uses a0 at bb1, before its beginning in the order of the blocks",
+    ),
     // The rules every stage's IR keeps are checked before where locals retire, as a debug build checks them.
     BrokenIR(
         testDescription: "the ownership stage's IR that breaks its types after a use of a retired local",

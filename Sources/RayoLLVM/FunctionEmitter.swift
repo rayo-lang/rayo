@@ -79,8 +79,8 @@ struct FunctionEmitter {
     /// The pointer to each local's place, indexed by `LocalID`.
     var places: [PointerValue] = []
     var blocks: [LLVM.BasicBlock] = []
-    /// Each access begun so far, by its ID. A block's accesses are begun before a block it leads to uses them, since
-    /// the beginning of an access comes before every use of it on every path.
+    /// Each access begun so far, by its ID. An access is begun before a use of it is emitted, since its beginning
+    /// comes before every use of it in the order of the blocks, and on every path.
     var accesses: [AccessID: BegunAccess] = [:]
 
     /// The LLVM types of the program's values.

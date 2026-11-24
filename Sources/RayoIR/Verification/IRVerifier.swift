@@ -16,8 +16,17 @@ public enum IRVerifier {
     package static func verifyEmitterRules(_ program: IRProgram) -> IRViolation? {
         firstViolation(in: program) { body, declaration throws(IRViolation) in
             try verifySharedRules(in: body, of: declaration, in: program)
-            try LocalLifeVerifier(body: body, of: declaration.name).verify()
+            try verifyOwnershipRulesTheEmitterTrusts(in: body, of: declaration)
         }
+    }
+
+    /// Throws the first violation in `body`, the body of `declaration`, of the rules of the ownership stage's IR that
+    /// the emitter takes as given: of where its accesses begin, then of where its locals retire.
+    private static func verifyOwnershipRulesTheEmitterTrusts(
+        in body: IRBody, of declaration: FunctionDeclaration,
+    ) throws(IRViolation) {
+        try BegunAccessVerifier(body: body, of: declaration.name).verify()
+        try LocalLifeVerifier(body: body, of: declaration.name).verify()
     }
 
     /// The first violation in `program`: of a function's declaration, in the order of its ID, or else the first that
@@ -52,7 +61,7 @@ public enum IRVerifier {
 
     /// Throws the first violation in `body`, the body of `declaration`, of the rules of `stage`'s IR alone: for
     /// lowering's IR, of an end or a retirement it holds, or, for the ownership stage's IR, of where its accesses end
-    /// and its locals retire.
+    /// and begin and its locals retire.
     private static func verifyStageRules(
         of stage: IRStage, in body: IRBody, of declaration: FunctionDeclaration,
     ) throws(IRViolation) {
@@ -62,7 +71,7 @@ public enum IRVerifier {
         // A local's life lasts through each access to it, so the accesses are checked first.
         case .ownership:
             try AccessScopeVerifier(body: body, of: declaration.name).verify()
-            try LocalLifeVerifier(body: body, of: declaration.name).verify()
+            try verifyOwnershipRulesTheEmitterTrusts(in: body, of: declaration)
         }
     }
 
