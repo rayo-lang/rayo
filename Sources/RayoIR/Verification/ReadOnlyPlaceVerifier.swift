@@ -13,17 +13,25 @@ struct ReadOnlyPlaceVerifier {
     }
 
     /// Throws for the first store or modify access found whose place may not change so, in the order of the blocks
-    /// and of the effects in each. Every block is checked, whether or not a path reaches it.
+    /// and of the statements in each. Every block is checked, whether or not a path reaches it.
     func verify() throws(IRViolation) {
-        for effect in body.blocks.flatMap(\.effects).joined() {
-            switch effect {
-            case .store(let destination):
-                try verify(.store, of: destination.place)
-            case .begin(_, let access) where access.kind == .modify:
-                try verify(.modify, of: access.place)
-            default:
-                break
+        for block in body.blocks {
+            for statement in block.statements {
+                try verify(statement)
             }
+        }
+    }
+
+    /// Throws where `statement` changes a place that may not change so. Only a computation that stores its value and
+    /// the beginning of a modify access change a place, and a terminator changes none.
+    private func verify(_ statement: Statement) throws(IRViolation) {
+        switch statement {
+        case .compute(let destination?, _, _):
+            try verify(.store, of: destination.place)
+        case .begin(_, let access) where access.kind == .modify:
+            try verify(.modify, of: access.place)
+        default:
+            break
         }
     }
 
