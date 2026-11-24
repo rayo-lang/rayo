@@ -12,6 +12,49 @@ struct UncheckedIndex: CustomTestStringConvertible, Sendable {
     let message: String
 }
 
+/// The end of a block that names `%0[%1]`, an element of an array of two Bools at an index that nothing stores.
+struct NamedElement: CustomTestStringConvertible, Sendable {
+    let testDescription: String
+    /// The statements and the terminator that end `main`'s first block, as text. `bb1` follows, and returns.
+    let naming: String
+}
+
+private let namedElements = [
+    NamedElement(
+        testDescription: "an operand that moves the element",
+        naming: """
+              _ = operand move %0[%1] @1:1-1:2 @1:1-1:2
+              return
+            """,
+    ),
+    NamedElement(
+        testDescription: "a store to the element",
+        naming: """
+              %0[%1] @1:1-1:2 = operand false @1:1-1:2
+              return
+            """,
+    ),
+    NamedElement(
+        testDescription: "an access to the element",
+        naming: """
+              begin a0 read %0[%1] @1:1-1:2
+              return
+            """,
+    ),
+    NamedElement(
+        testDescription: "a dependence of the element on an access",
+        naming: """
+              begin a0 read %0 @1:1-1:2
+              depend %0[%1] on a0
+              return
+            """,
+    ),
+    NamedElement(
+        testDescription: "a branch on the element",
+        naming: "  branch read %0[%1] @1:1-1:2, bb1, bb1",
+    ),
+]
+
 @Suite("Verifying that each index a local holds is checked against its array's count")
 struct ElementIndexTests {
     @Test(arguments: uncheckedIndices)
@@ -19,6 +62,26 @@ struct ElementIndexTests {
         let program = try IRParser.program(from: indexing(index.local, after: index.store))
         let violation = IRViolation(function: "main()", message: index.message)
         #expect(IRVerifier.verify(program, from: .lowering) == violation)
+    }
+
+    @Test(arguments: namedElements)
+    func `an unchecked index is a violation however a statement or terminator names its element`(
+        element: NamedElement,
+    ) throws {
+        let program = try IRParser.program(from: """
+            main "main()"
+            func "main()"() -> Void {
+              temp %0: [2 of Bool]
+              temp %1: UInt
+            bb0:
+              %0 @1:1-1:2 = fill 2 of true @1:1-1:2
+            \(element.naming)
+            bb1:
+              return
+            }
+            """)
+        let message = "the IR indexes an array of 2 elements at %1, which no statement stores"
+        #expect(IRVerifier.verify(program, from: .lowering) == IRViolation(function: "main()", message: message))
     }
 
     @Test func `a temporary index stored only by a check below its array's count is no violation`() throws {

@@ -87,6 +87,14 @@ private let statementEffects = [
             """,
         effects: ["end a0"],
     ),
+    EffectsOfText(
+        testDescription: "a dependence makes the value at its place depend on its access, and reads nothing",
+        text: """
+              begin a0 read %0 @1:1-1:2
+              depend %2[%1] on a0
+            """,
+        effects: ["depend %2[%1] on a0"],
+    ),
     EffectsOfText(testDescription: "a declaration declares its local", text: "  declare %0", effects: ["declare %0"]),
     EffectsOfText(testDescription: "a retirement retires its local", text: "  retire %0", effects: ["retire %0"]),
 ]

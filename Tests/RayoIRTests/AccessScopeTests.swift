@@ -1,5 +1,5 @@
 import RayoCheckedProgram
-import RayoIR
+@testable import RayoIR
 import Testing
 
 /// IR whose accesses don't end once on every path from where each begins, and what the verifier says is wrong with it
@@ -51,6 +51,20 @@ struct AccessScopeTests {
 
         let message = "the IR begins a0 at bb0, where it is already held"
         #expect(IRVerifier.verify(program, from: .ownership) == IRViolation(function: "main()", message: message))
+    }
+
+    @Test func `an access still held where a block ends in 'unreachable' is a violation`() throws {
+        let program = try IRParser.program(from: borrowing("""
+              begin a0 read %0 @1:1-1:2
+              unreachable
+            """))
+        let body = try #require(program.bodies[FunctionID(index: 0)])
+
+        // The whole verifier reports a reached `unreachable` first, so the check of the accesses runs alone.
+        let violation = #expect(throws: IRViolation.self) {
+            try AccessScopeVerifier(body: body, of: "main()").verify()
+        }
+        #expect(violation?.message == "the IR leaves the function at bb0 without ending a0")
     }
 
     @Test func `lowering's IR, whose ends the ownership stage writes later, ends no access`() throws {
@@ -141,6 +155,16 @@ private let unscopedAccesses = [
               begin a0 read %0 @1:1-1:2
               end a0
               _ = call "f(_: &Int)"(a0) @1:1-1:2
+              return
+            """,
+        message: "the IR uses a0 at bb0, where it isn't held",
+    ),
+    UnscopedAccess(
+        testDescription: "a value made to depend on an access after its end",
+        blocks: """
+              begin a0 read %0 @1:1-1:2
+              end a0
+              depend %0 on a0
               return
             """,
         message: "the IR uses a0 at bb0, where it isn't held",

@@ -48,8 +48,8 @@ struct AccessScopeVerifier {
     private func accessesHeld(after block: BlockID, entering held: Set<AccessID>) throws(IRViolation) -> Set<AccessID> {
         var held = held
         let label = "bb\(block.index)"
-        for statement in body.blocks[block.index].statements {
-            switch statement {
+        for effect in body.blocks[block.index].effects.joined() {
+            switch effect {
             // A beginning starts an access that isn't held, since one statement begins each access.
             case .begin(let id, _):
                 guard held.insert(id).inserted else {
@@ -62,30 +62,24 @@ struct AccessScopeVerifier {
                     throw violation("the IR ends a\(id.index) at \(label), where it isn't held")
                 }
 
-            // A call reaches its arguments' places through their accesses, each of which must be held.
-            case .compute(_, let value, _):
-                for id in value.accesses where !held.contains(id) { throw unheld(id, at: label) }
+            // A use reaches a place through its access, and a dependence keeps its access live from where a value
+            // comes to depend on it, so each needs the access held.
+            case .use(let id), .depend(_, let id):
+                guard held.contains(id) else {
+                    throw violation("the IR uses a\(id.index) at \(label), where it isn't held")
+                }
 
-            // A dependence keeps its access live from where a value comes to depend on it, so the access must be held
-            // there.
-            case .depend(_, let id):
-                guard held.contains(id) else { throw unheld(id, at: label) }
-
-            case .declare, .retire:
+            case .read, .move, .store, .declare, .retire, .exit:
                 break
             }
         }
 
-        // A way out of the function ends every access first, since nothing after it can.
+        // A way out of the function ends every access first, since nothing after it can. A block that ends in
+        // `unreachable` is one too, though it has no effect that leaves the function.
         if body.blocks[block.index].terminator.successors.isEmpty, let open = held.min() {
             throw violation("the IR leaves the function at \(label) without ending a\(open.index)")
         }
         return held
-    }
-
-    /// The violation of a use of the access `id` at the block `label`, where it isn't held.
-    private func unheld(_ id: AccessID, at label: String) -> IRViolation {
-        violation("the IR uses a\(id.index) at \(label), where it isn't held")
     }
 
     /// The violation that `message` says, in this function.
