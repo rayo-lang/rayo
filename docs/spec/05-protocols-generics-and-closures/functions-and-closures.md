@@ -393,7 +393,7 @@ enum PadButton: Int32 { case start, back }      // crosses as its raw type, Int3
 
 **An `unsafe func` converts only to `unsafe` function types** and `Closure`s of them, and, when it is also `@c`, imported or declared with `extern(c)`, to `@c` types. So no function value hides its call from the caller. It satisfies a `some F` or a function-type constraint only when `F` is `unsafe`. Every imported or `extern(c)` function is an `unsafe func` ([08](../08-c-interop/imports-and-declarations.md#what-imports-as-what)).
 
-**A `@c` value converts only to another `@c` type, or its optional**, as above, never to a Rayo function type, a `Closure` or an `unsafe` form. A literal that calls C inside an `unsafe` block is an ordinary Rayo function:
+**A `@c` value converts only to another `@c` type, or its optional**, as above, never to a Rayo function type, a `Closure` or an `unsafe` form. It has no room for captures and no callee known statically, so a Rayo function value of it needs a wrapper that captures the pointer, and a literal writes that wrapper out. A literal that calls C inside an `unsafe` block is an ordinary Rayo function:
 
 ```rayo
 let now: () -> Double = { unsafe { platform_time_seconds() } }   // a Rayo function type, though its body calls C
