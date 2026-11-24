@@ -76,11 +76,14 @@ struct MutableParameterTests {
     }
 
     @Test(arguments: [
-        "func f(_ n: Int) { bump(mutable n) }",
-        "func f(_ e: mutable &Enemy) {\n    heal(mutable e)\n    bump(mutable e.stats.hp)\n}",
+        ("n: Int", "bump(mutable n)"),
+        ("e: Enemy", "heal(mutable e)\n    bump(mutable e.stats.hp)\n    bump(mutable e.slots[0])"),
+        ("e: mutable &Enemy", "heal(mutable e)\n    bump(mutable e.stats.hp)\n    bump(mutable e.slots[0])"),
     ])
-    func `a parameter that owns its argument, or borrows it for change, is lent with 'mutable'`(declaration: String) {
-        #expect(declarationMessages(of: declaration) == [])
+    func `a parameter that owns its argument, or borrows it for change, is lent with 'mutable', and so are its parts`(
+        parameter: String, body: String,
+    ) {
+        #expect(declarationMessages(of: "func f(_ \(parameter)) {\n    \(body)\n}") == [])
     }
 
     // A `mutable &T` parameter is lent shared, or copied, as any place is.
@@ -90,17 +93,54 @@ struct MutableParameterTests {
     }
 
     @Test(arguments: [
-        ("bump(mutable fixed)", 10), ("heal(mutable fixedEnemy)", 10), ("bump(mutable fixedEnemy.stats.hp)", 10),
-        ("bump(mutable e.id)", 10), ("bump(mutable seen.stats.hp)", 10), ("bumpCount(mutable e.slots.count)", 15),
-        ("heal(mutable makeEnemy())", 10), ("bump(mutable makeEnemy().stats.hp)", 10),
+        ("bump(mutable fixed)", "fixed"), ("heal(mutable fixedEnemy)", "fixedEnemy"),
+        ("bump(mutable fixedEnemy.stats.hp)", "fixedEnemy"), ("fill(mutable fixedEnemy.slots)", "fixedEnemy"),
+        ("bump(mutable fixedEnemy.slots[i])", "fixedEnemy"),
     ])
-    func `'mutable' of a place that isn't changeable is reported as unsupported`(statement: String, column: Int) {
+    func `'mutable' of a 'let', or of a part of one, names it and says to declare it 'var'`(
+        statement: String, name: String,
+    ) {
+        #expect(messages(of: statement) == [
+            "18: error[E0295]: '\(name)' is a 'let', so it can't change; declare it 'var'",
+        ])
+    }
+
+    @Test func `'mutable' of a 'ref let' names it`() {
+        #expect(messages(of: "heal(mutable seen)") == ["18: error[E0296]: 'seen' is a 'ref let', so it can't change"])
+    }
+
+    // A part of a `ref let` is reported as an assignment into it is.
+    @Test(arguments: ["bump(mutable seen.stats.hp)", "fill(mutable seen.slots)", "bump(mutable seen.slots[i])"])
+    func `'mutable' of a part of a 'ref let' names it`(statement: String) {
+        #expect(messages(of: statement) == [
+            "18: error[E0251]: 'seen' is a 'let', so its fields and elements can't change",
+        ])
+    }
+
+    // A `let` field never changes, whatever holds it, so it is reported ahead of a root that can't change either.
+    @Test(arguments: [("bump(mutable e.id)", 20), ("bump(mutable fixedEnemy.id)", 29), ("bump(mutable seen.id)", 23)])
+    func `'mutable' of a 'let' field names the field`(statement: String, column: Int) {
+        #expect(messages(of: statement) == ["\(column): error[E0252]: 'id' is a 'let' field, so it can't change"])
+    }
+
+    // An array's count never changes, whatever holds the array, so it is reported ahead of a root that can't change
+    // either.
+    @Test(arguments: [("bumpCount(mutable e.slots.count)", 31), ("bumpCount(mutable fixedEnemy.slots.count)", 40)])
+    func `'mutable' of an array's count says its type fixes it`(statement: String, column: Int) {
+        #expect(messages(of: statement) == [
+            "\(column): error[E0273]: an array's 'count' is fixed by its type, so it can't change",
+        ])
+    }
+
+    @Test(arguments: [("heal(mutable makeEnemy())", 10), ("bump(mutable makeEnemy().stats.hp)", 10)])
+    func `'mutable' of a temporary is reported as unsupported`(statement: String, column: Int) {
         #expect(messages(of: statement) == ["\(column): error[E0289]: 'mutable' isn't supported"])
     }
 
-    @Test func `'mutable' of a '&T' parameter is reported as unsupported`() {
-        #expect(declarationMessages(of: "func f(_ e: &Enemy) { heal(mutable e) }") == [
-            "14:28: error[E0289]: 'mutable' isn't supported",
+    @Test(arguments: ["heal(mutable e)", "bump(mutable e.stats.hp)", "bump(mutable e.slots[0])"])
+    func `'mutable' of a '&T' parameter, or of a part of one, says to take it as 'mutable &T'`(statement: String) {
+        #expect(declarationMessages(of: "func f(_ e: &Enemy) { \(statement) }") == [
+            "14:36: error[E0230]: 'e' is a '&Enemy' parameter, so it can't change; take it as 'mutable &Enemy'",
         ])
     }
 

@@ -14,6 +14,10 @@ private func errorLines(_ body: String) -> [String] {
     diagnostics("func main() {}\nfunc f(_ p: &[2 of Int]) {\n\(body)\n}\n\(declarations)").map(\.description)
 }
 
+/// The error at an assignment into an element of the borrowed array `p`, which starts the body's first line.
+private let borrowedArray =
+    "3:1: error[E0230]: 'p' is a '&[2 of Int]' parameter, so it can't change; take it as 'mutable &[2 of Int]'"
+
 struct ElementAssignmentTests {
     @Test(arguments: [
         "var a = [1, 2]\na[0] = 3\na[1] += a[0]\ntake(a[1])",
@@ -35,8 +39,8 @@ struct ElementAssignmentTests {
             "var e = Enemy(slots: [1, 2], fixed: [3, 4])\ne.fixed[0] = 1",
             "4:3: error[E0252]: 'fixed' is a 'let' field, so it can't change",
         ),
-        ("p[0] = 1", "3:1: error[E0230]: 'p' is a borrowed parameter, so it can't change"),
-        ("p[1] -= 1", "3:1: error[E0230]: 'p' is a borrowed parameter, so it can't change"),
+        ("p[0] = 1", borrowedArray),
+        ("p[1] -= 1", borrowedArray),
         (
             "made()[0] = 1",
             "3:1: error[E0291]: changing 'made()' does nothing, since it's dropped right after; "

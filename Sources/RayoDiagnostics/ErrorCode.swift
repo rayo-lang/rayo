@@ -215,8 +215,8 @@ public enum ErrorCode: Sendable, Hashable {
     @Code(229, error: "'main' takes no parameters")
     case mainTakesParameters
 
-    @Code(230, error: "'{name}' is a borrowed parameter, so it can't change")
-    case assignToParameter(name: String)
+    @Code(230, error: "'{name}' is a '&{type}' parameter, so it can't change; take it as 'mutable &{type}'")
+    case assignToParameter(name: String, type: TypeName)
 
     @Code(231, error: "no '{name}' takes the arguments ({arguments})")
     case noMatchingFunction(name: String, arguments: String)
@@ -406,6 +406,12 @@ public enum ErrorCode: Sendable, Hashable {
 
     @Code(294, error: "'{name}' takes '{type}', not a mutable reference; remove the 'mutable'")
     case mutableToNonMutableParameter(name: String, type: String)
+
+    @Code(295, error: "'{name}' is a 'let', so it can't change; declare it 'var'")
+    case mutableOfLet(name: String)
+
+    @Code(296, error: "'{name}' is a 'ref let', so it can't change")
+    case mutableOfReferenceLet(name: String)
 
     // MARK: Ownership
 

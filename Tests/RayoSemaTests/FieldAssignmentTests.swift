@@ -19,7 +19,7 @@ struct FieldAssignmentTests {
         ("l.armor = 1", ErrorCode.assignToPartOfLet(name: "l"), "l"),
         ("l.stats.hp += 1", .assignToPartOfLet(name: "l"), "l"),
         ("l.stats = Stats(alive: true, hp: 50)", .assignToPartOfLet(name: "l"), "l"),
-        ("p.stats.hp = 1", .assignToParameter(name: "p"), "p"),
+        ("p.stats.hp = 1", .assignToParameter(name: "p", type: "Enemy"), "p"),
         ("e.stats.alive = false", .assignToLetField(field: "alive"), "alive"),
         ("e.stats.mana = 1", .noSuchField(type: "Stats", field: "mana"), "mana"),
         ("e.armor = true", .typeMismatch(expected: "Int", found: "Bool"), "true"),

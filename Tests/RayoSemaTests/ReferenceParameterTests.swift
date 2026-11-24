@@ -179,7 +179,7 @@ struct ReferenceParameterTests {
     @Test func `a parameter that owns an Int may change, and one that borrows it can't`() {
         #expect(declarationMessages(of: "func f(_ n: Int) {\n    n += 1\n    print(n)\n}") == [])
         #expect(declarationMessages(of: "func f(_ n: &Int) { n = 1 }") == [
-            "3:21: error[E0230]: 'n' is a borrowed parameter, so it can't change",
+            "3:21: error[E0230]: 'n' is a '&Int' parameter, so it can't change; take it as 'mutable &Int'",
         ])
     }
 }
