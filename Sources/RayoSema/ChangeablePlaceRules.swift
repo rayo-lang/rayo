@@ -20,12 +20,12 @@ extension ChangeablePlaceRules {
     /// Checks a root that is no name, such as a call or a literal, as a temporary, which never changes. A place that
     /// goes on from it has the root refused last, after the rest of the place.
     func root(_ expr: Expr, holdsParts: Bool) -> TypedPlace? {
-        // A value that failed was reported, and so is one too large for the stack, where a temporary lies.
-        guard let value = expressions.check(expr),
-              let held = expressions.file.declarations.fittingOnStack(value, reporting: expressions.file.errors)
-        else { return nil }
-        guard holdsParts else { return refuse(refusal(toChange: held), at: expr.range) }
-        return (CheckedPlace(root: .temporary(held)), held.type)
+        // A value that failed was reported, and so is one too large for the stack.
+        guard let value = expressions.check(expr), let temporary = expressions.temporary(holding: value) else {
+            return nil
+        }
+        guard holdsParts else { return refuse(refusal(toChange: value), at: expr.range) }
+        return temporary
     }
 
     /// Checks the place that `target` names under these rules, checking its root last.

@@ -50,8 +50,8 @@ extension Parser {
             return Expr(kind: .reference(place), range: range(from: start))
         }
 
-        // A `mutable` takes the unary expression after it, as a `-` does. Checking says which of them is a place that
-        // can change, and names a temporary that can't.
+        // A `mutable` takes the unary expression after it, as a `-` does. Checking reports an operand that names no
+        // place that can change, such as a temporary.
         if consume(.mutable) {
             let operand = try parseUnary()
             return Expr(kind: .mutableReference(operand), range: range(from: start))

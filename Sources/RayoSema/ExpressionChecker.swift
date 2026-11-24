@@ -280,6 +280,13 @@ struct ExpressionChecker {
         place(expr, under: rules, holdsParts: false)
     }
 
+    /// The temporary that holds `value`, as a place, or nil after reporting a value too large for the stack, where a
+    /// temporary lies.
+    func temporary(holding value: CheckedExpr) -> TypedPlace? {
+        guard let held = file.declarations.fittingOnStack(value, reporting: errors) else { return nil }
+        return (CheckedPlace(root: .temporary(held)), held.type)
+    }
+
     /// Checks an expression that names a place under the given rules. The flag says whether the place goes on into
     /// a field or an element of it, as the base of a longer place does.
     private func place(_ expr: Expr, under rules: some PlaceRules, holdsParts: Bool) -> TypedPlace? {
@@ -550,9 +557,7 @@ extension ExpressionChecker: PlaceRules {
         // whole. A value that failed was reported.
         guard let value = check(expr) else { return nil }
         if case .place(let place) = value.kind { return (place, value.type) }
-        // A temporary lies on the stack, so one too large for it is reported.
-        guard let held = file.declarations.fittingOnStack(value, reporting: errors) else { return nil }
-        return (CheckedPlace(root: .temporary(held)), held.type)
+        return temporary(holding: value)
     }
 
     func admits(_ local: LocalID, at range: SourceRange, holdsParts: Bool) -> Bool {

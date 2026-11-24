@@ -41,11 +41,7 @@ struct ElementAssignmentTests {
         ),
         ("p[0] = 1", borrowedArray),
         ("p[1] -= 1", borrowedArray),
-        (
-            "made()[0] = 1",
-            "3:1: error[E0291]: changing 'made()' does nothing, since it's dropped right after; "
-                + "store it in a 'var' first",
-        ),
+        ("made()[0] = 1", changedTemporary("made()", at: "3:1")),
     ])
     func `an element is assigned only where a field would be`(body: String, expected: String) {
         #expect(errorLines(body) == [expected])

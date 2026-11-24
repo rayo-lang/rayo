@@ -14,12 +14,6 @@ private let declarations = """
     func keep(_ n: Int) { print(n) }
     """
 
-/// The error line for a `mutable` of `temporary` at `position`.
-private func lentTemporary(_ temporary: String, at position: String) -> String {
-    "\(position): error[E0291]: changing '\(temporary)' does nothing, since it's dropped right after; store it in a "
-        + "'var' first"
-}
-
 struct MutableTemporaryTests {
     @Test(arguments: [
         ("heal(mutable makeEnemy())", "2:14", "makeEnemy()"),
@@ -33,11 +27,10 @@ struct MutableTemporaryTests {
     func `'mutable' of a temporary, or of a part of one, names it and says to store it in a 'var'`(
         body: String, position: String, temporary: String,
     ) {
-        #expect(errorLines(inMain: body, beside: declarations) == [lentTemporary(temporary, at: position)])
+        #expect(errorLines(inMain: body, beside: declarations) == [changedTemporary(temporary, at: position)])
     }
 
-    // The temporary can't change wherever the `mutable` stands, so that is all a position that takes no mutable
-    // reference reports of it.
+    // A temporary can't change, so that is the only error, even where the position takes no mutable reference.
     @Test(arguments: [
         ("show(mutable makeEnemy())", "2:14", "makeEnemy()"),
         ("keep(mutable makeEnemy().hp)", "2:14", "makeEnemy()"),
@@ -49,7 +42,7 @@ struct MutableTemporaryTests {
     func `'mutable' of a temporary reports it alone, wherever the 'mutable' stands`(
         body: String, position: String, temporary: String,
     ) {
-        #expect(errorLines(inMain: body, beside: declarations) == [lentTemporary(temporary, at: position)])
+        #expect(errorLines(inMain: body, beside: declarations) == [changedTemporary(temporary, at: position)])
     }
 
     @Test func `a temporary that fails is reported for that alone`() {

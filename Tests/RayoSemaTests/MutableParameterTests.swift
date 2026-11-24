@@ -167,10 +167,7 @@ struct MutableParameterTests {
     func `a value given to a 'mutable &T' parameter is a temporary whose change does nothing`(
         statement: String, column: Int, temporary: String,
     ) {
-        #expect(messages(of: statement) == [
-            "\(column): error[E0291]: changing '\(temporary)' does nothing, since it's dropped right after; "
-                + "store it in a 'var' first",
-        ])
+        #expect(messages(of: statement) == [changedTemporary(temporary, at: "\(column)")])
     }
 
     @Test(arguments: [

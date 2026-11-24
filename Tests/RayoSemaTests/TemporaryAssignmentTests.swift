@@ -9,12 +9,6 @@ private let declarations = """
     func makeHP() -> Int { 100 }
     """
 
-/// The error line for an assignment into `temporary` at `position`.
-private func assignedTemporary(_ temporary: String, at position: String = "2:1") -> String {
-    "\(position): error[E0291]: changing '\(temporary)' does nothing, since it's dropped right after; store it in a "
-        + "'var' first"
-}
-
 struct TemporaryAssignmentTests {
     @Test(arguments: [
         ("makeEnemy().hp = 0", "makeEnemy()"),
@@ -27,7 +21,7 @@ struct TemporaryAssignmentTests {
     func `an assignment into a temporary, whole or part, names it and says to store it in a 'var'`(
         body: String, temporary: String,
     ) {
-        #expect(errorLines(inMain: body, beside: declarations) == [assignedTemporary(temporary)])
+        #expect(errorLines(inMain: body, beside: declarations) == [changedTemporary(temporary, at: "2:1")])
     }
 
     @Test(arguments: [
@@ -58,7 +52,7 @@ struct TemporaryAssignmentTests {
     func `the temporary is named as the source writes it, on one line, without comments or parentheses around it`(
         body: String, position: String, temporary: String,
     ) {
-        #expect(errorLines(inMain: body, beside: declarations) == [assignedTemporary(temporary, at: position)])
+        #expect(errorLines(inMain: body, beside: declarations) == [changedTemporary(temporary, at: position)])
     }
 
     @Test func `a temporary that fails is reported for that alone`() {
@@ -68,7 +62,7 @@ struct TemporaryAssignmentTests {
 
     @Test func `the value is checked even where the temporary can't be assigned`() {
         #expect(errorLines(inMain: "makeEnemy().hp = nope", beside: declarations) == [
-            assignedTemporary("makeEnemy()"),
+            changedTemporary("makeEnemy()", at: "2:1"),
             "2:18: error[E0206]: 'nope' isn't declared",
         ])
     }
