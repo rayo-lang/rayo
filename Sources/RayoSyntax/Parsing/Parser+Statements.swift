@@ -4,7 +4,14 @@ internal import RayoDiagnostics
 extension Parser {
     mutating func parseBlock() throws(ParseFailure) -> Block {
         try expect(.lbrace, else: ErrorCode.missingBlock)
+
+        // A block's statements hold expressions of their own, even inside an `if` expression, since how deep blocks
+        // nest is apart from how deep an expression does.
+        let enclosingDepth = depth
+        depth = 0
         let statements = parseStatements()
+        depth = enclosingDepth
+
         let closingBrace = try expect(.rbrace, else: ErrorCode.unclosedBlock).range
         return Block(statements: statements, closingBrace: closingBrace)
     }

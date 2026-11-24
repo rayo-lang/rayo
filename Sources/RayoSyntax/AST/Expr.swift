@@ -3,6 +3,42 @@ public import RayoSource
 public struct Expr: Sendable {
     public var kind: ExprKind
     public var range: SourceRange
+    /// How many levels deep the expression nests: none without parts, and one more than its deepest part otherwise.
+    /// A pair of parentheses is a level too, though the tree keeps no node for it.
+    let levels: Int
+
+    /// An expression of `kind` over `range`, as deep as its parts make it.
+    init(kind: ExprKind, range: SourceRange) {
+        self.init(kind: kind, range: range, levels: kind.levels)
+    }
+
+    init(kind: ExprKind, range: SourceRange, levels: Int) {
+        self.kind = kind
+        self.range = range
+        self.levels = levels
+    }
+}
+
+private extension ExprKind {
+    /// How many levels deep an expression of this kind nests, one more than its deepest part. The blocks of an `if`
+    /// count for nothing, since their statements' expressions are expressions of their own.
+    var levels: Int {
+        switch self {
+        case .intLiteral, .negativeIntLiteral, .boolLiteral, .name, .implicitMember:
+            0
+        case .member(let base, _, _), .copy(let base), .consume(let base), .reference(let base),
+             .mutableReference(let base), .unary(_, let base):
+            base.levels + 1
+        case .binary(_, let left, let right), .element(let left, index: let right):
+            max(left.levels, right.levels) + 1
+        case .call(let callee, let arguments):
+            arguments.reduce(callee.levels) { deepest, argument in max(deepest, argument.value.levels) } + 1
+        case .arrayLiteral(let elements):
+            elements.isEmpty ? 0 : elements.reduce(0) { deepest, element in max(deepest, element.levels) } + 1
+        case .if(let ifExpr):
+            ifExpr.condition.levels + 1
+        }
+    }
 }
 
 public indirect enum ExprKind: Sendable {
