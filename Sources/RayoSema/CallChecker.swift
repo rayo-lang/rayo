@@ -227,7 +227,7 @@ struct CallChecker {
         }
 
         // A parameter whose type isn't known was reported where it is declared; the value is checked on its own.
-        guard let expected = parameter.expectation(calledAs: name) else {
+        guard let expected = parameter.expectation(calledAs: name, isBorrowedByOverload: false) else {
             argument.reportErrors(by: expressions)
             return nil
         }
@@ -252,7 +252,8 @@ struct CallChecker {
 
         // Pick the one candidate that the arguments' labels and values fit.
         let labels = arguments.map(\.label)
-        let (remaining, takeWrittenReferences) = remaining(of: candidates, passing: labels, values)
+        let fitting = fitting(candidates, passing: labels, values)
+        let (remaining, takeWrittenReferences) = remaining(of: fitting, passing: values)
         // No candidate fits, which is reported with the arguments' types.
         guard !remaining.isEmpty else {
             reportNoMatch(of: name, labels: labels, values: values, in: range)
@@ -271,7 +272,7 @@ struct CallChecker {
 
         // A parameter whose type isn't known was reported where it is declared, and takes any argument, so the
         // arguments report only their own errors, as they do where the call has one candidate.
-        let expectations = chosen.parameters.compactMap { $0.expectation(calledAs: name) }
+        let expectations = expectations(of: chosen, named: name, among: fitting)
         guard expectations.count == values.count else {
             expressions.reportSettlingErrors(of: values)
             return nil
@@ -309,9 +310,21 @@ struct CallChecker {
         return nil
     }
 
-    /// The candidates that a call passing `labels` and `values` can reach, and whether they take its `&` arguments.
-    private func remaining(of candidates: [Signature], passing labels: [String?],
-                           _ values: [CheckedValue]) -> (candidates: [Signature], takeWrittenReferences: Bool) {
+    /// What each of `chosen`'s parameters expects of its argument, where the call names the function as `name`. Each
+    /// notes whether one of `fitting`, the candidates the arguments fit, borrows the argument. A parameter whose type
+    /// isn't known expects nothing, and is left out.
+    private func expectations(of chosen: Signature, named name: String,
+                              among fitting: [Signature]) -> [Expectation] {
+        chosen.parameters.indices.compactMap { index in
+            let isBorrowedByOverload = fitting.contains { $0.parameters[index].convention == .borrowed }
+            return chosen.parameters[index].expectation(calledAs: name, isBorrowedByOverload: isBorrowedByOverload)
+        }
+    }
+
+    /// The candidates whose labels a call passing `labels` and `values` matches, in order, and whose parameter types
+    /// the values fit.
+    private func fitting(_ candidates: [Signature], passing labels: [String?],
+                         _ values: [CheckedValue]) -> [Signature] {
         // Keep the candidates whose labels the arguments match, in order.
         let labeled = candidates.filter { $0.takesLabels(labels) }
         // Keep those that the typed arguments fit, so that an untyped argument is offered only the parameters of the
@@ -319,11 +332,17 @@ struct CallChecker {
         let typedFit = labeled.filter { $0.takes(values, in: declarations, where: { $0.type != nil }) }
         // Each untyped argument takes each remaining candidate's parameter type, and a candidate it doesn't fit drops
         // out.
-        let typesFit = typedFit.filter { $0.takes(values, in: declarations, where: { $0.type == nil }) }
+        return typedFit.filter { $0.takes(values, in: declarations, where: { $0.type == nil }) }
+    }
+
+    /// The ones of `fitting`, the candidates whose labels and types `values` fit, that the call can reach, and
+    /// whether they take its `&` arguments.
+    private func remaining(of fitting: [Signature],
+                           passing values: [CheckedValue]) -> (candidates: [Signature], takeWrittenReferences: Bool) {
         // A candidate that owns a `&` argument drops out; where all do, all stay, so the one reached reports how to
         // write it.
-        let takingReferences = typesFit.filter { $0.takesReferences(in: values) }
-        guard !takingReferences.isEmpty else { return (typesFit, false) }
+        let takingReferences = fitting.filter { $0.takesReferences(in: values) }
+        guard !takingReferences.isEmpty else { return (fitting, false) }
 
         // A candidate that needs a bare place lent drops out where another needs no conversion.
         let areReferences = countedAsReferences(values, by: takingReferences)
@@ -372,7 +391,9 @@ struct CallChecker {
 
         // The candidates differ only in types the arguments fit, so the first stands for them all. The call still
         // fails, so its body is tainted, whatever the arguments report.
-        let expectations = candidates[0].parameters.compactMap { $0.expectation(calledAs: name) }
+        let expectations = candidates[0].parameters.compactMap {
+            $0.expectation(calledAs: name, isBorrowedByOverload: false)
+        }
         for (value, expected) in zip(values, expectations) {
             _ = expressions.settled(value, expecting: expected)
         }

@@ -158,9 +158,9 @@ struct ExpressionChecker {
     }
 
     /// `value`, as `recipient` takes it, with what the recipient can't take of it as the source writes it reported,
-    /// such as a place written without the `&` that a parameter that borrows takes it with.
+    /// such as a struct's place written without the `consume` or `copy` that a parameter that owns it takes it with.
     func taken(_ value: CheckedExpr, by recipient: Recipient?) -> CheckedExpr {
-        reportUnlent(value, to: recipient)
+        reportUnmarked(value, to: recipient)
         return value
     }
 

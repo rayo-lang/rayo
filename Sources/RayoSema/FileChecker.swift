@@ -84,7 +84,7 @@ final class FileChecker {
             let initializer = FunctionID(index: functions.count)
             let parameters = types[id].fields.map { field in
                 Parameter(FunctionParameter(label: field.name, convention: .owned, type: field.type),
-                          borrowsTemporaries: false)
+                          borrowsTemporaries: false, movesBarePlaces: true)
             }
             let signature = Signature(name: id.name, target: .callee(.function(initializer)), parameters: parameters,
                                       result: .type(.named(.structure(id))))
@@ -139,8 +139,8 @@ final class FileChecker {
 
     /// Makes the signature's parameter from the one the declaration writes: a `&T` parameter borrows its argument,
     /// a `mutable &T` one borrows it for change, and a `T` one owns it. Reports what rayoc doesn't support in it: a
-    /// default value, and a `mutable &T` parameter, the type Void, or a `T` parameter of a type that isn't implicitly
-    /// copyable, each of which leaves the parameter without a type, so that its calls report nothing more.
+    /// default value, and a `mutable &T` parameter or the type Void, each of which leaves the parameter without a
+    /// type, so that its calls report nothing more.
     private func parameter(from parameter: Param) -> Parameter {
         // A default value is reported, since every call writes every argument.
         if let defaultValue = parameter.defaultValue { errors.report(.defaultArgument, at: defaultValue.range) }
@@ -163,19 +163,14 @@ final class FileChecker {
             errors.report(code, at: parameter.type.range)
             type = nil
         }
-        // So is one that owns a struct or an array, which rayoc doesn't support.
-        if let resolved = type, convention == .owned, !resolved.isImplicitlyCopyable {
-            errors.report(.unsupportedOwnedParameter(type: declarations.typeName(of: resolved)),
-                          at: parameter.type.range)
-            type = nil
-        }
         // So is one too large for the stack, where the call's argument lies.
         if let resolved = type, !declarations.fitsOnStack(resolved, at: parameter.type.range, reporting: errors) {
             type = nil
         }
-        // Only a built-in is lent a temporary.
+        // Only a built-in is lent a temporary. A place that the parameter owns moves in only where the call writes
+        // `consume`.
         return Parameter(label: parameter.label, convention: convention, type: type,
-                         spelledType: parameter.spelledType, borrowsTemporaries: false)
+                         spelledType: parameter.spelledType, borrowsTemporaries: false, movesBarePlaces: false)
     }
 
     /// The result type that `function`, which is `id`, declares, or `.givenByBody` where its body gives it.

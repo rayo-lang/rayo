@@ -167,27 +167,12 @@ struct ReferenceParameterTests {
         #expect(errors(source) == [.notAType(name: "Nope")])
     }
 
-    @Test(arguments: ["func f(_ n: Int, _ u: UInt, _ b: Bool) {}", "func f(_ e: &Enemy, _ s: &[2 of Enemy]) {}"])
-    func `a parameter may own an Int, a UInt or a Bool, and borrow a value of any type`(declaration: String) {
-        #expect(declarationMessages(of: declaration) == [])
-    }
-
     @Test(arguments: [
-        ("func f(_ e: Enemy) {}", "3:13", "an Enemy", "Enemy"),
-        ("func f(_ s: [2 of Int]) {}", "3:13", "a [2 of Int]", "[2 of Int]"),
+        "func f(_ n: Int, _ u: UInt, _ b: Bool) {}", "func f(_ e: &Enemy, _ s: &[2 of Enemy]) {}",
+        "func f(_ e: Enemy, _ s: [2 of Enemy]) {}",
     ])
-    func `a parameter that owns a struct or an array names v0.3, and says to borrow it`(
-        declaration: String, position: String, type: String, written: String,
-    ) {
-        #expect(declarationMessages(of: declaration) == [
-            "\(position): error[E0282]: parameters that own \(type) arrive in v0.3; write '&\(written)' to borrow it",
-        ])
-    }
-
-    @Test func `a call of a function whose parameter owns a struct reports nothing more`() {
-        let body = "    var e = Enemy(hp: 1)\n    f(e)\n    f(&e)\n    print(e.hp)"
-        let source = "func main() {\n\(body)\n}\nstruct Enemy(var hp: Int)\nfunc f(_ e: Enemy) { print(e.hp) }"
-        #expect(errors(source) == [.unsupportedOwnedParameter(type: "Enemy")])
+    func `a parameter may own or borrow a value of any type`(declaration: String) {
+        #expect(declarationMessages(of: declaration) == [])
     }
 
     @Test func `a 'mutable &T' parameter is reported as unsupported`() {
