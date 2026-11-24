@@ -16,11 +16,11 @@ private func source(running body: String) -> String {
 
 struct FieldAssignmentTests {
     @Test(arguments: [
-        ("l.armor = 1", ErrorCode.assignToPartOfLet(name: "l"), "l"),
-        ("l.stats.hp += 1", .assignToPartOfLet(name: "l"), "l"),
-        ("l.stats = Stats(alive: true, hp: 50)", .assignToPartOfLet(name: "l"), "l"),
-        ("p.stats.hp = 1", .assignToParameter(name: "p"), "p"),
-        ("e.stats.alive = false", .assignToLetField(field: "alive"), "alive"),
+        ("l.armor = 1", ErrorCode.changeOfPartOfLet(name: "l"), "l"),
+        ("l.stats.hp += 1", .changeOfPartOfLet(name: "l"), "l"),
+        ("l.stats = Stats(alive: true, hp: 50)", .changeOfPartOfLet(name: "l"), "l"),
+        ("p.stats.hp = 1", .changeOfBorrowedParameter(name: "p", type: "Enemy"), "p"),
+        ("e.stats.alive = false", .changeOfLetField(field: "alive"), "alive"),
         ("e.stats.mana = 1", .noSuchField(type: "Stats", field: "mana"), "mana"),
         ("e.armor = true", .typeMismatch(expected: "Int", found: "Bool"), "true"),
         ("e.stats = made()", .typeMismatch(expected: "Stats", found: "Enemy"), "made()"),
@@ -45,7 +45,7 @@ struct FieldAssignmentTests {
     @Test(arguments: [
         ("l.mana = 1", ErrorCode.noSuchField(type: "Enemy", field: "mana"), "mana"),
         ("p.mana = 1", .noSuchField(type: "Enemy", field: "mana"), "mana"),
-        ("l.stats.alive = false", .assignToLetField(field: "alive"), "alive"),
+        ("l.stats.alive = false", .changeOfLetField(field: "alive"), "alive"),
         ("made().mana = 1", .noSuchField(type: "Enemy", field: "mana"), "mana"),
         ("nope().armor = 1", .notDeclared(name: "nope"), "nope"),
     ])
@@ -60,9 +60,9 @@ struct FieldAssignmentTests {
     }
 
     @Test(arguments: [
-        ("b.stats.hp = 1", ErrorCode.assignToLetField(field: "stats"), "stats"),
-        ("b.level *= 2", .assignToLetField(field: "level"), "level"),
-        ("b.stats.hp /= 2", .assignToLetField(field: "stats"), "stats"),
+        ("b.stats.hp = 1", ErrorCode.changeOfLetField(field: "stats"), "stats"),
+        ("b.level *= 2", .changeOfLetField(field: "level"), "level"),
+        ("b.stats.hp /= 2", .changeOfLetField(field: "stats"), "stats"),
     ])
     func `a 'let' field anywhere on the target's path rules out an assignment or a compound one`(
         body: String, expected: ErrorCode, covered: String,
@@ -82,11 +82,11 @@ struct FieldAssignmentTests {
 
     @Test func `a 'let' declared without a value is given one whole, never field by field`() {
         let source = "func main() {\nlet l: Enemy\nl.armor = 1\n}" + enemyAndStats
-        #expect(errors(source) == [.assignToPartOfLet(name: "l")])
+        #expect(errors(source) == [.changeOfPartOfLet(name: "l")])
     }
 
     @Test func `the value is checked even where the field can't be assigned`() {
-        let expected: [ErrorCode] = [.assignToPartOfLet(name: "l"), .notDeclared(name: "nope")]
+        let expected: [ErrorCode] = [.changeOfPartOfLet(name: "l"), .notDeclared(name: "nope")]
         #expect(errors(source(running: "l.armor = nope")) == expected)
     }
 }

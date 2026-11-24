@@ -17,8 +17,8 @@ struct ParameterTests {
     }
 
     @Test("a '&T' parameter is borrowed: it can't change, and an expression reads it", arguments: [
-        ("func f(x: &Int) { x = 1 }", [ErrorCode.assignToParameter(name: "x")]),
-        ("func f(x: &Int) { x += 1 }", [.assignToParameter(name: "x")]),
+        ("func f(x: &Int) { x = 1 }", [ErrorCode.changeOfBorrowedParameter(name: "x", type: "Int")]),
+        ("func f(x: &Int) { x += 1 }", [.changeOfBorrowedParameter(name: "x", type: "Int")]),
         ("func f(x: &Int) { x(1) }", [.notAFunction(name: "x")]),
     ])
     func borrowed(declaration: String, expected: [ErrorCode]) {
