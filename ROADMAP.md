@@ -1,16 +1,16 @@
 # Roadmap
 
-Rayo's [spec](docs/spec/README.md) defines the whole language, and `rayoc` builds it a small version at a time. Each version adds a few features of the spec, end to end: a program that uses them parses, checks, compiles, links and runs. This file gives the feature set of each version, two versions ahead and no further.
+Rayo's [spec](docs/spec/README.md) defines the whole language, and `rayoc` builds it a small version at a time. Each version adds one or two features of the spec, end to end: a program that uses them parses, checks, compiles, links and runs. This file gives the feature set of each version, three versions ahead and no further.
 
 ## What a version is
 
 **Each version lists its feature set, once.** The list says what the release holds, so it stays the same as those features come to run. The work toward the version, what of it is left, and its bugs and refactors are in the [issue tracker](https://github.com/rayo-lang/rayo/issues).
 
+**A version builds one or two features, each a feature of the spec**, such as fixed-width integers or the prelude. Its list names each part of them that it builds, their compile errors included.
+
 **A version is done when every feature it lists runs end to end, and its proof program shows it.** The proof program is one Rayo program, `examples/v0.N/<name>.rayo`, with its expected output beside it in `<name>.out`. A driver test runs it, in debug and in release builds, on every platform CI tests: macOS arm64, Linux x64, Windows x64 and Windows arm64. The driver tests check each feature in detail, so the proof program only puts the features to work together. The other programs in `examples/` use the whole language, more than `rayoc` compiles, and no test runs them.
 
 **A version that builds part of a spec feature leaves the rest mapped in [Not yet planned](#not-yet-planned)**, so every feature of the spec is in a version or in that list.
-
-**A half version, such as v0.2.5, adds one small feature.** It has no proof program of its own: it extends the program of the version before it.
 
 **A finished version is tagged**, as `v0.1.0`, with short release notes, and the tag marks it done. A version ships no binaries, and is built from source as [TOOLCHAIN.md](TOOLCHAIN.md) says.
 
@@ -52,29 +52,43 @@ v0.2 adds:
 - `consume` of the same places, as `let x = consume e`, which moves a local or a field of one, and is an error where a `&T` parameter or an element can't be moved from ([01](docs/spec/01-values-and-ownership/moving-values-out.md#moving-values-out));
 - implicit copies of `Int`, `UInt` and `Bool`, which leave the place usable, in a `let`, a `var`, an assignment, a `return`, an initializer's argument and an array literal's element, while a struct or an array keeps the errors ([01](docs/spec/01-values-and-ownership/moves-copies-destruction.md#implicit-copies)).
 
-## v0.2.5: `Float` and `Double`
-
-v0.2.5 adds:
-
-- `Float` and `Double`, with their literals, the arithmetic operators `+`, `-`, `*` and `/`, unary `-`, and the comparisons, each one IEEE 754 operation ([04](docs/spec/04-types/numbers-and-math.md#floating-point));
-- a float literal that nothing gives another type, such as `0.5` in `let x = 0.5`, as a `Double` ([04](docs/spec/04-types/numbers-and-math.md#numbers));
-- implicit copies of `Float` and `Double`, as v0.2 makes of `Int`, `UInt` and `Bool` ([01](docs/spec/01-values-and-ownership/moves-copies-destruction.md#implicit-copies));
-- the conversions between every pair of `Int`, `UInt`, `Float` and `Double` that v0.2 doesn't build, as `Double(i)`, `Float(d)` and `Int(f)` ([04](docs/spec/04-types/numbers-and-math.md#conversions)):
-    - a float to an integer rounds toward zero, and panics in every build with `float to integer conversion of NaN` or `float to integer conversion out of range`;
-    - an integer to a float, and a `Double` to a `Float`, round to nearest, and a value too large for a `Float` becomes an infinity;
-- `print(Float)` and `print(Double)`, which print the shortest decimal that reads back as the same value ([04](docs/spec/04-types/collections.md#printing)).
-
-Its proof program extends v0.2's.
-
 ## v0.3: changing values in place
+
+A function changes its caller's value through a `mutable &T` parameter, and takes a struct or an array over through a parameter that owns it.
 
 v0.3 adds:
 
-- `mutable &T` parameters, which a call lends a place with `mutable a`, and parameters `x: T` of a struct or array type, which own their arguments, with the [law of exclusivity](docs/spec/01-values-and-ownership/exclusivity.md#the-law-of-exclusivity), and the error for an owning parameter that no code reads ([05](docs/spec/05-protocols-generics-and-closures/functions-and-closures.md#unused-values));
-- the compile errors for a place given to a `mutable &T` parameter without `mutable`, and for a struct or an array given to an owning parameter without `consume` or `copy`, each of which names the marks that fit;
-- the compile error for `mutable a` given to a parameter that doesn't take a mutable reference;
-- `mutating func`, whose `self` names the receiver's place as a `mutable &T` parameter names its argument's;
-- the compile errors for a change to what a temporary owns: `mutable` of a temporary, a `mutating` call on one, and an assignment into one, which v0.1 rejects without naming the fix ([01](docs/spec/01-values-and-ownership/bindings.md#temporaries-are-read-only)).
+- `mutable &T` parameters, which a call lends a place with `mutable a`, under the [law of exclusivity](docs/spec/01-values-and-ownership/exclusivity.md#the-law-of-exclusivity) ([01](docs/spec/01-values-and-ownership/parameters.md#parameters));
+- the compile error for a place given to a `mutable &T` parameter without `mutable`, which names `mutable`, and the one for `mutable a` given to a parameter that doesn't take a mutable reference ([01](docs/spec/01-values-and-ownership/references.md#every-lend-for-change-is-marked));
+- the compile errors for changing a temporary: `mutable` of a temporary, and an assignment into one, which v0.1 rejects without naming the fix ([01](docs/spec/01-values-and-ownership/bindings.md#temporaries-are-read-only));
+- parameters `x: T` of a struct or array type, which own their arguments, given as `consume a` or `copy a` ([01](docs/spec/01-values-and-ownership/parameters.md#parameters));
+- the compile error for a struct or an array given to an owning parameter without `consume` or `copy`, which names the marks that fit, and the one for an owning parameter that no code reads ([05](docs/spec/05-protocols-generics-and-closures/functions-and-closures.md#unused-values)).
+
+## v0.4: fixed-width integers and raw pointers
+
+A fixed-width integer has the size a file format or a C library asks for, and a raw pointer reaches memory at an address, in code marked `unsafe` ([10](docs/spec/10-errors-and-safety/unsafe-code.md#unsafe-code)).
+
+v0.4 adds:
+
+- `Int8`, `Int16`, `Int32` and `Int64`, and `UInt8`, `UInt16`, `UInt32` and `UInt64`, each implicitly copyable as `Int` is, with literals typed by context, and arithmetic and comparisons under the overflow rule ([04](docs/spec/04-types/numbers-and-math.md#numbers));
+- the conversions between each pair of them and `Int` and `UInt`, implicit only where they widen, as an `Int16` does to an `Int32`, and written elsewhere, as `Int32(x)`, which checks that the value fits ([04](docs/spec/04-types/numbers-and-math.md#conversions));
+- `unsafe { }` blocks, and `unsafe` before an expression, which every raw-pointer operation below needs ([10](docs/spec/10-errors-and-safety/unsafe-code.md#what-needs-unsafe));
+- `*T`, a raw pointer, implicitly copyable as `Int` is, and `ptr(to:)`, which gives a place's address, lent with `mutable` or shared ([10](docs/spec/10-errors-and-safety/unsafe-code.md#taking-an-address));
+- reading and writing `p.pointee`, offsetting as `p + n` and `p[i]`, the distance `q - p`, and `p.cast(to:)` ([10](docs/spec/10-errors-and-safety/unsafe-code.md#raw-pointers)).
+
+## v0.5: C calls and the prelude
+
+A program calls the C functions it declares, and prints through std's prelude, which is written in Rayo and which every program sees ([11](docs/spec/11-compilation-model.md#the-prelude)).
+
+v0.5 adds:
+
+- `extern(c) func` declarations of C functions, called only inside `unsafe` ([08](docs/spec/08-c-interop.md#08--c-interop));
+- C's integer aliases, `CInt`, `CSize`, `CPtrDiff` and the rest, which the compiler provides for each target as the `IntN` or `UIntN` of its C type's size and signedness ([08](docs/spec/08-c-interop.md#08--c-interop));
+- the prelude: std's Rayo source, which ships inside `rayoc` and is compiled with every program, and which every program sees without an import ([11](docs/spec/11-compilation-model.md#the-prelude));
+- a program's own declarations, which shadow the prelude's names;
+- `print(Int)`, `print(UInt)` and `print(Bool)`, moved from the runtime's LLVM IR into the prelude and written in Rayo over `write`, through one host function per platform: POSIX's `write`, and Windows' `_write`.
+
+A panic stays in the runtime's LLVM IR until Rayo has strings.
 
 ## Not yet planned
 
@@ -84,24 +98,28 @@ Declarations and types:
 
 - struct initializers other than the primary one ([04](docs/spec/04-types/structs.md#initializers)): v0.1 builds the primary initializer alone;
 - `.init(…)` and the other implicit members, such as `.zero` ([05](docs/spec/05-protocols-generics-and-closures/operators.md#operators)): v0.1 makes a struct only by naming its type, and v0.2 builds `.init(repeating:)` of an inline array alone;
-- methods, `self`, static members and computed properties, and subscripts ([05](docs/spec/05-protocols-generics-and-closures/functions-and-closures.md#static-and-instance-members), [02](docs/spec/02-views-and-dependencies/place-and-value-properties.md#place-and-value-properties)): v0.3 adds `mutating func` alone;
+- methods, `self`, static members and computed properties, and subscripts ([05](docs/spec/05-protocols-generics-and-closures/functions-and-closures.md#static-and-instance-members), [02](docs/spec/02-views-and-dependencies/place-and-value-properties.md#place-and-value-properties));
+- `mutating func`, whose `self` names the receiver's place as a `mutable &T` parameter names its argument's, and the compile error for a `mutating` call on a temporary ([01](docs/spec/01-values-and-ownership/bindings.md#temporaries-are-read-only)): v0.3 builds the other errors for changing a temporary;
 - default arguments and field defaults ([01](docs/spec/01-values-and-ownership/parameters.md#default-arguments), [04](docs/spec/04-types/structs.md#initializers)): v0.1's calls and initializers take every argument written out;
 - `deinit` and move-only structs ([01](docs/spec/01-values-and-ownership/moves-copies-destruction.md#destruction), [01](docs/spec/01-values-and-ownership/moves-copies-destruction.md#copyable-types));
 - layout attributes, `@align` and packed structs, and the data layouts `Pod`, `TrailingArray` and `SoA` ([04](docs/spec/04-types/structs.md#layout-attributes), [04](docs/spec/04-types/data-layout.md#plain-and-specialized-data-layouts));
 - types and functions declared inside a function ([05](docs/spec/05-protocols-generics-and-closures/functions-and-closures.md#functions-and-closures));
-- nested types, type aliases and extensions ([04](docs/spec/04-types/structs.md#structs), [12](docs/spec/12-grammar/declarations.md#files-and-declarations));
+- nested types, a program's own `typealias` declarations, and extensions ([04](docs/spec/04-types/structs.md#structs), [12](docs/spec/12-grammar/declarations.md#files-and-declarations)): v0.5 builds C's integer aliases alone, which the compiler declares;
 - tuples ([04](docs/spec/04-types/collections.md#tuples-ranges-and-arrays));
 - `.init(each:)` and `[_ of T]` ([04](docs/spec/04-types/collections.md#tuples-ranges-and-arrays)): v0.2 builds `[N of T]`, made by a literal or by `.init(repeating:)`;
 - enums and optionals, and `when` with a subject ([04](docs/spec/04-types/enums.md#enums));
 - untagged unions ([04](docs/spec/04-types/enums.md#untagged-unions));
-- the other number types, and implicit widening between them ([04](docs/spec/04-types/numbers-and-math.md#conversions)): v0.1 builds `Int`, v0.2 `UInt`, and v0.2.5 `Float` and `Double`, all without implicit widening, and v0.2's array literals wait on the rest to widen their elements;
-- `Int.min`, `Int.max`, `min` and `max` ([05](docs/spec/05-protocols-generics-and-closures/functions-and-closures.md#static-and-instance-members), [05](docs/spec/05-protocols-generics-and-closures/operators.md#equality-and-ordering)): v0.1 builds `Int` without them;
-- `Int(clamping: f)` and the other clamping conversions of a float ([04](docs/spec/04-types/numbers-and-math.md#conversions)): v0.2.5 builds the unlabeled form alone;
+- `Float` and `Double`, with their literals, the arithmetic operators `+`, `-`, `*` and `/`, unary `-`, and the comparisons, each one IEEE 754 operation ([04](docs/spec/04-types/numbers-and-math.md#floating-point));
+- a float literal that nothing gives another type, such as `0.5` in `let x = 0.5`, as a `Double` ([04](docs/spec/04-types/numbers-and-math.md#numbers));
+- the conversions between a float and an integer, and between `Float` and `Double`, as `Double(i)`, `Float(d)` and `Int(f)`, with the panics of a float that converts to no integer ([04](docs/spec/04-types/numbers-and-math.md#conversions), [04](docs/spec/04-types/numbers-and-math.md#float-to-integer-panics));
+- `Half`, and the implicit widening of a floating-point type to a wider one and of an integer to a float ([04](docs/spec/04-types/numbers-and-math.md#conversions)): v0.4 widens an integer type to another alone;
+- `Int.min`, `Int.max`, `min` and `max` ([05](docs/spec/05-protocols-generics-and-closures/functions-and-closures.md#static-and-instance-members), [05](docs/spec/05-protocols-generics-and-closures/operators.md#equality-and-ordering)): v0.1 to v0.4 build the integer types without them;
+- the `truncating:` and `clamping:` conversions between integers, and `Int(clamping: f)` and the other clamping conversions of a float ([04](docs/spec/04-types/numbers-and-math.md#conversions)): v0.2 and v0.4 build the unlabeled conversions between integers alone;
 - named functions for a float's truncated remainder and its IEEE 754 remainder, which stand in for `%`, since floats have none ([04](docs/spec/04-types/numbers-and-math.md#floating-point));
 - the wrapping, saturating, bitwise and shift operators ([04](docs/spec/04-types/numbers-and-math.md#integer-overflow-division-and-shifts));
 - SIMD vectors ([04](docs/spec/04-types/numbers-and-math.md#simd-and-math));
 - text ([04](docs/spec/04-types/collections.md#strings));
-- `print` of any other `Formattable`, such as text, an interpolated literal or `Half` ([04](docs/spec/04-types/collections.md#printing)): v0.1, v0.2 and v0.2.5 print `Int`, `Bool`, `UInt`, `Float` and `Double` alone;
+- `print` of any other `Formattable`, such as text, an interpolated literal, an `Int8` or a `Float` ([04](docs/spec/04-types/collections.md#printing)): v0.1 and v0.2 print `Int`, `Bool` and `UInt` alone, and v0.5 moves those into the prelude;
 - backtick identifiers ([12](docs/spec/12-grammar/lexical.md#lexical)).
 
 Statements and control flow:
@@ -116,12 +134,12 @@ Statements and control flow:
 Ownership and borrowing:
 
 - `ref var` bindings, as `ref var m = mutable p`, and the errors for a `ref var` given `&p` and a `ref let` given `mutable p` ([01](docs/spec/01-values-and-ownership/bindings.md#bindings-that-refer-to-a-place)): v0.2 builds `ref let` alone;
-- `&` of a temporary, as `&makeEnemy()`, and a value lent to a `&T`, as `show(makeEnemy())` ([01](docs/spec/01-values-and-ownership/references.md#making-a-reference)): v0.1 to v0.3 lend only a local, a parameter, a field or an element of one, or a value given to `print`;
+- `&` of a temporary, as `&makeEnemy()`, and a value lent to a `&T`, as `show(makeEnemy())` ([01](docs/spec/01-values-and-ownership/references.md#making-a-reference)): v0.1 to v0.5 lend only a local, a parameter, a field or an element of one, or a value given to `print`;
 - `consume` of any other place, such as a parameter that owns its argument, or a temporary ([01](docs/spec/01-values-and-ownership/moving-values-out.md#moving-values-out)): v0.2 builds `consume` of a local or a field of one;
-- `ImplicitlyCopyable`, its conformances declared by a struct or an enum, and the other implicitly copyable types, such as tuples, `Handle` and `T?` ([01](docs/spec/01-values-and-ownership/moves-copies-destruction.md#implicitly-copyable-types)): v0.2 copies `Int`, `UInt` and `Bool` implicitly, and v0.2.5 `Float` and `Double`;
+- `ImplicitlyCopyable`, its conformances declared by a struct or an enum, and the other implicitly copyable types, such as tuples, `Handle` and `T?` ([01](docs/spec/01-values-and-ownership/moves-copies-destruction.md#implicitly-copyable-types)): v0.2 copies `Int`, `UInt` and `Bool` implicitly, and v0.4 the fixed-width integers and `*T`;
 - implicit copies in the positions v0.2 doesn't build, such as a condition's binding, a `for` or `when` name and a tuple literal's element ([01](docs/spec/01-values-and-ownership/moves-copies-destruction.md#implicit-copies));
 - `copy` of a field of a temporary, as `copy makeEnemy().stats`, and a `let` of one, which owns it ([01](docs/spec/01-values-and-ownership/moves-copies-destruction.md#copies)): v0.1 copies a field of a local or a `&T` parameter, and v0.2 borrows one with a `ref let`;
-- references held as values, as `let best = &enemies[0]` holds a `&Enemy`, and the other views, which are [scoped values](docs/spec/02-views-and-dependencies/scoped-values.md), with the dependencies that check them ([01](docs/spec/01-values-and-ownership/references.md#references), [02](docs/spec/02-views-and-dependencies.md#dependencies)): v0.1 and v0.2 build references only as `&T` parameters and `ref let` bindings;
+- references held as values, as `let best = &enemies[0]` holds a `&Enemy`, and the other views, which are [scoped values](docs/spec/02-views-and-dependencies/scoped-values.md), with the dependencies that check them ([01](docs/spec/01-values-and-ownership/references.md#references), [02](docs/spec/02-views-and-dependencies.md#dependencies)): v0.1 to v0.3 build references only as `&T` and `mutable &T` parameters and `ref let` bindings;
 - a place lent wherever else a `&T` is expected, as `let top: &Enemy = enemies[0]` lends one, and the conversions of the reference it makes, as to a `&[T]` ([05](docs/spec/05-protocols-generics-and-closures/implicit-conversions.md#places-lent-where-a-reference-is-expected)): v0.2 lends a place given to a `&T` parameter;
 - closures and function values ([05](docs/spec/05-protocols-generics-and-closures/functions-and-closures.md#closure-kinds));
 - handles and objects ([03](docs/spec/03-handles-and-objects.md#03--handles-and-objects)).
@@ -130,18 +148,26 @@ Protocols, compile time and modules:
 
 - conformances, protocols and user-declared operators ([05](docs/spec/05-protocols-generics-and-closures/protocols-and-generics.md#protocols-and-generics), [05](docs/spec/05-protocols-generics-and-closures/operators.md#operators)): v0.2's arrays wait on them for `==` and the comparisons;
 - `const` and globals ([09](docs/spec/09-compile-time/constants-and-conditions.md#running-code-at-compile-time-const), [07](docs/spec/07-concurrency/global-state.md#global-state)): v0.2's arrays wait on `const` for the compile error on a `const` index out of range;
-- reflection, `static if`, generated declarations and the other compile-time features ([09](docs/spec/09-compile-time.md#09--compile-time));
+- `static if` and conditional compilation ([09](docs/spec/09-compile-time/constants-and-conditions.md#static-if-and-conditional-compilation));
+- reflection, generated declarations and the other compile-time features ([09](docs/spec/09-compile-time.md#09--compile-time));
 - attributes, among them `@inline` ([09](docs/spec/09-compile-time/attributes-and-runtime-data.md#attributes), [11](docs/spec/11-compilation-model.md#functions-that-are-never-calls-inline));
 - access control and modules ([11](docs/spec/11-compilation-model.md#modules-and-names)).
 
 Safety, memory and the platform:
 
-- the check for running out of stack, which recursion needs ([10](docs/spec/10-errors-and-safety/panics.md#what-ends-the-program)): v0.1 builds recursion without it;
+- catching stack overflow, with a guard page, stack probes and a runtime handler that ends the program ([10](docs/spec/10-errors-and-safety/panics.md#what-ends-the-program)): v0.1 builds recursion without it;
 - `precondition`, `assert`, `unreachable` and `Never` ([10](docs/spec/10-errors-and-safety/panics.md#assert-and-precondition), [04](docs/spec/04-types/enums.md#enums));
 - unwinding, and catching a panic ([10](docs/spec/10-errors-and-safety/panics.md#what-a-panic-does));
 - `unchecked` blocks and `@checks` ([10](docs/spec/10-errors-and-safety/checks-and-build-modes.md#check-levels));
 - heap storage: allocators, generics, and owning collections such as `List` ([06](docs/spec/06-memory-and-allocators.md#06--memory-and-allocators), [04](docs/spec/04-types/collections.md#collections-and-strings));
 - concurrency ([07](docs/spec/07-concurrency.md#07--concurrency));
-- C interop, and the raw pointers and `unsafe` code it needs ([08](docs/spec/08-c-interop.md#08--c-interop), [10](docs/spec/10-errors-and-safety/unsafe-code.md#unsafe-code)).
+- `*T?`, which needs optionals, and `p.move()`, which needs move-only types ([10](docs/spec/10-errors-and-safety/unsafe-code.md#raw-pointers), [10](docs/spec/10-errors-and-safety/unsafe-code.md#raw-memory)): v0.4 builds `*T` alone;
+- `&p[0..<n]` and a run's `baseAddress`, which need ranges and runs ([10](docs/spec/10-errors-and-safety/unsafe-code.md#raw-pointers), [04](docs/spec/04-types/collections.md#runs-of-elements));
+- the rest of `unsafe` code: `unsafe func`, `*Void`, the conversions between a pointer and an integer, the alignment queries, the other raw-memory operations, raw allocations and hardware access ([10](docs/spec/10-errors-and-safety/unsafe-code.md#unsafe-code));
+- `@safe` modules ([10](docs/spec/10-errors-and-safety/unsafe-code.md#safe-modules));
+- `import(c)` of C headers ([08](docs/spec/08-c-interop.md#08--c-interop)): v0.5 reaches C through `extern(c) func` declarations alone;
+- `@c` function pointers ([05](docs/spec/05-protocols-generics-and-closures/functions-and-closures.md#c-function-pointers));
+- calling Rayo from C, through exported functions and callbacks ([08](docs/spec/08-c-interop/calling-rayo-from-c.md#calling-rayo-from-c));
+- embedding Rayo in a C program ([08](docs/spec/08-c-interop/c-contract-and-embedding.md#embedding-rayo-in-a-c-program)).
 
-Besides the spec's features, `rayoc` needs a way to install a toolchain ([#184](https://github.com/rayo-lang/rayo/issues/184), [#216](https://github.com/rayo-lang/rayo/issues/216)).
+Besides the spec's features, `rayoc` needs a way to install a toolchain ([#184](https://github.com/rayo-lang/rayo/issues/184), [#216](https://github.com/rayo-lang/rayo/issues/216)), and a way to compile std as a library of its own, where v0.5 compiles std's source with every program.
