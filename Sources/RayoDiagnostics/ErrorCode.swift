@@ -131,8 +131,8 @@ public enum ErrorCode: Sendable, Hashable {
 
     // MARK: Checking
 
-    // A checking error takes a number from 201 to 299, then from 401 onwards. When a block fills, name the next one
-    // here.
+    // A checking error takes a number from 201 to 299, then from 401 onwards, since ownership errors hold 301 to 399.
+    // When a block fills, name the next one here.
 
     @Code(201, error: "the file has no 'main' function, so it can't be built into an executable or run")
     case noMain
