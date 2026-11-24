@@ -1,12 +1,12 @@
 # Roadmap
 
-Rayo's [spec](docs/spec/README.md) defines the whole language, and `rayoc` builds it a small version at a time. Each version adds one or two features of the spec, end to end: a program that uses them parses, checks, compiles, links and runs. This file gives the feature set of each version, three versions ahead and no further.
+Rayo's [spec](docs/spec/README.md) defines the whole language, and `rayoc` builds it a small version at a time. Each version adds features of the spec end to end: a program that uses them parses, checks, compiles, links and runs. This file gives the feature set of each version, three versions ahead and no further.
 
 ## What a version is
 
 **Each version lists its feature set, once.** The list says what the release holds, so it stays the same as those features come to run. The work toward the version, what of it is left, and its bugs and refactors are in the [issue tracker](https://github.com/rayo-lang/rayo/issues).
 
-**A version builds one or two features, each a feature of the spec**, such as fixed-width integers or the prelude. Its list names each part of them that it builds, their compile errors included.
+**From v0.3 on, a version builds one or two features, each a feature of the spec**, such as fixed-width integers or the prelude. Its list names each part of them that it builds, their compile errors included.
 
 **A version is done when every feature it lists runs end to end, and its proof program shows it.** The proof program is one Rayo program, `examples/v0.N/<name>.rayo`, with its expected output beside it in `<name>.out`. A driver test runs it, in debug and in release builds, on every platform CI tests: macOS arm64, Linux x64, Windows x64 and Windows arm64. The driver tests check each feature in detail, so the proof program only puts the features to work together. The other programs in `examples/` use the whole language, more than `rayoc` compiles, and no test runs them.
 
@@ -61,7 +61,9 @@ v0.3 adds:
 - `mutable &T` parameters, which a call lends a place with `mutable a`, under the [law of exclusivity](docs/spec/01-values-and-ownership/exclusivity.md#the-law-of-exclusivity) ([01](docs/spec/01-values-and-ownership/parameters.md#parameters));
 - the compile error for a place given to a `mutable &T` parameter without `mutable`, which names `mutable`, and the one for `mutable a` given to a parameter that doesn't take a mutable reference ([01](docs/spec/01-values-and-ownership/references.md#every-lend-for-change-is-marked));
 - the compile errors for changing a temporary: `mutable` of a temporary, and an assignment into one, which v0.1 rejects without naming the fix ([01](docs/spec/01-values-and-ownership/bindings.md#temporaries-are-read-only));
-- parameters `x: T` of a struct or array type, which own their arguments, given as `consume a` or `copy a` ([01](docs/spec/01-values-and-ownership/parameters.md#parameters));
+- the compile error for `mutable` of a place that isn't changeable, such as a `let` local or a `&T` parameter or a part of one ([01](docs/spec/01-values-and-ownership/bindings.md#changeable-places));
+- parameters `x: T` of a struct or array type, which own their arguments, given as `consume a`, `copy a` or a value, as `keep(makeEnemy())` ([01](docs/spec/01-values-and-ownership/parameters.md#parameters));
+- `consume` of an owning parameter and of a field of one, which passes it on, returns it or stores it, or drops it with `_ = consume x` ([01](docs/spec/01-values-and-ownership/moving-values-out.md#moving-values-out));
 - the compile error for a struct or an array given to an owning parameter without `consume` or `copy`, which names the marks that fit, and the one for an owning parameter that no code reads ([05](docs/spec/05-protocols-generics-and-closures/functions-and-closures.md#unused-values)).
 
 ## v0.4: fixed-width integers and raw pointers
@@ -71,10 +73,10 @@ A fixed-width integer has the size a file format or a C library asks for, and a 
 v0.4 adds:
 
 - `Int8`, `Int16`, `Int32` and `Int64`, and `UInt8`, `UInt16`, `UInt32` and `UInt64`, each implicitly copyable as `Int` is, with literals typed by context, and arithmetic and comparisons under the overflow rule ([04](docs/spec/04-types/numbers-and-math.md#numbers));
-- the conversions between each pair of them and `Int` and `UInt`, implicit only where they widen, as an `Int16` does to an `Int32`, and written elsewhere, as `Int32(x)`, which checks that the value fits ([04](docs/spec/04-types/numbers-and-math.md#conversions));
-- `unsafe { }` blocks, and `unsafe` before an expression, which every raw-pointer operation below needs ([10](docs/spec/10-errors-and-safety/unsafe-code.md#what-needs-unsafe));
+- the conversions between any two of these eight types, `Int` and `UInt`, implicit only where they widen, as an `Int16` does to an `Int32`, and written elsewhere, as `Int32(x)`, which checks that the value fits ([04](docs/spec/04-types/numbers-and-math.md#conversions));
+- `unsafe { }` blocks, and `unsafe` before an expression, which reading or writing `p.pointee`, offsetting a pointer as `p + n` or `p[i]`, and `ptr(to:)` need ([10](docs/spec/10-errors-and-safety/unsafe-code.md#what-needs-unsafe));
 - `*T`, a raw pointer, implicitly copyable as `Int` is, and `ptr(to:)`, which gives a place's address, lent with `mutable` or shared ([10](docs/spec/10-errors-and-safety/unsafe-code.md#taking-an-address));
-- reading and writing `p.pointee`, offsetting as `p + n` and `p[i]`, the distance `q - p`, and `p.cast(to:)` ([10](docs/spec/10-errors-and-safety/unsafe-code.md#raw-pointers)).
+- reading and writing `p.pointee`, offsetting as `p + n` and `p[i]`, the distance `q - p`, and `p.cast(to: U.self)` ([10](docs/spec/10-errors-and-safety/unsafe-code.md#raw-pointers)).
 
 ## v0.5: C calls and the prelude
 
@@ -83,12 +85,12 @@ A program calls the C functions it declares, and prints through std's prelude, w
 v0.5 adds:
 
 - `extern(c) func` declarations of C functions, called only inside `unsafe` ([08](docs/spec/08-c-interop.md#08--c-interop));
-- C's integer aliases, `CInt`, `CSize`, `CPtrDiff` and the rest, which the compiler provides for each target as the `IntN` or `UIntN` of its C type's size and signedness ([08](docs/spec/08-c-interop.md#08--c-interop));
+- C's integer aliases, `CInt`, `CSize`, `CPtrDiff` and the rest, which the compiler provides for each target as the `IntN` or `UIntN` of its C type's size and signedness ([08](docs/spec/08-c-interop/imports-and-inline-c.md#what-imports-as-what));
 - the prelude: std's Rayo source, which ships inside `rayoc` and is compiled with every program, and which every program sees without an import ([11](docs/spec/11-compilation-model.md#the-prelude));
 - a program's own declarations, which shadow the prelude's names;
-- `print(Int)`, `print(UInt)` and `print(Bool)`, moved from the runtime's LLVM IR into the prelude and written in Rayo over `write`, through one host function per platform: POSIX's `write`, and Windows' `_write`.
+- `print(Int)`, `print(UInt)` and `print(Bool)`, moved from the runtime's LLVM IR into the prelude, and written in Rayo over the host's write function, declared with `extern(c) func`: POSIX's `write`, and Windows' `_write`.
 
-A panic stays in the runtime's LLVM IR until Rayo has strings.
+A panic stays in the runtime's LLVM IR.
 
 ## Not yet planned
 
@@ -135,7 +137,7 @@ Ownership and borrowing:
 
 - `ref var` bindings, as `ref var m = mutable p`, and the errors for a `ref var` given `&p` and a `ref let` given `mutable p` ([01](docs/spec/01-values-and-ownership/bindings.md#bindings-that-refer-to-a-place)): v0.2 builds `ref let` alone;
 - `&` of a temporary, as `&makeEnemy()`, and a value lent to a `&T`, as `show(makeEnemy())` ([01](docs/spec/01-values-and-ownership/references.md#making-a-reference)): v0.1 to v0.5 lend only a local, a parameter, a field or an element of one, or a value given to `print`;
-- `consume` of any other place, such as a parameter that owns its argument, or a temporary ([01](docs/spec/01-values-and-ownership/moving-values-out.md#moving-values-out)): v0.2 builds `consume` of a local or a field of one;
+- `consume` of any other place, such as a temporary ([01](docs/spec/01-values-and-ownership/moving-values-out.md#moving-values-out)): v0.2 builds `consume` of a local or a field of one, and v0.3 of an owning parameter or a field of one;
 - `ImplicitlyCopyable`, its conformances declared by a struct or an enum, and the other implicitly copyable types, such as tuples, `Handle` and `T?` ([01](docs/spec/01-values-and-ownership/moves-copies-destruction.md#implicitly-copyable-types)): v0.2 copies `Int`, `UInt` and `Bool` implicitly, and v0.4 the fixed-width integers and `*T`;
 - implicit copies in the positions v0.2 doesn't build, such as a condition's binding, a `for` or `when` name and a tuple literal's element ([01](docs/spec/01-values-and-ownership/moves-copies-destruction.md#implicit-copies));
 - `copy` of a field of a temporary, as `copy makeEnemy().stats`, and a `let` of one, which owns it ([01](docs/spec/01-values-and-ownership/moves-copies-destruction.md#copies)): v0.1 copies a field of a local or a `&T` parameter, and v0.2 borrows one with a `ref let`;
@@ -147,6 +149,7 @@ Ownership and borrowing:
 Protocols, compile time and modules:
 
 - conformances, protocols and user-declared operators ([05](docs/spec/05-protocols-generics-and-closures/protocols-and-generics.md#protocols-and-generics), [05](docs/spec/05-protocols-generics-and-closures/operators.md#operators)): v0.2's arrays wait on them for `==` and the comparisons;
+- type values, `T.self` and `Type<T>` ([05](docs/spec/05-protocols-generics-and-closures/protocols-and-generics.md#value-parameters-and-type-values)): v0.4 builds `U.self` only as `cast(to:)`'s argument;
 - `const` and globals ([09](docs/spec/09-compile-time/constants-and-conditions.md#running-code-at-compile-time-const), [07](docs/spec/07-concurrency/global-state.md#global-state)): v0.2's arrays wait on `const` for the compile error on a `const` index out of range;
 - `static if` and conditional compilation ([09](docs/spec/09-compile-time/constants-and-conditions.md#static-if-and-conditional-compilation));
 - reflection, generated declarations and the other compile-time features ([09](docs/spec/09-compile-time.md#09--compile-time));
@@ -155,7 +158,7 @@ Protocols, compile time and modules:
 
 Safety, memory and the platform:
 
-- catching stack overflow, with a guard page, stack probes and a runtime handler that ends the program ([10](docs/spec/10-errors-and-safety/panics.md#what-ends-the-program)): v0.1 builds recursion without it;
+- the check for running out of stack, which ends the program with a report before anything is written past the stack's end ([10](docs/spec/10-errors-and-safety/panics.md#what-ends-the-program)): v0.1 builds recursion without it;
 - `precondition`, `assert`, `unreachable` and `Never` ([10](docs/spec/10-errors-and-safety/panics.md#assert-and-precondition), [04](docs/spec/04-types/enums.md#enums));
 - unwinding, and catching a panic ([10](docs/spec/10-errors-and-safety/panics.md#what-a-panic-does));
 - `unchecked` blocks and `@checks` ([10](docs/spec/10-errors-and-safety/checks-and-build-modes.md#check-levels));
