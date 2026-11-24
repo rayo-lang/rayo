@@ -32,8 +32,7 @@ struct AccessExtents {
     /// The dependence and unbegun-access states on entry to `body`, which the extents carry through it.
     private static func entryStates(of body: IRBody) -> (dependencies: DependencyState, unbegun: UnbegunAccessState) {
         // The states index accesses by their IDs, so they span every ID the body begins.
-        let highestID = body.begunAccesses.keys.max()
-        let accessCount = highestID.map { $0.index + 1 } ?? 0
+        let accessCount = body.accessCount
         return (DependencyState(entering: body, accessCount: accessCount), UnbegunAccessState(accessCount: accessCount))
     }
 
