@@ -18,7 +18,8 @@ public struct LocalUses {
         case .use(let id), .end(let id): accessedLocal(of: id)
         // An effect that names a place uses the local that holds it. A dependence marks the value its place holds,
         // which must be alive to hold it.
-        case .read, .move, .store, .begin, .depend, .declare, .retire, .exit: effect.place?.root
+        case .read, .move, .store, .begin, .depend: effect.place?.root
+        case .declare, .retire, .exit: nil
         }
     }
 

@@ -30,7 +30,7 @@ public enum Effect: Equatable, Sendable {
 
     /// The place the effect names: the one it reads, moves, stores to, begins an access to or makes depend on one.
     /// Nil for an effect that names only an access or a local, or none.
-    public var place: Place? {
+    var place: Place? {
         switch self {
         case .read(let place, _), .move(let place, _), .depend(let place, _): place
         case .store(let destination): destination.place
