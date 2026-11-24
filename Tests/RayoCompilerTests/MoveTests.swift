@@ -158,6 +158,38 @@ struct MoveTests {
         #expect(found.flatMap(\.notes) == ["3:13: note: moved here"])
     }
 
+    // The array's elements are copies of the one value, so a place written bare is read, and keeps its value.
+    @Test(arguments: [
+        "let a: [2 of Enemy] = .init(repeating: e)",
+        "let a: [2 of Enemy] = .init(repeating: copy e)",
+        "let a: [2 of Enemy] = .init(repeating: Enemy(hp: 1))",
+    ])
+    func `a local is usable after .init(repeating:) takes it bare, a copy of it, or another value`(statement: String) {
+        let source = """
+            func main() {
+                let e = Enemy(hp: 1)
+                \(statement)
+                print(e.hp + a[0].hp)
+            }
+            struct Enemy(var hp: Int)
+            """
+        #expect(errors(source) == [])
+    }
+
+    @Test func `a place moved into .init(repeating:) can't be used after the call`() {
+        let source = """
+            func main() {
+                let e = Enemy(hp: 1)
+                let a: [2 of Enemy] = .init(repeating: consume e)
+                print(e.hp + a[0].hp)
+            }
+            struct Enemy(var hp: Int)
+            """
+        let found = diagnostics(source)
+        #expect(found.map(\.description) == ["4:11: error[E0302]: 'e' was moved"])
+        #expect(found.flatMap(\.notes) == ["3:44: note: moved here"])
+    }
+
     // A `copy` is a value, not a place. As with any temporary, its elements can't be moved out of it; `copy a[0]`
     // copies the element instead. The source gives the copy no name, so the error names it as an array.
     @Test func `an element taken from a copy can't be moved out of the copy`() {

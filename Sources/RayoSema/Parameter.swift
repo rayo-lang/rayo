@@ -11,17 +11,16 @@ struct Parameter {
     var spelledType: String
     /// Whether a bare value that no local holds may be lent to the parameter as a temporary.
     var borrowsTemporaries: Bool
-    /// Whether a bare place of a type that isn't implicitly copyable moves into the parameter, as it does into an
-    /// initializer's.
-    var movesBarePlaces: Bool
+    /// What the parameter, where it owns its argument, does with a bare place of a type that isn't implicitly copyable.
+    var barePlaceUse: BarePlaceUse
 }
 
 extension Parameter {
     /// The parameter that the checked program declares as `parameter`.
-    init(_ parameter: FunctionParameter, borrowsTemporaries: Bool, movesBarePlaces: Bool) {
+    init(_ parameter: FunctionParameter, borrowsTemporaries: Bool, barePlaceUse: BarePlaceUse) {
         self.init(label: parameter.label, convention: parameter.convention, type: parameter.type,
                   spelledType: parameter.convention.spelling(of: parameter.type),
-                  borrowsTemporaries: borrowsTemporaries, movesBarePlaces: movesBarePlaces)
+                  borrowsTemporaries: borrowsTemporaries, barePlaceUse: barePlaceUse)
     }
 
     /// The parameter as the checked program declares it, or nil where its type isn't known.
@@ -34,7 +33,7 @@ extension Parameter {
     /// fit borrows the argument.
     func expectation(calledAs callee: String, isBorrowedByOverload: Bool) -> Expectation? {
         let parameter = ArgumentParameter(callee: callee, convention: convention,
-                                          borrowsTemporaries: borrowsTemporaries, movesBarePlaces: movesBarePlaces,
+                                          borrowsTemporaries: borrowsTemporaries, barePlaceUse: barePlaceUse,
                                           isBorrowedByOverload: isBorrowedByOverload)
         return type.map { Expectation($0, recipient: .parameter(parameter)) }
     }
