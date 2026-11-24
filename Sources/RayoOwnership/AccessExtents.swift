@@ -40,15 +40,32 @@ struct AccessExtents {
 
         // Walk back through what later code uses, keeping at each point the accesses it uses and the locals it reads.
         var used = Array(repeating: LaterUses(accesses: [], readLocals: []), count: points)
-        let reached = uses.walk(block) { point, state in
-            used[point] = LaterUses(accesses: state.accesses.ids, readLocals: state.values.readLocals)
-        }
+        let reached = uses.walk(block) { point, state in used[point] = LaterUses(state) }
         guard reached else { return nil }
 
         // Walk forward through what values depend on, which carries the uses to the accesses behind them.
         var live = Array(repeating: Set<AccessID>(), count: points)
         dependencies.walk(block) { point, state in
             live[point] = Self.live(using: used[point], dependingOn: state)
+        }
+        return live
+    }
+
+    /// The accesses live just after each effect of `block`, by the rule `live(in:)` keeps between statements: one set
+    /// for each effect of its statements in turn, then of its terminator. Nil where no path reaches the block.
+    func liveAfterEffects(in block: BlockID) -> [Set<AccessID>]? {
+        // Walk back through what later code uses, keeping what the code after each effect uses, the last effect first.
+        var used: [LaterUses] = []
+        let reached = uses.walkEffects(of: block) { _, state in used.append(LaterUses(state)) }
+        guard reached else { return nil }
+
+        // Walk forward through what values depend on once each effect is done, which carries the uses after the
+        // effect to the accesses behind them.
+        var live: [Set<AccessID>] = []
+        dependencies.walkEffects(of: block) { effect, before in
+            var after = before
+            after.apply(effect, in: ())
+            live.append(Self.live(using: used[used.count - 1 - live.count], dependingOn: after))
         }
         return live
     }
@@ -124,4 +141,14 @@ struct AccessExtents {
 private struct LaterUses {
     var accesses: Set<AccessID>
     var readLocals: Set<LocalID>
+
+    init(accesses: Set<AccessID>, readLocals: Set<LocalID>) {
+        self.accesses = accesses
+        self.readLocals = readLocals
+    }
+
+    /// What the code after the point of `state` uses.
+    init(_ state: AccessUseState) {
+        self.init(accesses: state.accesses.ids, readLocals: state.values.readLocals)
+    }
 }

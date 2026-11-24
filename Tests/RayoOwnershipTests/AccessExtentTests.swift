@@ -107,6 +107,34 @@ struct AccessExtentTests {
         ])
     }
 
+    @Test func `a move inside a call conflicts with a borrow that an access the call passes depends on`() throws {
+        // `r` borrows `h`, so the access to `r.damage` that the call passes keeps the borrow live at the call's move.
+        let blocks = """
+              begin a1 read %1.0 @2:6-2:6
+              _ = call "pair(_: &Int, _: Int)"(a1, move %0.0 @2:9-2:9) @1:1-1:1
+            """
+        #expect(try checked(borrowingHit(then: blocks), beside: [pair]).errors == [damageMovedWhileBorrowed])
+    }
+
+    @Test func `a move inside a call conflicts with a borrow that a value the call reads next depends on`() throws {
+        // The call moves `h.damage` out, and then reads `r.damage`, whose value depends on the borrow of `h`.
+        let blocks = """
+              _ = call "sum(_: Int, _: Int)"(move %0.0 @2:9-2:9, read %1.0 @1:1-1:1) @1:1-1:1
+            """
+        let sum = (name: "sum(_: Int, _: Int)", text: #"func "sum(_: Int, _: Int)"(_: Int, _: Int) -> Void"#)
+        #expect(try checked(borrowingHit(then: blocks), beside: [sum]).errors == [damageMovedWhileBorrowed])
+    }
+
+    @Test func `a move before a call conflicts with a borrow that an access the call passes depends on`() throws {
+        // The same move in a statement of its own, before the access to `r.damage` begins.
+        let blocks = """
+              %2 @1:1-1:1 = operand move %0.0 @2:9-2:9 @1:1-1:1
+              begin a1 read %1.0 @2:6-2:6
+              _ = call "pair(_: &Int, _: Int)"(a1, move %2 @1:1-1:1) @1:1-1:1
+            """
+        #expect(try checked(borrowingHit(then: blocks), beside: [pair]).errors == [damageMovedWhileBorrowed])
+    }
+
     @Test func `a read of a place that a live modify access overlaps conflicts with it`() throws {
         let blocks = """
             bb0:
@@ -323,3 +351,31 @@ struct AccessExtentTests {
             """))
     }
 }
+
+/// A function that stores a new `Hit` in the `var` `h` (`%0`), borrows it at column 3 into the `ref` `r` (`%1`), whose
+/// value depends on that borrow, and then runs `statements`, which may use an Int temporary (`%2`), before it returns.
+private func borrowingHit(then statements: String) -> (name: String, text: String) {
+    let text = """
+        func "f()"() -> Void {
+          var %0 h: Hit @1:1-1:1
+          ref %1 r: Hit @1:1-1:1
+          temp %2: Int
+        bb0:
+          %0 @1:1-1:1 = call "Hit(damage: Int)"(1) @1:1-1:1
+          begin a0 read %0 @2:3-2:3
+          %1 @1:1-1:1 = operand read %0 @1:1-1:1 @1:1-1:1
+          depend %1 on a0
+        \(statements)
+          return
+        }
+        """
+    return ("f()", text)
+}
+
+/// The error for a move of `h.damage` at column 9 while the borrow of `h` at column 3 is live.
+private let damageMovedWhileBorrowed = Diagnostic(
+    .movedWhileBorrowed(name: "h.damage", borrowed: "h"), at: at(9), labeling: [.init(.borrowed, at: at(3))],
+)
+
+/// A function without a body that borrows its first argument and takes its second.
+private let pair = (name: "pair(_: &Int, _: Int)", text: #"func "pair(_: &Int, _: Int)"(_: &Int, _: Int) -> Void"#)
