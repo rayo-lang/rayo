@@ -185,7 +185,9 @@ struct MoveTests {
             }
             struct Enemy(var hp: Int)
             """
-        #expect(diagnostics(source).map(\.description) == ["4:11: error[E0302]: 'e' was moved"])
+        let found = diagnostics(source)
+        #expect(found.map(\.description) == ["4:11: error[E0302]: 'e' was moved"])
+        #expect(found.flatMap(\.notes) == ["3:44: note: moved here"])
     }
 
     // A `copy` is a value, not a place. As with any temporary, its elements can't be moved out of it; `copy a[0]`
