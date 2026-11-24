@@ -144,7 +144,9 @@ struct BodyChecker {
         // A value that no code uses is a mistake, unless `_ =` drops it on purpose. The statement keeps a meaning all
         // the same: a place it names is only read, so the mistake moves nothing out of it, and any other value is
         // dropped as `_ =` drops it.
-        errors.reportKeepingMeaning(.unusedValue(type: expressions.typeName(of: value.type)), at: value.range)
+        let unused = ErrorCode.unusedValue(type: expressions.typeName(of: value.type),
+                                           drop: expressions.dropMark(of: value))
+        errors.reportKeepingMeaning(unused, at: value.range)
         guard case .place(let place) = value.kind else { return value }
         return CheckedExpr(kind: .copy(place), type: value.type, range: value.range)
     }
@@ -153,6 +155,10 @@ struct BodyChecker {
     private func checkDropped(_ expr: Expr) -> CheckedExpr? {
         // An expression that failed was reported.
         guard let value = expressions.check(expr) else { return nil }
+
+        // The temporary owns its value, as any assignment's target does, so it can't borrow a place.
+        expressions.reportHandedPlaces(of: value, as: ErrorCode.assignmentBorrowsPlace)
+
         // A temporary lies on the stack, so one too large for it is reported.
         return declarations.fittingOnStack(value, reporting: errors)
     }

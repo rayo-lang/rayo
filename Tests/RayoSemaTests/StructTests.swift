@@ -41,7 +41,7 @@ struct StructTests {
 
     @Test(arguments: [
         ("let b: Bool = 1", ErrorCode.typeMismatch(expected: "Bool", found: .shadowedPrelude("Int"))),
-        ("1", .unusedValue(type: .shadowedPrelude("Int"))),
+        ("1", .unusedValue(type: .shadowedPrelude("Int"), drop: .bare)),
         ("let a = 9223372036854775808", .literalDoesntFit(type: .shadowedPrelude("Int"))),
         ("let y: () = g()", .voidLocal(name: "y", type: .shadowedPrelude("Void"))),
         ("let b = 1 == true", .operandsDiffer(op: "==", left: .shadowedPrelude("Int"), right: "Bool")),
@@ -257,7 +257,7 @@ struct FieldCopyTests {
         ("let h = copy e.speed", ErrorCode.noSuchField(type: "Enemy", field: "speed"), "speed"),
         ("let h = copy e.hp.armor", .noSuchField(type: "Int", field: "armor"), "armor"),
         ("let b: Bool = copy e.hp", .typeMismatch(expected: "Bool", found: "Int"), "copy e.hp"),
-        ("copy e.hp", .unusedValue(type: "Int"), "copy e.hp"),
+        ("copy e.hp", .unusedValue(type: "Int", drop: .bare), "copy e.hp"),
     ])
     func `a copy of a field the value doesn't have, of a moved struct, or left unused, is an error`(
         body: String, expected: ErrorCode, covered: String,

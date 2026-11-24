@@ -20,7 +20,7 @@ struct StructTests {
                 if e.alive && e.hp > e.armor { print(-e.armor) }
                 print(spawned(hp: 40).hp)
                 let nothing = Empty()
-                _ = nothing
+                _ = consume nothing
             }
             func damage(to e: &Enemy, by hit: Int) -> Int { return hit - e.armor }
             func spawned(hp: Int) -> Enemy { Enemy(alive: false, hp: copy hp, armor: 0) }

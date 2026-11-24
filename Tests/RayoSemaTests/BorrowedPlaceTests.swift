@@ -29,9 +29,6 @@ private func messages(of statement: String) -> [String] {
 /// The fix that the error for a place given to a `let` or `var` ends with.
 private let declarationFix = "write 'copy' or 'consume' before it, or '&' and declare 'ref let'"
 
-/// The fix that the error for a place given to an assignment ends with.
-private let ownedFix = "write 'copy' before it to take a copy, or 'consume' to move it"
-
 struct BorrowedPlaceTests {
     // A `let` or `var` owns its value, and the place's value has an owner already, so the declaration writes how it
     // takes the value, or says that it refers to the place.
@@ -62,14 +59,37 @@ struct BorrowedPlaceTests {
         })
     }
 
-    // An assignment that borrowed its place would leave its target naming a value it doesn't own.
-    @Test(arguments: [("g[0] = g[1]", 12, "g[1]"), ("e.slots = g[0]", 15, "g[0]")])
-    func `an assignment of a place names the place, and says to write 'copy' or 'consume'`(
-        statement: String, column: Int, place: String,
+    // An assignment that borrowed its place would leave its target naming a value it doesn't own. `consume` fits only
+    // a place the code may move the value out of, which an element isn't.
+    @Test(arguments: [
+        ("g[0] = e.slots", 12, "e.slots", "'consume e.slots' or 'copy e.slots'"),
+        ("g[0] = g[1]", 12, "g[1]", "'copy g[1]'"), ("e.slots = g[0]", 15, "g[0]", "'copy g[0]'"),
+    ])
+    func `an assignment of a place names the place, and says to write the marks that fit it`(
+        statement: String, column: Int, place: String, marks: String,
     ) {
         #expect(messages(of: statement) == [
-            "\(column): error[E0278]: an assignment can't borrow '\(place)'; \(ownedFix)",
+            "\(column): error[E0278]: an assignment can't borrow '\(place)'; write \(marks)",
         ])
+    }
+
+    // `_ =` takes its value as any assignment does, so nothing written says whether it drops the place's value or a
+    // copy of it.
+    @Test(arguments: [
+        ("_ = e", "e", "'consume e' or 'copy e'"), ("_ = e.stats", "e.stats", "'consume e.stats' or 'copy e.stats'"),
+        ("_ = g", "g", "'consume g' or 'copy g'"), ("_ = g[i]", "g[i]", "'copy g[i]'"),
+        ("ref let r = &e\n    _ = r", "r", "'copy r'"),
+    ])
+    func `a place dropped with '_ =' names the place, and says to write the marks that fit it`(
+        statement: String, place: String, marks: String,
+    ) {
+        #expect(messages(of: statement) == ["9: error[E0278]: an assignment can't borrow '\(place)'; write \(marks)"])
+    }
+
+    // A borrowing parameter's value is its caller's, so the function can't move it out.
+    @Test func `a borrowing parameter dropped with '_ =' says to write 'copy' alone`() {
+        let reported = diagnostics("func main() {}\nfunc f(_ p: &Enemy) {\n    _ = p\n}\n\(declarations)")
+        #expect(reported.map(\.description) == ["3:9: error[E0278]: an assignment can't borrow 'p'; write 'copy p'"])
     }
 
     // An `if` hands its position to the branch that runs, so each branch that ends in a place is reported there.
@@ -86,7 +106,7 @@ struct BorrowedPlaceTests {
     @Test(arguments: [
         "var x = copy a", "let x = consume a", "var x = a + 1", "let x = makeEnemy().stats.hp", "var x = e.slots.count",
         "var x = if c { copy a } else { 1 }", "b = copy a", "b = consume a", "b = makeEnemy().stats.hp", "b += a",
-        "e.stats = consume e.stats",
+        "e.stats = consume e.stats", "_ = consume e", "_ = copy e.slots", "_ = copy g[i]", "_ = makeEnemy().stats",
     ])
     func `a value, a copy, a consume or a place in a temporary needs nothing written`(statement: String) {
         #expect(messages(of: statement) == [])
@@ -132,7 +152,7 @@ struct BorrowedPlaceTests {
     // A `let`, a `var` or an assignment given a place of an implicitly copyable type takes a copy of its value.
     @Test(arguments: [
         "var x = a", "let x = e.stats.hp", "let x = g[i][0]", "var x = i", "let x = c", "b = a",
-        "e.stats.hp = g[0][1]", "var x = if c { a } else { b }",
+        "e.stats.hp = g[0][1]", "var x = if c { a } else { b }", "_ = a", "_ = i", "_ = c", "_ = e.stats.hp",
     ])
     func `a 'let', a 'var' or an assignment given an Int, a UInt or a Bool place needs nothing written`(
         statement: String,

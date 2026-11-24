@@ -17,6 +17,6 @@ bb0:
   declare %2
   %2 @2:28-2:40 = call "Stats(hp: Int)"(2) @2:28-2:40
   %0 @2:9-2:10 = array of Stats(read %1 @2:14-2:26, read %2 @2:28-2:40) @2:13-2:41
-  _ = operand move %0[0] @3:9-3:13 @3:9-3:13
+  _ = operand move %0[0] @3:9-3:21 @3:9-3:21
   return
 }
