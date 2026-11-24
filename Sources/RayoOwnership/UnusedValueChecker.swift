@@ -14,7 +14,7 @@ enum UnusedValueChecker {
     }
 
     /// The parameters whose values the function's entry stores and no code reads, each reported where the source
-    /// declares it, where `uses` says what code reads after each point of `body`.
+    /// declares it, naming the statement that drops it, where `uses` says what code reads after each point of `body`.
     private static func unreadParameters(
         of body: IRBody, uses: DataflowResults<AccessUseState>,
     ) -> [Diagnostic] {
@@ -24,13 +24,20 @@ enum UnusedValueChecker {
         uses.walk(BlockID(index: 0)) { point, state in
             guard point == 0 else { return }
             unread = body.locals.indices.compactMap { index in
-                guard case .source(let name, .parameter(let convention), _, let range) = body.locals[index],
+                guard case .source(let name, .parameter(let convention), let type, let range) = body.locals[index],
                       convention.isStoredAtEntry, !state.values.reads(Place(root: LocalID(index: index)))
                 else { return nil }
-                return Diagnostic(.unreadParameter(name: name), at: range)
+                let drop = DropStatement(dropMark(of: type), dropping: name)
+                return Diagnostic(.unreadParameter(drop: drop), at: range)
             }
         }
         return unread
+    }
+
+    /// What a statement writes before a parameter of `type` that no code reads, to drop its value. `_ =` drops a copy
+    /// of an implicitly copyable value as it stands, and the function owns any other, so `consume` moves it out.
+    private static func dropMark(of type: RayoType) -> DropMark {
+        type.isImplicitlyCopyable ? .bare : .consume
     }
 
     /// The stores in `block` of a value that no code reads, where `uses` says what code reads after each of them. A

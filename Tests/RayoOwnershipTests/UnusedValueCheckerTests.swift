@@ -334,14 +334,18 @@ struct UnusedValueCheckerTests {
         #expect(try checked(taking("mutable &Int", blocks)).errors == [])
     }
 
-    @Test(arguments: [
-        (#"begin a0 read %0 @1:1-1:1\#n  _ = call builtin "print(_: &Int)"(a0) @1:1-1:1"#, [Diagnostic]()),
-        ("_ = operand 1 @1:1-1:1", [Diagnostic(.unreadParameter(name: "n"), at: at(1))]),
-    ])
-    func `an owned parameter that no code reads is reported where it is declared`(
-        statement: String, expected: [Diagnostic],
+    @Test func `an owned parameter that code reads is not reported`() throws {
+        let statements = #"begin a0 read %0 @1:1-1:1\#n  _ = call builtin "print(_: &Int)"(a0) @1:1-1:1"#
+        #expect(try checked(taking("Int", "bb0:\n  \(statements)\n  return")).errors == [])
+    }
+
+    // `_ =` drops a copy of an implicitly copyable value bare, and any other value only once `consume` moves it out.
+    @Test(arguments: [("Int", DropMark.bare), ("Bool", .bare), ("[2 of Int]", .consume)])
+    func `an owned parameter that no code reads is reported where it is declared, with the drop that fits its type`(
+        type: String, mark: DropMark,
     ) throws {
-        #expect(try checked(taking("Int", "bb0:\n  \(statement)\n  return")).errors == expected)
+        let expected = Diagnostic(.unreadParameter(drop: DropStatement(mark, dropping: "n")), at: at(1))
+        #expect(try checked(taking(type, "bb0:\n  _ = operand 1 @1:1-1:1\n  return")).errors == [expected])
     }
 
     @Test func `a borrowed parameter that no code reads is not reported`() throws {

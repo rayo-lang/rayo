@@ -39,4 +39,30 @@ struct UnusedValueTests {
             """
         #expect(run(source, options: mode) == CommandResult(exitCode: 0, output: "7\n9\n3\n", errors: ""))
     }
+
+    @Test(arguments: [["--debug"], ["--release"]])
+    func `a parameter that drops its argument with '_ = consume' takes a value, a moved place or a copy`(
+        mode: [String],
+    ) {
+        let source = """
+            func main() {
+                adopt(makeItem())
+                let item = makeItem()
+                adopt(copy item)
+                print(item.slots[1])
+                adopt(consume item)
+                keepHP(makeItem())
+            }
+            func adopt(_ item: Item) {
+                _ = consume item
+            }
+            func keepHP(_ item: Item) {
+                _ = consume item.slots
+                print(item.hp)
+            }
+            func makeItem() -> Item { Item(hp: 7, slots: [8, 9]) }
+            struct Item(var hp: Int, var slots: [2 of Int])
+            """
+        #expect(run(source, options: mode) == CommandResult(exitCode: 0, output: "9\n7\n", errors: ""))
+    }
 }
