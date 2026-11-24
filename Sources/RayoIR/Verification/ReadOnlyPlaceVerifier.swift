@@ -31,22 +31,25 @@ struct ReadOnlyPlaceVerifier {
     private func verify(_ change: PlaceChange, of place: Place) throws(IRViolation) {
         // A temporary is lowering's own, and holds whatever lowering stores in it.
         guard case .source(let name, let kind, let type, _) = body.locals[place.root.index] else { return }
-        let isWhole = place.steps.isEmpty
-        guard !ChangedPlace(local: kind, isWhole: isWhole).allows(change) else { return }
+        let changed = ChangedPlace(local: kind, isPart: !place.steps.isEmpty)
+        guard let readOnly = changed.refusal(of: change) else { return }
 
-        // The violation says what changes the place, and names the local as the source declares it.
-        let does = switch change {
+        let local = switch readOnly {
+        case .borrowedParameter: "parameter '\(name)' of \(ParameterConvention.borrowed.spelling(of: type))"
+        case .let: "let '\(name)'"
+        case .refLet: "ref let '\(name)'"
+        }
+        throw violation(of: local, by: change, to: place)
+    }
+
+    /// The violation of a `change` to `place`, which starts from the read-only local that `local` describes.
+    private func violation(of local: String, by change: PlaceChange, to place: Place) -> IRViolation {
+        let action = switch change {
         case .store: "stores to"
         case .modify: "begins a modify access to"
         }
-        let changed = "\(isWhole ? "" : "part of ")%\(place.root.index)"
-        let local = switch kind {
-        case .let: "let '\(name)'"
-        case .refLet: "ref let '\(name)'"
-        case .var: "var '\(name)'"
-        case .parameter(let convention): "parameter '\(name)' of \(convention.spelling(of: type))"
-        }
-        let message = "the IR \(does) \(changed), the \(local), which may not change so"
-        throw IRViolation(function: function, message: message)
+        let part = place.steps.isEmpty ? "" : "part of "
+        let message = "the IR \(action) \(part)%\(place.root.index), the \(local), which may not change so"
+        return IRViolation(function: function, message: message)
     }
 }

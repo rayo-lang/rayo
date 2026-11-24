@@ -3,24 +3,28 @@
 package struct ChangedPlace {
     /// The kind of the local the place starts from.
     package var local: LocalKind
-    /// Whether the place is the whole local, and not a part inside it.
-    package var isWhole: Bool
+    /// Whether the place is a part inside the local, and not the local whole.
+    package var isPart: Bool
 
-    package init(local: LocalKind, isWhole: Bool) {
+    package init(local: LocalKind, isPart: Bool) {
         self.local = local
-        self.isWhole = isWhole
+        self.isPart = isPart
     }
 
-    /// Whether code may make `change` to the place.
-    package func allows(_ change: PlaceChange) -> Bool {
+    /// The kind of local that refuses `change` of the place, or nil where code may change it so.
+    package func refusal(of change: PlaceChange) -> ReadOnlyLocal? {
         switch local {
         // Each owns its value, or borrows its caller's place for change, so it may change whole or part by part.
-        case .var, .parameter(.owned), .parameter(.mutable): true
-        // A `&T` parameter only reads its caller's place.
-        case .parameter(.borrowed): false
-        // A `let` and a `ref let` change only as a store gives one its value whole. The initialization check lets a
-        // `let` take one store on each path, and a `ref let` only its declaration's.
-        case .let, .refLet: isWhole && change == .store
+        case .var, .parameter(.owned), .parameter(.mutable): nil
+        case .parameter(.borrowed): .borrowedParameter
+        // A store gives a `let` or a `ref let` its value whole, and the initialization check says which stores may.
+        case .let: givesWholeValue(change) ? nil : .let
+        case .refLet: givesWholeValue(change) ? nil : .refLet
         }
+    }
+
+    /// Whether `change` stores a value in the local whole, as the store that gives a local its value does.
+    private func givesWholeValue(_ change: PlaceChange) -> Bool {
+        !isPart && change == .store
     }
 }

@@ -9,6 +9,13 @@ struct ReadOnlyChange: CustomTestStringConvertible, Sendable {
     let message: String
 }
 
+/// IR that changes a place code may change.
+struct AllowedChange: CustomTestStringConvertible, Sendable {
+    let testDescription: String
+    /// The statements of `f`, as text, before it returns.
+    let statements: String
+}
+
 @Suite("Verifying that nothing changes a place code may only read")
 struct ReadOnlyPlaceTests {
     @Test(arguments: readOnlyChanges, [IRStage.lowering, .ownership])
@@ -35,13 +42,6 @@ struct ReadOnlyPlaceTests {
         #expect(IRVerifier.verify(program, from: .lowering) == nil)
         #expect(IRVerifier.verifyEmitterRules(program) == nil)
     }
-}
-
-/// IR that changes a place code may change.
-struct AllowedChange: CustomTestStringConvertible, Sendable {
-    let testDescription: String
-    /// The statements of `f`, as text, before it returns.
-    let statements: String
 }
 
 /// The name of the function that `changingPoints` gives its statements to.

@@ -89,16 +89,12 @@ extension ChangeablePlaceRules {
     /// The error for a place that starts from `local`, whole or part by part, or nil where it may change so.
     private func refusal(toChange local: LocalID, holdsParts: Bool) -> ErrorCode? {
         let declared = expressions.names[local]
-        guard !ChangedPlace(local: declared.kind, isWhole: !holdsParts).allows(change) else { return nil }
-
-        // The error names the local as its kind declares it.
-        return switch declared.kind {
-        case .parameter(.borrowed):
+        return switch ChangedPlace(local: declared.kind, isPart: holdsParts).refusal(of: change) {
+        case nil: nil
+        case .borrowedParameter?:
             .changeOfBorrowedParameter(name: declared.name, type: expressions.typeName(of: declared.type))
-        case .let: refusal(toChangeLet: declared.name)
-        case .refLet: refusal(toChangeReferenceLet: declared.name, holdsParts: holdsParts)
-        case .var, .parameter(.owned), .parameter(.mutable):
-            preconditionFailure("a 'var', and a parameter that owns its argument or may change it, change in any way")
+        case .let?: refusal(toChangeLet: declared.name)
+        case .refLet?: refusal(toChangeReferenceLet: declared.name, holdsParts: holdsParts)
         }
     }
 }
