@@ -16,13 +16,14 @@ struct BegunAccessVerifier {
     func verify() throws(IRViolation) {
         // A use in the block that begins its access follows the beginning on every path, so the paths are walked
         // only for a body that uses an access in another block, which few do.
-        guard try usesAccessOutsideItsBlock() else { return }
+        let usesAccessOutsideItsBlock = try verifyBlockOrder()
+        guard usesAccessOutsideItsBlock else { return }
         try verifyPaths()
     }
 
-    /// Whether some statement uses an access that another block begins. Throws at an access that a second statement
-    /// begins, or that a statement uses before the walk reaches its beginning.
-    private func usesAccessOutsideItsBlock() throws(IRViolation) -> Bool {
+    /// Throws at an access that a second statement begins, or that a statement uses before the walk reaches its
+    /// beginning. Returns whether some statement uses an access that another block begins.
+    private func verifyBlockOrder() throws(IRViolation) -> Bool {
         // The index of the block that begins each access the walk has reached. The walk takes every block, since the
         // emitter emits a block whether or not a path reaches it, and reads each statement in place, since every
         // build runs it on every body.
@@ -59,8 +60,8 @@ struct BegunAccessVerifier {
         }
     }
 
-    /// The accesses that `statement` needs begun: those a call passes, or the one it makes a value depend on. A
-    /// terminator needs none.
+    /// The accesses that `statement` needs begun: those a call passes, or the one it makes a value depend on. They
+    /// are the accesses its effects use or depend on, and a terminator's effects name none.
     private static func accesses(usedBy statement: Statement) -> [AccessID] {
         switch statement {
         case .compute(_, let value, _): value.accesses
