@@ -151,9 +151,10 @@ struct AccessExtentTests {
               \(moveAndStore)
               %2 @1:1-1:1 = operand read %1.0 @1:1-1:1 @1:1-1:1
             """
-        // The one error is for the value `r` first held, which the store leaves unread.
+        // The one error is for the value `r` first held, which the store leaves unread. `r` is a `var`, since no
+        // store changes part of a `ref`.
         let unreadBorrow = Diagnostic(.unreadValue(name: "r"), at: at(1))
-        #expect(try checked(borrowingHit(then: blocks)).errors == [unreadBorrow])
+        #expect(try checked(borrowingHit(into: "var", then: blocks)).errors == [unreadBorrow])
     }
 
     @Test func `a read of a place that a live modify access overlaps conflicts with it`() throws {
@@ -373,14 +374,16 @@ struct AccessExtentTests {
     }
 }
 
-/// A function that stores a new `Hit` in the `var` `h` (`%0`), borrows it at column 3 into the `ref` `r` (`%1`), which
-/// it stores at column 1 and whose value depends on that borrow, and then runs `statements`, which may use an Int
-/// temporary (`%2`), before it returns.
-private func borrowingHit(then statements: String) -> (name: String, text: String) {
+/// A function that stores a new `Hit` in the `var` `h` (`%0`), borrows it at column 3 into `r` (`%1`), which it stores
+/// at column 1 and whose value depends on that borrow, and then runs `statements`, which may use an Int temporary
+/// (`%2`), before it returns. `r` is a `ref`, or a local of the kind `keyword` declares.
+private func borrowingHit(
+    into keyword: String = "ref", then statements: String,
+) -> (name: String, text: String) {
     let text = """
         func "f()"() -> Void {
           var %0 h: Hit @1:1-1:1
-          ref %1 r: Hit @1:1-1:1
+          \(keyword) %1 r: Hit @1:1-1:1
           temp %2: Int
         bb0:
           %0 @1:1-1:1 = call "Hit(damage: Int)"(1) @1:1-1:1

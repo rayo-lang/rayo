@@ -100,7 +100,8 @@ extension Compiler {
         case (.debug, _):
             IRVerifier.verify(program, from: stage)
 
-        // The emitter trusts its IR's types, blocks, indices and local lives, so every build checks those.
+        // The emitter trusts its IR's types, read-only places, blocks, indices and local lives, so every build checks
+        // those.
         // It ignores where an access ends, and never receives lowering's IR, so a release build checks neither.
         case (.release, .ownership):
             IRVerifier.verifyEmitterRules(program)

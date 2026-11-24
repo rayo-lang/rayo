@@ -63,14 +63,17 @@ extension AssignmentChecker: ChangeablePlaceRules {
         }
     }
 
-    /// Admits a whole `let`, which the initialization check lets an assignment give its value once on each path.
-    func refusal(toChangeLet name: String, holdsParts: Bool) -> ErrorCode? {
-        holdsParts ? .changeOfPartOfLet(name: name) : nil
+    /// An assignment stores a value in its target, so it may give a whole `let` or `ref let` its value. The
+    /// initialization check reports each such store but a `let`'s first on a path.
+    var change: PlaceChange { .store }
+
+    /// Refuses a part of a `let`, the one place of a `let` that a store may not change.
+    func refusal(toChangeLet name: String) -> ErrorCode {
+        .changeOfPartOfLet(name: name)
     }
 
-    /// Admits a whole `ref let` as a `let`, since its declaration gives it its value, so the initialization check
-    /// reports any assignment of it whole as a second one.
-    func refusal(toChangeReferenceLet name: String, holdsParts: Bool) -> ErrorCode? {
-        refusal(toChangeLet: name, holdsParts: holdsParts)
+    /// Refuses a part of a `ref let` as a part of a `let`.
+    func refusal(toChangeReferenceLet name: String, holdsParts: Bool) -> ErrorCode {
+        refusal(toChangeLet: name)
     }
 }

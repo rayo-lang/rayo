@@ -13,13 +13,16 @@ extension MutablyLentPlaceRules: ChangeablePlaceRules {
         expressions.error(naming: nonPlace, name)
     }
 
-    /// Refuses a `let`, whole or part by part, since a `mutable` never gives a place its value.
-    func refusal(toChangeLet name: String, holdsParts: Bool) -> ErrorCode? {
+    /// A `mutable` lends its place for change, and never gives a place its value.
+    var change: PlaceChange { .modify }
+
+    /// Refuses a `let` alike whole and part by part.
+    func refusal(toChangeLet name: String) -> ErrorCode {
         .mutableOfLet(name: name)
     }
 
-    /// Refuses a `ref let`, whole or part by part. A part is refused as an assignment into it is.
-    func refusal(toChangeReferenceLet name: String, holdsParts: Bool) -> ErrorCode? {
+    /// Refuses a part of a `ref let` as an assignment into it is refused.
+    func refusal(toChangeReferenceLet name: String, holdsParts: Bool) -> ErrorCode {
         holdsParts ? .changeOfPartOfLet(name: name) : .mutableOfReferenceLet(name: name)
     }
 }
