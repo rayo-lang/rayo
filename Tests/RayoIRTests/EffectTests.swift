@@ -65,7 +65,7 @@ struct EffectTests {
         let body = try mainBody(from: """
             bb0:
               declare %0
-              %0 @1:1-1:2 = operand 1 @1:3-1:4
+              %2[%1] @1:1-1:6 = operand read %0 @1:9-1:10 @1:9-1:10
               retire %0
               return
             """)
@@ -73,10 +73,10 @@ struct EffectTests {
         #expect(throws: StoppedWalk.self) {
             try body.blocks[0].forEachEffect { effect throws(StoppedWalk) in
                 walked.append(effectText(effect))
-                if case .store = effect { throw StoppedWalk() }
+                if case .read = effect { throw StoppedWalk() }
             }
         }
-        #expect(walked == ["declare %0", "store %0 @1:1-1:2"])
+        #expect(walked == ["declare %0", "read %0 @1:9-1:10"])
     }
 }
 

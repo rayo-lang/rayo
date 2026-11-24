@@ -12,7 +12,7 @@ struct BegunAccessVerifier {
     }
 
     /// Throws the first violation of the order of the blocks, or else the first on a path, each in the order of the
-    /// blocks and of the statements in each.
+    /// blocks and of the effects in each.
     func verify() throws(IRViolation) {
         // A use in the block that begins its access follows the beginning on every path, so the paths are walked
         // only for a body that uses an access in another block, which few do.
@@ -34,6 +34,7 @@ struct BegunAccessVerifier {
                 if case .begin(let id, _) = effect, beginningBlocks.updateValue(index, forKey: id) != nil {
                     throw violation("the IR begins a\(id.index) at bb\(index), after another statement that begins it")
                 }
+
                 guard let used = Self.access(usedBy: effect) else { return }
                 guard let beginningBlock = beginningBlocks[used] else {
                     throw violation("the IR uses a\(used.index) at bb\(index), before its beginning in the order of "

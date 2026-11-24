@@ -6,8 +6,7 @@ extension Statement {
         return effects
     }
 
-    /// Lends `visit` each of the statement's effects in turn, and stops where it throws. A check that reads the
-    /// effects once walks them so, since the walk builds no array of them.
+    /// Lends `visit` each of the statement's effects in turn, and stops where it throws.
     func forEachEffect<Failure: Error>(_ visit: (Effect) throws(Failure) -> Void) throws(Failure) {
         switch self {
         case .compute(let destination, let value, _):
