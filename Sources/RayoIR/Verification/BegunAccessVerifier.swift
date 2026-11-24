@@ -12,27 +12,38 @@ struct BegunAccessVerifier {
     }
 
     /// Throws the first violation of the order of the blocks, or else the first on a path, each in the order of the
-    /// blocks and of the effects in each.
+    /// blocks and of the statements in each.
     func verify() throws(IRViolation) {
-        try verifyBlockOrder()
+        // A use in the block that begins its access follows the beginning on every path, so the paths are walked
+        // only for a body that uses an access in another block, which few do.
+        guard try usesAccessOutsideItsBlock() else { return }
         try verifyPaths()
     }
 
-    /// Throws at an access that a second statement begins, or that an effect uses before the walk reaches its
-    /// beginning. The walk takes every block, since the emitter emits a block whether or not a path reaches it.
-    private func verifyBlockOrder() throws(IRViolation) {
-        var begun: Set<AccessID> = []
+    /// Whether some statement uses an access that another block begins. Throws at an access that a second statement
+    /// begins, or that a statement uses before the walk reaches its beginning.
+    private func usesAccessOutsideItsBlock() throws(IRViolation) -> Bool {
+        // The index of the block that begins each access the walk has reached. The walk takes every block, since the
+        // emitter emits a block whether or not a path reaches it, and reads each statement in place, since every
+        // build runs it on every body.
+        var beginningBlocks: [AccessID: Int] = [:]
+        var usesOutside = false
+
         for (index, block) in body.blocks.enumerated() {
-            for effect in block.effects.joined() {
-                if case .begin(let id, _) = effect, !begun.insert(id).inserted {
+            for statement in block.statements {
+                if case .begin(let id, _) = statement, beginningBlocks.updateValue(index, forKey: id) != nil {
                     throw violation("the IR begins a\(id.index) at bb\(index), after another statement that begins it")
                 }
-                if let used = Self.access(usedBy: effect), !begun.contains(used) {
-                    throw violation("the IR uses a\(used.index) at bb\(index), before its beginning in the order of "
-                        + "the blocks")
+                for used in Self.accesses(usedBy: statement) {
+                    guard let beginningBlock = beginningBlocks[used] else {
+                        throw violation("the IR uses a\(used.index) at bb\(index), before its beginning in the order "
+                            + "of the blocks")
+                    }
+                    if beginningBlock != index { usesOutside = true }
                 }
             }
         }
+        return usesOutside
     }
 
     /// Throws at an effect that uses an access some path to it hasn't begun, where the address the emitter keeps
@@ -45,6 +56,16 @@ struct BegunAccessVerifier {
                 guard let used = Self.access(usedBy: effect), unbegun.contains(used) else { return }
                 throw violation("the IR uses a\(used.index) at bb\(index), which a path reaches without beginning it")
             }
+        }
+    }
+
+    /// The accesses that `statement` needs begun: those a call passes, or the one it makes a value depend on. A
+    /// terminator needs none.
+    private static func accesses(usedBy statement: Statement) -> [AccessID] {
+        switch statement {
+        case .compute(_, let value, _): value.accesses
+        case .depend(_, let id): [id]
+        case .begin, .end, .declare, .retire: []
         }
     }
 

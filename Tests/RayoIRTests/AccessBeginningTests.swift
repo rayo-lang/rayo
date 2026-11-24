@@ -69,6 +69,21 @@ struct AccessBeginningTests {
         #expect(IRVerifier.verifyEmitterRules(program) == nil)
     }
 
+    @Test func `a use in a later block that every path reaches through the beginning is no violation`() throws {
+        let program = try IRParser.program(from: borrowing("""
+              begin a0 read %0 @1:1-1:2
+              branch true, bb1, bb2
+            bb1:
+              goto bb2
+            bb2:
+              _ = call "f(_: &Int)"(a0) @1:1-1:2
+              end a0
+              return
+            """))
+        #expect(IRVerifier.verify(program, from: .ownership) == nil)
+        #expect(IRVerifier.verifyEmitterRules(program) == nil)
+    }
+
     @Test func `a use after the access ends is no violation of the rules the emitter trusts`() throws {
         let program = try IRParser.program(from: borrowing("""
               begin a0 read %0 @1:1-1:2
