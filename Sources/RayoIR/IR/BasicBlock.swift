@@ -11,4 +11,10 @@ public struct BasicBlock: Equatable, Sendable {
     public var effects: [[Effect]] {
         statements.map(\.effects) + [terminator.effects]
     }
+
+    /// Lends `visit` each effect of each statement in turn, then each of the terminator's, and stops where it throws.
+    func forEachEffect<Failure: Error>(_ visit: (Effect) throws(Failure) -> Void) throws(Failure) {
+        for statement in statements { try statement.forEachEffect(visit) }
+        try terminator.forEachEffect(visit)
+    }
 }

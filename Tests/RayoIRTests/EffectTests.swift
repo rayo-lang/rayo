@@ -1,5 +1,5 @@
 import RayoCheckedProgram
-import RayoIR
+@testable import RayoIR
 import RayoSource
 import Testing
 
@@ -43,7 +43,45 @@ struct EffectTests {
             """)
         #expect(body.blocks[0].effects.map { $0.map(effectText) } == [["declare %0"], ["store %0 @1:1-1:2"], ["exit"]])
     }
+
+    @Test func `a walk of a block's effects takes each statement's in turn, then the terminator's`() throws {
+        let body = try mainBody(from: """
+            bb0:
+              %2[%1] @1:1-1:6 = operand read %0 @1:9-1:10 @1:9-1:10
+              begin a0 modify %0 @2:1-2:2
+              _ = call "bump(_: mutable &Int, _: Int)"(a0, 1) @2:1-2:7
+              end a0
+              return move %0 @3:1-3:2
+            """)
+        var walked: [String] = []
+        body.blocks[0].forEachEffect { walked.append(effectText($0)) }
+        #expect(walked == [
+            "read %0 @1:9-1:10", "read %1 @1:1-1:6", "store %2[%1] @1:1-1:6", "begin a0 modify %0", "use a0", "end a0",
+            "move %0 @3:1-3:2", "exit",
+        ])
+    }
+
+    @Test func `a walk of a block's effects stops at the effect its visit throws at`() throws {
+        let body = try mainBody(from: """
+            bb0:
+              declare %0
+              %0 @1:1-1:2 = operand 1 @1:3-1:4
+              retire %0
+              return
+            """)
+        var walked: [String] = []
+        #expect(throws: StoppedWalk.self) {
+            try body.blocks[0].forEachEffect { effect throws(StoppedWalk) in
+                walked.append(effectText(effect))
+                if case .store = effect { throw StoppedWalk() }
+            }
+        }
+        #expect(walked == ["declare %0", "store %0 @1:1-1:2"])
+    }
 }
+
+/// What a visit throws to stop a walk of effects.
+private struct StoppedWalk: Error {}
 
 private let statementEffects = [
     EffectsOfText(

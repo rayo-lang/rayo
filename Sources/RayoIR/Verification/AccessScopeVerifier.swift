@@ -48,7 +48,7 @@ struct AccessScopeVerifier {
     private func accessesHeld(after block: BlockID, entering held: Set<AccessID>) throws(IRViolation) -> Set<AccessID> {
         var held = held
         let label = "bb\(block.index)"
-        for effect in body.blocks[block.index].effects.joined() {
+        try body.blocks[block.index].forEachEffect { effect throws(IRViolation) in
             switch effect {
             // A beginning starts an access that isn't held, since one statement begins each access.
             case .begin(let id, _):
