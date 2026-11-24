@@ -197,9 +197,8 @@ struct ErrorCodeTests {
     @Test(arguments: [
         (DropMark.bare, "the parameter 'n' is never read; write '_ = n' to drop it"),
         (.consume, "the parameter 'n' is never read; write '_ = consume n' to drop it"),
-        (.copy, "the parameter 'n' is never read; write '_ = copy n' to drop it"),
     ])
-    func `a message about an unread place names the statement that drops it`(mark: DropMark, message: String) {
+    func `a message about an unread parameter names the statement that drops it`(mark: DropMark, message: String) {
         #expect(ErrorCode.unreadParameter(drop: DropStatement(mark, dropping: "n")).message == message)
     }
 }

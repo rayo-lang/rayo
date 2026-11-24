@@ -14,7 +14,7 @@ enum UnusedValueChecker {
     }
 
     /// The parameters whose values the function's entry stores and no code reads, each reported where the source
-    /// declares it with the statement that drops it, where `uses` says what code reads after each point of `body`.
+    /// declares it, naming the statement that drops it, where `uses` says what code reads after each point of `body`.
     private static func unreadParameters(
         of body: IRBody, uses: DataflowResults<AccessUseState>,
     ) -> [Diagnostic] {
@@ -27,7 +27,8 @@ enum UnusedValueChecker {
                 guard case .source(let name, .parameter(let convention), let type, let range) = body.locals[index],
                       convention.isStoredAtEntry, !state.values.reads(Place(root: LocalID(index: index)))
                 else { return nil }
-                return Diagnostic(.unreadParameter(drop: DropStatement(dropMark(of: type), dropping: name)), at: range)
+                let drop = DropStatement(dropMark(of: type), dropping: name)
+                return Diagnostic(.unreadParameter(drop: drop), at: range)
             }
         }
         return unread
