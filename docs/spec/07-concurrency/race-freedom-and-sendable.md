@@ -29,7 +29,7 @@ particles.forEachInParallel { p in            // may run on many threads at once
 ## What may cross threads: `Sendable`
 
 ```rayo
-import c "audio.h"                                       // declarations land in module 'audio'
+import(c) "audio.h"                                      // declarations land in module 'audio'
 
 struct Enemy(var pos: Vec3, var hp: Float)               // Sendable: every field is
 struct Hud(var root: WeakPointer<Widget>)                // not Sendable: holds a thread-bound weak pointer

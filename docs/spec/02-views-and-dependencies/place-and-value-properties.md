@@ -45,7 +45,7 @@ A body with no accessor keyword returns a value, as a `get` does.
 
 **Two kinds of field are reached through a copy, as a value property is**, since neither is a place a view could reach:
 
-- an imported C bitfield, whose bits share bytes with other fields ([08](../08-c-interop/imports-and-inline-c.md#structs-unions-and-enums));
+- an imported C bitfield, whose bits share bytes with other fields ([08](../08-c-interop/imports-and-declarations.md#structs-unions-and-enums));
 - an under-aligned field, at an address where a load or store of its type may fault ([04](../04-types/structs.md#packed-structs-and-under-aligned-places)).
 
 ## Place properties: `borrow` and `mutate`

@@ -34,7 +34,7 @@ func inspect<T>(_ value: mutable &T, in ui: mutable &Inspector) {
 
 **Reflection reads a user attribute only on a field, a type or an enum case, so one on any other declaration is a compile error.** A declaration may take one attribute type several times, as a type could take both `@Requires(Physics.self)` and `@Requires(Render.self)`, which `attributes(Requires.self)` lists.
 
-**The built-in attributes are reserved names**: `@align`, `@c`, `@checks`, `@converts`, `@export`, `@guard`, `@inline`, `@layout`, `@noalloc`, `@nonexhaustive`, `@opaque`, `@pod`, `@reflect`, `@sendable` and `@threadlocal`. A toolchain may add attributes of its own that change no program's meaning.
+**The built-in attributes are reserved names**: `@align`, `@c`, `@checks`, `@converts`, `@export`, `@guard`, `@inline`, `@layout`, `@nonexhaustive`, `@opaque`, `@pod`, `@reflect`, `@sendable` and `@threadlocal`. A toolchain may add attributes of its own that change no program's meaning.
 
 ## Runtime type info
 
@@ -77,4 +77,5 @@ func showFields(_ info: &TypeInfo, in ui: mutable &Inspector) {   // one functio
 - **Panic strategy.** Whether a panic unwinds, the default, or aborts the program ([10](../10-errors-and-safety/panics.md#panic-strategy)).
 - **Flags.** The flags that `target.flag` reads, each a `const` `Bool`, `Int` or `static &Text`.
 - **Seed bytes.** For a program on a platform with no source of randomness, the bytes startup takes as the process seed, without which the build fails ([08](../08-c-interop/c-contract-and-embedding.md#what-the-runtime-needs-from-the-platform)).
-- **C headers.** For each `import c`, the header it reads and each header its config block names. For each `import c` and each `extern c` block, the preprocessor definitions its C is read with, so no other import's macros reach an `import c` ([08](../08-c-interop/imports-and-inline-c.md#importing-headers)).
+- **C headers.** For each `import(c)`, the header it reads, each header its config block names, and the preprocessor definitions its C is read with, so no other import's macros reach it ([08](../08-c-interop/imports-and-declarations.md#importing-headers)).
+- **C code.** The object files and libraries the build links, those of the program's own C included, which define the C functions that imported headers and `extern(c) func` declarations declare ([08](../08-c-interop/imports-and-declarations.md#declaring-c-functions)).

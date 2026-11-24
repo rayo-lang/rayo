@@ -482,17 +482,17 @@ _Avoid_: thread id
 A function C can call: a `@c func`, an `@export` function, or a closure literal converted to a `@c` pointer ([08](docs/spec/08-c-interop/calling-rayo-from-c.md#c-entries-and-threads)).
 
 **Config block**:
-The `unsafe { … }` block that may end an `import c`, holding rules about the header's C ([08](docs/spec/08-c-interop/imports-and-inline-c.md#importing-headers)).
+The `unsafe { … }` block that may end an `import(c)`, holding rules about the header's C, each naming the header to take a type from ([08](docs/spec/08-c-interop/imports-and-declarations.md#importing-headers)).
 
 **Memory location**:
-A maximal run of adjacent nonzero-width C bitfields, which counts as one place for exclusivity ([08](docs/spec/08-c-interop/imports-and-inline-c.md#structs-unions-and-enums)).
+A maximal run of adjacent nonzero-width C bitfields, which counts as one place for exclusivity ([08](docs/spec/08-c-interop/imports-and-declarations.md#structs-unions-and-enums)).
 
 **Opaque type**:
-An imported C type marked `@opaque`, whose layout Rayo doesn't know or whose members it can't map, so Rayo uses it only behind a pointer ([08](docs/spec/08-c-interop/imports-and-inline-c.md#what-imports-as-what)).
+An imported C type marked `@opaque`, whose layout Rayo doesn't know or whose members it can't map, so Rayo uses it only behind a pointer ([08](docs/spec/08-c-interop/imports-and-declarations.md#what-imports-as-what)).
 _Avoid_: incomplete type
 
 **Open enum**:
-An imported C enum, which may hold any value of its underlying type unless its header declares it closed ([08](docs/spec/08-c-interop/imports-and-inline-c.md#structs-unions-and-enums)).
+An imported C enum, which may hold any value of its underlying type unless its header declares it closed ([08](docs/spec/08-c-interop/imports-and-declarations.md#structs-unions-and-enums)).
 
 ### Compile time
 
@@ -524,6 +524,9 @@ A tagged union with one member per error type, written `(IoError | ParseError)`,
 **Failure type**:
 The `Failure` of a `Result`, and of a function whose result type is one: the errors it can fail with, `Never` for none ([10](docs/spec/10-errors-and-safety/typed-errors.md#results)).
 
+**Guard page**:
+Memory below a stack whose fault, when code touches it, the runtime turns into ending the program, so running out of stack never writes past the stack's end ([10](docs/spec/10-errors-and-safety/panics.md#running-out-of-stack)).
+
 **Memory-safety check**:
 A run-time check, such as a bounds check, that keeps safe code sound; it is on in every build ([10](docs/spec/10-errors-and-safety/checks-and-build-modes.md#check-levels)).
 _Avoid_: safety check
@@ -553,7 +556,7 @@ Code that uses an operation needing `unsafe`, such as dereferencing a raw pointe
 A protocol, such as `Sendable` or `Frozen`, whose declared conformance is a contract the compiler can't check ([10](docs/spec/10-errors-and-safety/unsafe-code.md#unverified-promises)).
 
 **Unverified promise**:
-A declaration the compiler takes on trust, such as an `unsafe` conformance, an `@export` function or an `import c` config block ([10](docs/spec/10-errors-and-safety/unsafe-code.md#unverified-promises)).
+A declaration the compiler takes on trust, such as an `unsafe` conformance, an `@export` function or an `import(c)` config block ([10](docs/spec/10-errors-and-safety/unsafe-code.md#unverified-promises)).
 
 **Unwinding**:
 What a panic does to its thread's frames, innermost first: it ends each as a `throw` would, destroying its live values and running its live `defer` blocks ([10](docs/spec/10-errors-and-safety/panics.md#unwinding)).

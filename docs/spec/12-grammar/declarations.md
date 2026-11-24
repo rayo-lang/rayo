@@ -14,16 +14,15 @@ file-static-for= 'static' 'for' identifier 'in' expression ('where' expression)?
 static-error  = 'static' 'error' '(' string-lit ')' ;              (* a compile error where this is built or instantiated (09);
                                                                       each interpolated segment is a const, formatted at compile time *)
 import        = 'import' module-path ('as' identifier)?
-              | 'import' 'c' plain-string-lit ('as' identifier)? ('where' 'prefix' ':' plain-string-lit)? c-import-config? ;
+              | 'import' foreign-lang plain-string-lit ('as' identifier)? ('where' 'prefix' ':' plain-string-lit)? c-import-config? ;
+foreign-lang  = '(' identifier ')' ;                               (* the language of the declarations: the spec defines only 'c' (08) *)
 c-import-config = 'unsafe' '{' c-import-rule* '}' ;                 (* asserted facts; rejected in @safe modules *)
-c-import-rule = 'noalloc' identifier (',' identifier)*             (* C functions that allocate nothing (08) *)
-              | c-stack identifier (',' identifier)*                 (* the stack those functions need (08) *)
-              | ('struct' | 'union' | 'enum') identifier 'in' plain-string-lit ;   (* the header whose reading has a type this one only declares (08) *)
+c-import-rule = ('struct' | 'union' | 'enum') identifier 'in' plain-string-lit ;   (* the header whose reading has a type this one only declares (08) *)
 module-path   = identifier ('.' identifier)* ;
 
 declaration   = attribute* modifier* ( let-decl | var-decl | const-decl | func-decl | task-decl
               | struct-decl | union-decl | enum-decl | protocol-decl | extension-decl | typealias-decl
-              | extern-c-decl ) ;
+              | extern-decl ) ;
 modifier      = 'public' | 'private' | 'static' | 'mutating' | 'consuming' | 'unsafe' | 'alloc' ;
                                                                    (* each only where a chapter gives it a meaning, and a compile error elsewhere:
                                                                       'public' and 'private' on a declaration outside a function body (11),
@@ -31,7 +30,7 @@ modifier      = 'public' | 'private' | 'static' | 'mutating' | 'consuming' | 'un
                                                                       'mutating' on a computed property or subscript (04),
                                                                       'unsafe' on a function, initializer, subscript, accessor, field or protocol,
                                                                       'alloc' on a function that makes a new value for its caller, of any type (06).
-                                                                      An extern-c-decl or protocol-decl only at a file's top level *)
+                                                                      An extern-decl or protocol-decl only at a file's top level *)
 attribute     = '@' (type-name | keyword) ('(' attribute-args? ')')? ;   (* a keyword right after '@' is an attribute name: @guard; @ui.Bounds names another module's *)
 attribute-args= attribute-arg (',' attribute-arg)* ','? ;
 attribute-arg = ((identifier | keyword) ':')? (expression | keyword) ;   (* @layout(.packed(4)); @checks(.all); @reflect(private), a keyword argument; @export(c, name: "nav_path"), a labeled one *)
@@ -86,12 +85,11 @@ extension-decl= 'extension' type inheritance? where-clause? '{' member* '}' ;
                                                                       only in an unconditional extension, in the type's module (04);
                                                                       a conformance only at a file's top level (05) *)
 typealias-decl= 'typealias' identifier generic-params? '=' type ;
-extern-c-decl = 'extern' 'c' ( plain-string-lit | 'noalloc'? c-stack? 'func' identifier param-clause ('->' type)? ) ;
-c-stack       = 'stack' '(' expression ')' ;                        (* the stack, in bytes, the C function needs at most: a const Int expression (08) *)
+extern-decl   = 'extern' foreign-lang 'func' identifier param-clause ('->' type)? ;   (* a function a linked library or object file defines (08) *)
 
 member        = declaration | init-decl | deinit-decl | subscript-decl | static-if-decl | static-for-decl | static-error ;
 init-decl     = attribute* modifier* 'init' '?'? generic-params? param-clause init-result? where-clause? block ;   (* not both '?' and an init-result *)
-deinit-decl   = attribute* 'deinit' block ;                         (* '@noalloc' is the attribute with a meaning here (06) *)
+deinit-decl   = attribute* 'deinit' block ;
 subscript-decl= attribute* modifier* 'subscript' generic-params? param-clause '->' type where-clause? accessor-block ;   (* subscript<T>(as t: Type<T>) -> T?, as AttributeInfo's a[as:] (02) *)
 accessor-block= '{' ( statement* | accessor+ ) '}' ;              (* 'get', 'set', 'borrow' or 'mutate' first, after attributes and modifiers, then '{', begins an accessor,
                                                                       never a call *)

@@ -1,5 +1,5 @@
 /* A stand-in for a platform SDK's C header, such as a console's.
-   Rayo imports it with `import c "platform.h"`; see bindings.rayo. */
+   Rayo imports it with `import(c) "platform.h"`; see bindings.rayo. */
 #ifndef PLATFORM_H
 #define PLATFORM_H
 
@@ -38,7 +38,7 @@ void             platform_set_audio_callback(platform_audio_cb cb, void* user);
 void             platform_upload(const float* data, size_t count);
 void             platform_gpu_free(uint32_t id);
 
-/* A function-like macro: not imported by Rayo; see the extern c block in bindings.rayo. */
+/* A function-like macro: not imported by Rayo; deadzone.c wraps it in a C function. */
 #define PLATFORM_PAD_DEADZONE(v) ((v) > -0.15f && (v) < 0.15f ? 0.0f : (v))
 
 #endif

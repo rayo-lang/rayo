@@ -57,10 +57,10 @@ p.step(dt)
 
 **These places count as one place, since writing one can change another:**
 
-- **Unions.** The members of one union, declared `union` or `@c union` or anonymous inside a struct ([04](../04-types/enums.md#untagged-unions), [08](../08-c-interop/imports-and-inline-c.md#structs-unions-and-enums)), and the fields nested at any depth inside them. Every rule that relies on disjoint fields treats a union this way, reflection projections and SoA splitting included.
+- **Unions.** The members of one union, declared `union` or `@c union` or anonymous inside a struct ([04](../04-types/enums.md#untagged-unions), [08](../08-c-interop/imports-and-declarations.md#structs-unions-and-enums)), and the fields nested at any depth inside them. Every rule that relies on disjoint fields treats a union this way, reflection projections and SoA splitting included.
 - **Vector lanes.** The lanes of one `Simd` value ([04](../04-types/numbers-and-math.md#simd-and-math)), since storing one lane may rewrite the vector. A swizzle accesses the whole vector. `Vec3`'s `x`, `y` and `z` are ordinary stored fields, which are disjoint, and its swizzles are computed properties, which access all of it (above).
 - **Enum payloads.** Reaching into a payload, an optional's included, reads the tag, which may be a niche inside the payload ([04](../04-types/enums.md#optionals)). So every path into one enum value's payload overlaps every other, through `?.`, `!`, a pattern or reflection's `value[case:]` ([09](../09-compile-time/reflection.md#what-reflection-can-read)): `s?.n` and `s?.b` conflict. One pattern that binds several parts reads the tag once, though, so one over an optional tuple gives two disjoint borrows, as in the example below.
-- **Bitfields.** Imported bitfields that form one C **memory location** ([08](../08-c-interop/imports-and-inline-c.md#structs-unions-and-enums)). Bitfields in different memory locations, or a bitfield and a neighboring field, are separate places, which two threads may write at once, as C11 allows.
+- **Bitfields.** Imported bitfields that form one C **memory location** ([08](../08-c-interop/imports-and-declarations.md#structs-unions-and-enums)). Bitfields in different memory locations, or a bitfield and a neighboring field, are separate places, which two threads may write at once, as C11 allows.
 
 ```rayo
 g(mutable e.f, mutable e.u)                        // error when 'f' and 'u' are members of one union

@@ -196,7 +196,7 @@ func peek<T>(_ h: &Halves<T>) -> mutable &[T]              // error: 'h' is only
 
 **`unsafe` code that builds a mutable view answers for it**, since the signature's shape isn't enough: the code can take a dummy `mutable` argument. This covers a mutable reference made from a raw pointer, and a type of the code's own, declared `~Copyable`, that changes what it views through a raw pointer. The code promises that everything the view can change lies in a `mutable` argument's place, or in storage that place owns, or is reached through an exclusive dependency that a `mutable` or owned argument carries. It promises too that none of it is reached only through a `&` argument or what one carries.
 
-**In an `unsafe` function, that promise is its caller's**: that nothing else reaches what the view can change while it lives ([10](../10-errors-and-safety/unsafe-code.md#raw-accesses)). `S.trailing(at:count:)` is one such function ([08](../08-c-interop/imports-and-inline-c.md#what-imports-as-what)).
+**In an `unsafe` function, that promise is its caller's**: that nothing else reaches what the view can change while it lives ([10](../10-errors-and-safety/unsafe-code.md#raw-accesses)). `S.trailing(at:count:)` is one such function ([08](../08-c-interop/imports-and-declarations.md#what-imports-as-what)).
 
 **Two kinds of mutable view may come from a shared input, since their exclusivity is enforced at run time:**
 

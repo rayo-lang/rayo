@@ -293,16 +293,6 @@ func spawnBoss(at pos: Vec3) -> Box<Enemy>!AllocError {
 
 So a collection that must back off under a hard memory limit, such as a streaming loader's, grows through one of these.
 
-**`@noalloc` rules allocation out.** In a function marked `@noalloc`, such as an audio callback, any `alloc`, any call that may allocate and any closure stored as a `Closure` is a compile error:
-
-```rayo
-@noalloc
-func fillSilence(_ out: mutable &[Float], _ history: mutable &List<Float>) {
-    for i in 0..<out.count { out[i] = 0 }        // fine: nothing here allocates
-    history.append(0)                            // error: 'append' may allocate, and 'fillSilence' is @noalloc
-}
-```
-
 ## In the spec
 
 - [06 Allocator values and `alloc`](../spec/06-memory-and-allocators/allocator-basics.md): allocator ids and kinds, `alloc`, `Allocating` and `alloc func`, the ambient allocator, and the static allocator of read-only data.
@@ -312,7 +302,7 @@ func fillSilence(_ out: mutable &[Float], _ history: mutable &List<Float>) {
 - [06 Writing an allocator](../spec/06-memory-and-allocators/allocator-implementations.md#writing-an-allocator-allocatorimpl): `AllocatorImpl`, `ArenaImpl` and `WrapperImpl`, and what conforming to them promises.
 - [06 Owning boxes](../spec/06-memory-and-allocators/owning-values.md#owning-boxes): `Box`, `Shared`, `LocalShared` and weak links in full, `Frozen`, and handing an owner to C.
 - [06 Long-lived views](../spec/06-memory-and-allocators/owning-values.md#long-lived-views-into-long-lived-buffers): slices of a locked `Blob` or `List`, and what making one checks.
-- [06 Allocation failure](../spec/06-memory-and-allocators/allocation-lifecycle.md#allocation-failure): every fallible form, and what `@noalloc` rejects.
+- [06 Allocation failure](../spec/06-memory-and-allocators/allocation-lifecycle.md#allocation-failure): every fallible form, and what each returns or fails with.
 - [06 `TrivialFree`](../spec/06-memory-and-allocators/allocation-lifecycle.md#releasing-a-value-without-destroying-it-trivialfree): forgetting a value in an arena with `release`, instead of destroying it.
 - [05 `any P`](../spec/05-protocols-generics-and-closures/protocols-and-generics.md#any-p-explicit-dynamic-dispatch): existentials, `Box<any P>`, and passing one to generic code.
 - [03 Objects in arenas](../spec/03-handles-and-objects.md#objects-in-arenas-and-other-allocators): objects that a reset or an unregistration destroys.

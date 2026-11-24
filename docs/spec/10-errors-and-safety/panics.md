@@ -35,7 +35,7 @@ A few failures can't unwind, and end the program at once instead ([below](#what-
 
 **Arithmetic:**
 
-- integer overflow, including unary `-` and `Int.min / -1`, an unlabeled integer conversion whose value doesn't fit, and an imported bitfield write that doesn't fit its width ([08](../08-c-interop/imports-and-inline-c.md#structs-unions-and-enums)), only where overflow checks are on ([04](../04-types/numbers-and-math.md#integer-overflow-division-and-shifts));
+- integer overflow, including unary `-` and `Int.min / -1`, an unlabeled integer conversion whose value doesn't fit, and an imported bitfield write that doesn't fit its width ([08](../08-c-interop/imports-and-declarations.md#structs-unions-and-enums)), only where overflow checks are on ([04](../04-types/numbers-and-math.md#integer-overflow-division-and-shifts));
 - integer division or remainder by zero ([04](../04-types/numbers-and-math.md#integer-overflow-division-and-shifts));
 - converting NaN or an out-of-range floating-point value to an integer with the unlabeled form, which panics with `float to integer conversion of NaN` or `float to integer conversion out of range` ([04](../04-types/numbers-and-math.md#float-to-integer-panics)).
 
@@ -172,9 +172,7 @@ f(mutable x)           // fine: if f panics, its borrow of x has ended by the ti
 
 **These failures end the program at once, without unwinding:**
 
-- **Running out of stack.** Unwinding runs `deinit`s and `defer` blocks, which need the stack that ran out. Each case is caught before anything is written past the stack's end. WebAssembly's own engine stack isn't checked: there the engine traps, which ends the program without the report ([11](../11-compilation-model.md#webassembly)). The cases are these:
-    - a call, or the destruction of deeply nested values, that needs more of the stack it runs on than is left, a fiber's stack that C declared included;
-    - a call into C made with less stack left than its target declares, or than `target.cStackReserve` when it declares nothing ([08](../08-c-interop/imports-and-inline-c.md#the-stack-a-c-call-needs)).
+- **Running out of stack**, in a call or in destroying deeply nested values, on any stack Rayo code runs on, a fiber's included ([below](#running-out-of-stack)). Unwinding runs `deinit`s and `defer` blocks, which need the stack that ran out.
 - **An allocation that fails in a plain form**, such as `alloc UniquePointer(v)`, a list's growth or a conversion to a `Closure` that allocates. Code that can recover uses a fallible form, which returns `nil` or fails with an error ([06](../06-memory-and-allocators/allocation-lifecycle.md#allocation-failure)).
 - **A panic that would unwind out of code an unwind runs**, such as a `deinit` or a `defer` block ([above](#unwinding)). A recovery point catches one panic, and the thread would carry two.
 - **A panic that would unwind out of a thread's teardown**, such as one in a thread-local's `deinit`, since no frame is left to unwind to ([07](../07-concurrency/global-state.md#thread-teardown)).
@@ -187,6 +185,20 @@ f(mutable x)           // fine: if f panics, its borrow of x has ended by the ti
 - **The failure is reported.** A panic is reported when it happens, and any other failure as it ends the program. Once one failure is ending the program, a thread that fails or panics after it stops without reporting.
 - **The program ends once the report is made.** No frame unwinds and no shutdown runs, so no `deinit` or `defer` block runs either.
 - **Every other thread stops.** Where the platform can suspend threads, each stops where it stands, lent work included, so the report can show its stack as it was. Elsewhere, each stops the next time it enters Rayo from C or parks, or when the program ends, so a thread deep in a long computation may run briefly after the failure.
+
+### Running out of stack
+
+**Running out of stack ends the program before anything is written past the stack's end, by one of two means.** A platform that can protect memory below a stack guards each stack with a guard page. One that can't, as WebAssembly can't protect its linear memory, has each frame check its stack on entry instead ([below](#stacks-without-guard-pages)).
+
+**Where the platform can protect memory below a stack, three things catch it:**
+
+- **A guard page.** Every stack that Rayo code runs on has a **guard page** below it: at least a page of memory that faults when code touches it. The platform gives each thread's own stack one, and C that switches a thread to a stack of its own, as a fiber scheduler does, gives that stack one ([08](../08-c-interop/c-contract-and-embedding.md#what-c-must-uphold)).
+- **Probes.** A Rayo frame that grows the stack touches it at least once in each page, in order from the top, so it reaches the guard page before any memory below it. The functions the implementation supplies guard the stack as Rayo frames do ([11](../11-compilation-model.md#what-a-target-must-provide)), and C's frames as C's contract asks ([08](../08-c-interop/c-contract-and-embedding.md#what-c-must-uphold)).
+- **The fault handler.** The runtime turns a fault in a guard page into ending the program, with a report that the stack ran out ([above](#what-ends-the-program)). The handler runs with stack space of its own, since the stack that faulted has none left: an alternate stack, or space the platform reserves below the guard page. It tells the fault from any other by the bounds of the stack the thread runs on, and passes any other fault on ([08](../08-c-interop/c-contract-and-embedding.md#what-the-runtime-needs-from-the-platform)).
+
+#### Stacks without guard pages
+
+**Where the platform can't protect memory below a stack, each Rayo frame checks on entry that the stack it needs is left.** The check reads the bounds the runtime knows for the stack, and ends the program with the report when too little is left. WebAssembly is such a platform, for the stack in its linear memory. Its engine's own call stack isn't checked: there the engine traps, which ends the program without the report ([11](../11-compilation-model.md#webassembly)).
 
 ## Catching a panic: `catchPanic`
 

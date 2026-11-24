@@ -11,7 +11,7 @@ An owning value remembers where its storage came from so it can grow and release
 **Every registered allocator is either `.heap` or library code:**
 
 - **`.heap`, the platform's general-purpose heap, has a fixed id and is never unregistered**, so its storage never goes stale: `Allocator.unregister(.heap)` panics. `Allocator.heap` is a `static const`, so code takes it with no `copy` ([01](../01-values-and-ownership/moving-values-out.md#constants)).
-- **Every other registered allocator is library code implementing `AllocatorImpl`** ([Writing an allocator: `AllocatorImpl`](allocator-implementations.md#writing-an-allocator-allocatorimpl)). Examples are an arena, a heap or a budget wrapper, or one over a platform's memory APIs through `import c`.
+- **Every other registered allocator is library code implementing `AllocatorImpl`** ([Writing an allocator: `AllocatorImpl`](allocator-implementations.md#writing-an-allocator-allocatorimpl)). Examples are an arena, a heap or a budget wrapper, or one over a platform's memory APIs through `import(c)`.
 
 **Every registered allocator is of one of three kinds, which say how the memory it hands out goes back:**
 

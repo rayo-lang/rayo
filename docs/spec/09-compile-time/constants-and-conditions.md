@@ -22,7 +22,7 @@ func makeSinTable() -> [1024 of Float] {
 
 **Any function can run at compile time if what it executes, on the input it gets:**
 
-- calls no C function, whether imported or declared `extern c`;
+- calls no C function, whether imported or declared with `extern(c) func`;
 - accesses no global other than a `const`, a `static const` included, and no thread-local;
 - starts, parks and wakes no thread: it reaches no blocking wait, `Runtime.park` or `Runtime.wake`;
 - makes no volatile access, and no access through a pointer made from an integer;
@@ -144,7 +144,7 @@ func store<T>(_ value: &T, into w: mutable &Writer) {
 
 **The branch a `static if` doesn't take is parsed but not type-checked**, so it can mention symbols that only exist on another platform. Conditions must be `const`.
 
-**At the top level, `static if` can include or exclude declarations and whole `import` and `import c` statements.** A condition that guards an import reads only these, so which modules a file imports never depends on what an import provides or on the module's own declarations:
+**At the top level, `static if` can include or exclude declarations and whole `import` and `import(c)` statements.** A condition that guards an import reads only these, so which modules a file imports never depends on what an import provides or on the module's own declarations:
 
 - literals;
 - `const`s of modules imported outside any `static if`;
@@ -163,7 +163,6 @@ No `import` goes inside a `static for`, at any depth.
 - `has64BitAtomics`, a `Bool` that says whether the target has lock-free 8-byte atomics, without which an 8-byte `Atomic` is a compile error ([07](../07-concurrency/synchronization.md#atomics-and-locks));
 - `mode`, the build mode: `.debug` or `.release` ([10](../10-errors-and-safety/checks-and-build-modes.md#build-modes));
 - `checks`: the set of diagnostic checks that are on where it is read, as `@checks` names them ([10](../10-errors-and-safety/checks-and-build-modes.md#check-levels));
-- `cStackReserve`: the stack, in bytes, that a call into C checks is left, unless the C function called declares its own need with `stack(n)` ([08](../08-c-interop/imports-and-inline-c.md#the-stack-a-c-call-needs));
 - flags the build defines: `target.flag("editor")`, or `target.flag("poolSize")` for one holding a number, with the type and value the build gives it ([What a build declares](attributes-and-runtime-data.md#what-a-build-declares)).
 
 **Reading a flag the build doesn't declare is a compile error.** `target.hasFlag("editor")`, a `const` `Bool`, says whether the build declares that flag. So a library can read a flag that only some builds define inside a `static if` on `hasFlag`:

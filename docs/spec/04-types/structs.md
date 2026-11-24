@@ -64,7 +64,7 @@ struct Hit(var crit: Bool, var damage: Double, var team: UInt8)                 
 ```
 
 - **`@layout(.declared)` keeps the declared order, and changes nothing else.** Each field is still aligned and padded by the rules above, and may be of any type.
-- **`@layout(.packed)` keeps the declared order, and counts every field's alignment as 1.** So the alignment is 1, and there is no padding between or after fields: a struct's fields sit end to end. Padding inside a field's own type stays. `@layout(.packed(N))` caps each field's alignment at `N` instead, a power of two. A struct or union with either is **packed**. C's packed records import as these ([08](../08-c-interop/imports-and-inline-c.md#what-imports-as-what)).
+- **`@layout(.packed)` keeps the declared order, and counts every field's alignment as 1.** So the alignment is 1, and there is no padding between or after fields: a struct's fields sit end to end. Padding inside a field's own type stays. `@layout(.packed(N))` caps each field's alignment at `N` instead, a power of two. A struct or union with either is **packed**. C's packed records import as these ([08](../08-c-interop/imports-and-declarations.md#what-imports-as-what)).
 - **`@c` keeps the declared order, and rejects fields with no C representation** ([08](../08-c-interop/calling-rayo-from-c.md#c-representations)). It changes nothing else, since every target's C ABI already places fields by the rules above.
 - **`@align(N)` raises the alignment to at least `N`**, a power of two, and the size rounds up to it. It combines with any of the others.
 
@@ -91,7 +91,7 @@ struct Spawner(
 let s = Spawner(owner: nil)              // 'target', 'cooldown' and 'spawned' may be left out
 ```
 
-**Every value of a struct is built by its primary initializer**, except a value that a `Pod` type takes from bytes ([Plain data: `Pod` and bit casts](data-layout.md#plain-data-pod-and-bit-casts)) and an imported C struct's zero-initialized one ([08](../08-c-interop/imports-and-inline-c.md#structs-unions-and-enums)). The primary initializer's parameters are the fields, in order and labeled by name:
+**Every value of a struct is built by its primary initializer**, except a value that a `Pod` type takes from bytes ([Plain data: `Pod` and bit casts](data-layout.md#plain-data-pod-and-bit-casts)) and an imported C struct's zero-initialized one ([08](../08-c-interop/imports-and-declarations.md#structs-unions-and-enums)). The primary initializer's parameters are the fields, in order and labeled by name:
 
 - **Owned fields.** The header lists fields, not parameters: each entry is a `var` or `let` and its type. The value owns its fields, so the primary initializer owns every argument, as a `T` parameter does ([01](../01-values-and-ownership/parameters.md#parameters)). So `Inventory(items: consume loot)` moves `loot` in, and `copy loot` or `alloc loot.clone()` gives it a second value instead. A field whose type is a reference holds the reference, which makes the struct scoped ([02](../02-views-and-dependencies/scoped-values.md#which-types-are-scoped)).
 - **Defaults.** A field's default makes its argument optional. A field with a default may leave its type to the default, as `spawned` does above.

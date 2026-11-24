@@ -28,7 +28,7 @@ let wide: Int = small      // widening: every UInt8 fits in an Int
 | `Half` | 16-bit | |
 | `Bool` | 1 byte | |
 
-**`Int` and `UInt` are 64 bits on every target, whatever its pointer width** ([11](../11-compilation-model.md#what-a-target-must-provide)). So an integer's range, and the point where its arithmetic overflows, never differ between a 32-bit target and a 64-bit one. Every size fits in an `Int`, and every count and index in a `UInt`, since no target's pointers are wider than 64 bits. C's size types, whose width does follow the target, import as aliases of their own, such as `CSize` ([08](../08-c-interop/imports-and-inline-c.md#what-imports-as-what)).
+**`Int` and `UInt` are 64 bits on every target, whatever its pointer width** ([11](../11-compilation-model.md#what-a-target-must-provide)). So an integer's range, and the point where its arithmetic overflows, never differ between a 32-bit target and a 64-bit one. Every size fits in an `Int`, and every count and index in a `UInt`, since no target's pointers are wider than 64 bits. C's size types, whose width does follow the target, import as aliases of their own, such as `CSize` ([08](../08-c-interop/imports-and-declarations.md#what-imports-as-what)).
 
 **Every number type and `Bool` is implicitly copyable**, since each is one machine value. So taking one from a place copies it with no `copy` written, as `let n = e.hp` does ([01](../01-values-and-ownership/moves-copies-destruction.md#implicitly-copyable-types)).
 
@@ -381,7 +381,7 @@ struct Light4(var pos: Simd<Float, 3>, var radius: Float)    // 32 bytes: the ve
 public struct Vec3(public var x: Float, public var y: Float, public var z: Float): ExpressibleByArrayLiteral, ImplicitlyCopyable {
     @inline public init(_ x: Float, _ y: Float, _ z: Float) { self.init(x: x, y: y, z: z) }
 
-    @inline @noalloc public init<let N: UInt>(arrayLiteral e: [N of Float]) {   // @noalloc: literals work anywhere
+    @inline public init<let N: UInt>(arrayLiteral e: [N of Float]) {   // a literal of constants converts at compile time
         static if N == 3 { self.init(x: e[0], y: e[1], z: e[2]) }
         else { static error("a Vec3 literal needs 3 elements") }
     }

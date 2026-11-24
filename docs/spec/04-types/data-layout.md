@@ -17,7 +17,7 @@ let first: &Text = names[0]                  // a pointer and a length, whatever
 **The unsized types have no size of their own, so they have no values that sit in a place by themselves:**
 
 - **`[T]`, `Text` and `any P`**, which code holds only behind a value of fixed size that refers to them ([01](../01-values-and-ownership/references.md#unsized-types));
-- **an `@opaque` type**, a C type whose layout Rayo doesn't know or whose members it can't map, usable only behind a pointer ([08](../08-c-interop/imports-and-inline-c.md#what-imports-as-what)).
+- **an `@opaque` type**, a C type whose layout Rayo doesn't know or whose members it can't map, usable only behind a pointer ([08](../08-c-interop/imports-and-declarations.md#what-imports-as-what)).
 
 `T.size` and `T.alignment` of an unsized type are compile errors. No type parameter stands for one, so every generic body may rely on its types having a size ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#type-parameters-stand-for-sized-types)).
 
@@ -63,10 +63,10 @@ if let verts = bytes.reinterpret(as: Vertex.self) {   // a '&[UInt8]' to a '(&[V
 **The compiler derives `Pod` for types where every bit pattern is valid and that own nothing:**
 
 - integers, floats, `Half` and their `Simd` vectors (not `Simd<Bool, N>` masks);
-- **open** imported C enums and flag enums whose raw type is an integer type, padding-free like it ([08](../08-c-interop/imports-and-inline-c.md#structs-unions-and-enums));
+- **open** imported C enums and flag enums whose raw type is an integer type, padding-free like it ([08](../08-c-interop/imports-and-declarations.md#structs-unions-and-enums));
 - arrays and tuples of `Pod`;
-- structs with no `deinit` whose stored fields are all `Pod`, all **as visible as the struct**, and none `unsafe`, and whose primary initializer is as visible as the struct too and not `unsafe` ([Initializers](structs.md#initializers)). An imported bitfield counts as [08](../08-c-interop/imports-and-inline-c.md#structs-unions-and-enums) says;
-- unions with no `deinit`, named or anonymous in a struct ([08](../08-c-interop/imports-and-inline-c.md#structs-unions-and-enums)), whose members are all `Pod`, all as visible as the union, and none `unsafe`.
+- structs with no `deinit` whose stored fields are all `Pod`, all **as visible as the struct**, and none `unsafe`, and whose primary initializer is as visible as the struct too and not `unsafe` ([Initializers](structs.md#initializers)). An imported bitfield counts as [08](../08-c-interop/imports-and-declarations.md#structs-unions-and-enums) says;
+- unions with no `deinit`, named or anonymous in a struct ([08](../08-c-interop/imports-and-declarations.md#structs-unions-and-enums)), whose members are all `Pod`, all as visible as the union, and none `unsafe`.
 
 **These are not `Pod`:**
 
@@ -91,7 +91,7 @@ Each is `Pod` only through `@pod`, which states that every bit pattern is valid.
 
 - **Unions.** A union is padding-free when every member is and fills it exactly. Bytes a member doesn't cover, including tail padding from `@align(N)`, count as padding.
 - **Enums.** An enum, an optional included, is padding-free when each of its values sets every byte. So bytes that a case's payload doesn't fill, or that a `nil` leaves unset, count as padding: `UInt8?` isn't padding-free, and `Handle<T>?`, whose `nil` is all zero, is.
-- **Bitfields.** In an imported struct or union, the bitfield bits [08](../08-c-interop/imports-and-inline-c.md#structs-unions-and-enums) lists count as padding too.
+- **Bitfields.** In an imported struct or union, the bitfield bits [08](../08-c-interop/imports-and-declarations.md#structs-unions-and-enums) lists count as padding too.
 
 **Casts between `Pod` types depend on padding**, so that no uninitialized byte is read as data:
 
