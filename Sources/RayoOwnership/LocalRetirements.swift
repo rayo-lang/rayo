@@ -3,14 +3,15 @@ import RayoIR
 
 /// Writes the retirement of each local that a declaration starts the life of into a function's body, after the last
 /// point on each path where later code uses it before a declaration starts its life again. A local that no
-/// declaration starts, such as a parameter, lives as long as the call, and never retires.
+/// declaration starts, such as a parameter, lives as long as the call, and never retires. It holds one body, and
+/// which locals later code uses at each point of it.
 struct LocalRetirements {
     private let body: IRBody
     /// The locals that some statement of the body declares.
     private let declared: Set<LocalID>
     private let localUses: LocalUses
     /// Which locals later code uses at each point of the body.
-    private let uses: DataflowResults<LocalUseState>
+    private let useStates: DataflowResults<LocalUseState>
 
     /// `body` with the retirement of each local it declares written into it.
     static func written(into body: IRBody) -> IRBody {
@@ -25,7 +26,7 @@ struct LocalRetirements {
         self.body = body
         self.declared = declared
         localUses = LocalUses(body)
-        uses = DataflowSolver.solve(from: LocalUseState(leaving: body), through: body, knowing: localUses)
+        useStates = DataflowSolver.solve(from: LocalUseState(leaving: body), through: body, knowing: localUses)
     }
 
     /// The locals that some statement of `body` declares.
@@ -56,7 +57,7 @@ struct LocalRetirements {
                 guard let entry = walked[target.index]?.entry else {
                     preconditionFailure("a path that reaches a block reaches each block it goes on to")
                 }
-                return retirements(onEdgeFrom: block, into: entry)
+                return retirements(onEdgeFrom: walk, into: entry)
             }
         }
         return EdgeStatements.written(edges, into: retired)
@@ -69,13 +70,15 @@ struct LocalRetirements {
         let statements = body.blocks[block.index].statements
         var retirementsAfter = Array(repeating: [Statement](), count: statements.count)
         var entry: LocalUseState?
-        uses.walk(block) { point, state in
+        var exit: LocalUseState?
+        useStates.walk(block) { point, state in
             if point == 0 { entry = state }
-            // Each point but the first lies just after a statement.
+            if point == statements.count + 1 { exit = state }
+            // Each point from the second through the one just before the terminator lies just after a statement.
             guard point > 0, point <= statements.count else { return }
             retirementsAfter[point - 1] = retirements(after: statements[point - 1], unusedIn: state)
         }
-        guard let entry else { return nil }
+        guard let entry, let exit else { return nil }
 
         var retired: [Statement] = []
         for (statement, retirements) in zip(statements, retirementsAfter) {
@@ -83,14 +86,14 @@ struct LocalRetirements {
             retired += retirements
         }
         let written = BasicBlock(statements: retired, terminator: body.blocks[block.index].terminator)
-        return RetiringBlock(block: written, entry: entry)
+        return RetiringBlock(block: written, entry: entry, exit: exit)
     }
 
     /// The statements that retire each declared local that `statement` declares or uses, and that no code after it
     /// uses, as `after` says.
     private func retirements(after statement: Statement, unusedIn after: LocalUseState) -> [Statement] {
-        // A statement that declares or retires a local does nothing else, so a local in use before a statement and not
-        // after it is one the statement uses, and a declaration's life ends at once where no code uses it.
+        // Only a declaration or a retirement takes a local out of use, so a local in use before a statement and not
+        // after it is one the statement uses. A declaration's life ends at once where no code after it uses the local.
         var retiring: Set<LocalID> = []
         statement.forEachEffect { effect in
             let named = if case .declare(let local) = effect { local } else { localUses.local(usedBy: effect) }
@@ -100,18 +103,15 @@ struct LocalRetirements {
         return retirements(of: retiring)
     }
 
-    /// The statements that retire, on an edge from `block` into a block that begins where `entry` holds, each declared
-    /// local in use before the block's terminator and not where the edge goes.
-    private func retirements(onEdgeFrom block: BlockID, into entry: LocalUseState) -> [Statement] {
+    /// The statements that retire, on an edge from `walk` into a block that begins where `entry` holds, each declared
+    /// local in use before the walked block's terminator and not where the edge goes.
+    private func retirements(onEdgeFrom walk: RetiringBlock, into entry: LocalUseState) -> [Statement] {
         // After the terminator, later code uses what the blocks it goes on to use where they begin, so that state
         // shares most of its parts with the target's, and comparing the two costs only the parts that differ.
-        guard let exit = uses.boundaryState(of: block) else {
-            preconditionFailure("a block that an edge leaves is one that a path reaches")
-        }
-        var retiring = Set(exit.localsUsed(notUsedIn: entry).filter(declared.contains))
+        var retiring = Set(walk.exit.localsUsed(notUsedIn: entry).filter(declared.contains))
 
         // The terminator may use a local itself, such as a branch's condition, that the target doesn't.
-        for effect in body.blocks[block.index].terminator.effects {
+        for effect in walk.block.terminator.effects {
             guard let local = localUses.local(usedBy: effect), declared.contains(local), !entry.uses(local) else {
                 continue
             }
@@ -126,9 +126,12 @@ struct LocalRetirements {
     }
 }
 
-/// A block with the retirements that its statements make written in, and what later code uses where it begins, which
-/// the edges into it retire by.
+/// A block with the retirements that its statements make written in, and what later code uses at its two ends, which
+/// the edges into and out of it retire by.
 private struct RetiringBlock {
-    var block: BasicBlock
-    var entry: LocalUseState
+    let block: BasicBlock
+    /// What later code uses where the block begins.
+    let entry: LocalUseState
+    /// What later code uses just after the block's terminator.
+    let exit: LocalUseState
 }

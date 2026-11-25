@@ -43,11 +43,11 @@ package struct LocalSet: Equatable {
     /// their IDs.
     package func locals(notIn other: LocalSet) -> [LocalID] {
         var locals: [LocalID] = []
-        for word in words.indices(differingFrom: other.words) {
+        for index in words.indices(differingFrom: other.words) {
             // Each bit left in the word stands for one local, lowest first.
-            var bits = words[word] & ~other.words[word]
+            var bits = words[index] & ~other.words[index]
             while bits != 0 {
-                locals.append(LocalID(index: word * UInt64.bitWidth + bits.trailingZeroBitCount))
+                locals.append(LocalID(index: index * UInt64.bitWidth + bits.trailingZeroBitCount))
                 bits &= bits - 1
             }
         }

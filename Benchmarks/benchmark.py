@@ -131,8 +131,8 @@ def if_sum(terms):
 
 def programs(sizes):
     """Each program a benchmark compiles at each of `sizes`, by name, in order of size within each kind. A straight
-    line has five turns for each copy of a loop, since a turn is far smaller than a copy, and a sum of `if`s two
-    terms, which keeps it within how deep an expression may nest at each size the script measures unless told."""
+    line has five turns for each copy of a loop, since a turn is far smaller than a copy, and a sum of `if`s two terms
+    for each copy, which keeps it within how deep an expression may nest at the default sizes."""
     made = [(f'loops-{size}', loops(size)) for size in sizes]
     made += [(f'ref-let-loops-{size}', ref_let_loops(size)) for size in sizes]
     made += [(f'straight-line-{5 * size}', straight_line(5 * size)) for size in sizes]
