@@ -30,10 +30,4 @@ extension DataflowState {
             for effect in effects.reversed() { apply(effect, in: function) }
         }
     }
-
-    /// Takes the state across a whole block of `function`, whose statements and terminator have `effects`: from its
-    /// entry to its exit going forward, and from its exit to its entry going backward.
-    package mutating func apply(across effects: BlockEffects, in function: Function) {
-        apply(effects.all, in: function)
-    }
 }

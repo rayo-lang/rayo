@@ -29,13 +29,14 @@ package struct DataflowSolver<State: DataflowState> {
         from start: State, through body: IRBody, effects: BodyEffects, knowing function: State.Function,
     ) -> DataflowResults<State> {
         var solver = DataflowSolver(from: start, through: body, effects: effects, knowing: function)
-        solver.settle { _, state, effects in state.apply(across: effects, in: function) }
+        solver.settle { _, state, effects in state.apply(effects.all, in: function) }
         return DataflowResults(effects: effects, function: function, boundaryStates: solver.boundaryStates)
     }
 
     /// Carries the state through `body` as `solve(from:through:knowing:)` does, but has `cross` take it across each
-    /// block, given the block and its effects, as `apply(across:in:)` would. The last time `cross` crosses a block, the
-    /// state is the one the block settles on, since a block whose boundary state changes waits to be crossed again.
+    /// block, given the block and its effects, as applying all of them in the state's direction would. The last time
+    /// `cross` crosses a block, the state is the one the block settles on, since a block whose boundary state changes
+    /// waits to be crossed again.
     package static func solve(
         from start: State, through body: IRBody, knowing function: State.Function,
         crossingEachBlock cross: (BlockID, inout State, BlockEffects) -> Void,
@@ -45,7 +46,7 @@ package struct DataflowSolver<State: DataflowState> {
     }
 
     private init(from start: State, through body: IRBody, effects: BodyEffects, knowing function: State.Function) {
-        assert(effects.blockCount == body.blocks.count, "a solve reads the effects of the body it walks")
+        assert(effects.fit(body), "a solve reads effects with one crossing for each statement and terminator it walks")
         self.body = body
         self.effects = effects
         self.function = function

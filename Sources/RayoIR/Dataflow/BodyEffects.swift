@@ -34,8 +34,14 @@ package struct BodyEffects {
         self.blockStarts = blockStarts
     }
 
-    /// How many blocks the body has.
-    package var blockCount: Int { blockStarts.count - 1 }
+    /// Whether these effects have one crossing for each statement and terminator of each block of `body`, as the
+    /// effects of `body` have, and those of a body with statements written in or taken out don't.
+    package func fit(_ body: IRBody) -> Bool {
+        guard blockStarts.count == body.blocks.count + 1 else { return false }
+        return body.blocks.indices.allSatisfy { index in
+            blockStarts[index + 1] - blockStarts[index] == body.blocks[index].statements.count + 1
+        }
+    }
 
     /// The effects of `block`'s statements and terminator.
     package subscript(block: BlockID) -> BlockEffects {

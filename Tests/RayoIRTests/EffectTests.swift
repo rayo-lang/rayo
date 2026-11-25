@@ -65,6 +65,18 @@ struct EffectTests {
         #expect(effects[BlockID(index: 2)].map { $0.map(effectText) } == [["exit"]])
     }
 
+    @Test func `a body's effects fit it, and not the body with a statement written in`() throws {
+        var body = try mainBody(from: """
+            bb0:
+              declare %0
+              return
+            """)
+        let effects = BodyEffects(body)
+        #expect(effects.fit(body))
+        body.blocks[0].statements.append(.retire(LocalID(index: 0)))
+        #expect(!effects.fit(body))
+    }
+
     @Test func `all of a block's effects are each statement's in turn, then the terminator's`() throws {
         let body = try mainBody(from: """
             bb0:

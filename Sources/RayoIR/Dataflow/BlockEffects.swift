@@ -4,11 +4,11 @@ package struct BlockEffects: RandomAccessCollection {
     /// The block's effects, each statement's in turn and then the terminator's.
     package let all: ArraySlice<Effect>
     /// Where the effects of each of the block's statements and of its terminator begin in the body's effects, and then
-    /// where the terminator's end. A slice of `all` takes the same indices as the body's effects.
+    /// where the terminator's end. They index `all` too, since a slice keeps the indices of the array it is cut from.
     private let starts: ArraySlice<Int>
 
-    /// The block whose statements' and terminator's effects begin in `effects` at each of `starts` but the last, which
-    /// is where the terminator's end.
+    /// The effects of a block, cut from `effects`: `starts` gives where each of its statements' and its terminator's
+    /// begin, and then where the terminator's end.
     init(_ effects: [Effect], startingAt starts: ArraySlice<Int>) {
         all = effects[starts[starts.startIndex]..<starts[starts.endIndex - 1]]
         self.starts = starts

@@ -76,7 +76,7 @@ struct DataflowTests {
         DataflowSolver.solve(from: start, through: body, knowing: ()) { block, state, effects in
             lastStarts[block.index] = state.columns
             crossings += 1
-            state.apply(across: effects, in: ())
+            state.apply(effects.all, in: ())
         }
 
         #expect(lastStarts == body.blocks.indices.map { settled.boundaryState(of: BlockID(index: $0))?.columns })
