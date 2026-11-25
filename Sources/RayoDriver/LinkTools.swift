@@ -12,6 +12,12 @@ public struct LinkTools: Sendable {
         self.lld = lld
     }
 
+    /// The clang and the host's LLD in `directory`.
+    public init(in directory: URL) {
+        self.init(clang: directory.appendingPathComponent(Executable.fileName("clang")),
+                  lld: directory.appendingPathComponent(Self.hostLLD))
+    }
+
     /// The clang and LLD of the LLVM install that `rayo` was built against.
     public static let installed = LinkTools(
         clang: URL(fileURLWithPath: LLVMInstall.toolDirectory).appendingPathComponent(Executable.fileName("clang")),

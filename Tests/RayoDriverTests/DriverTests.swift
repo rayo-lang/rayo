@@ -88,7 +88,7 @@ struct DriverTests {
             let compiler = try notingCompiler(in: directory)
             let clang = directory.appendingPathComponent("nonexistent")
             let linkTools = LinkTools(clang: clang, lld: LinkTools.installed.lld)
-            #expect(Driver.run([command, source], compiler: compiler, linkTools: linkTools) == CommandResult(
+            #expect(Driver.run([command, source], compiler: compiler, linkTools: [linkTools]) == CommandResult(
                 exitCode: 1, output: "", errors: "rayoc: a note\nrayo: can't find clang at '\(clang.path)'\n"))
         }
     }

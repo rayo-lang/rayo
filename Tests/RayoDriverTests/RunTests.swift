@@ -67,7 +67,7 @@ private func isNumeral(_ text: Substring) -> Bool {
 private func runEmptyMain(options: [String] = [], linkTools: LinkTools) throws -> CommandResult {
     try withTemporaryDirectory { directory in
         let source = try save("func main() {}", as: "main.rayo", in: directory)
-        return Driver.run(["run"] + options + [source], compiler: compiler, linkTools: linkTools)
+        return Driver.run(["run"] + options + [source], compiler: compiler, linkTools: [linkTools])
     }
 }
 
@@ -191,7 +191,7 @@ struct BuildTests {
             let clang = try install(standIn, as: "clang", in: directory)
             let tools = LinkTools(clang: clang, lld: LinkTools.installed.lld)
             let source = try save("func main() { print(42) }", as: "main.rayo", in: directory)
-            let result = Driver.run(["run", source], compiler: compiler, linkTools: tools)
+            let result = Driver.run(["run", source], compiler: compiler, linkTools: [tools])
             #expect(result == CommandResult(exitCode: 0, output: "42\n", errors: ""))
         }
     }
@@ -214,7 +214,7 @@ struct BuildTests {
             #endif
             let source = try save("func main() { print(42) }", as: "answer.rayo", in: directory)
             let tools = LinkTools(clang: LinkTools.installed.clang, lld: lld)
-            let result = Driver.run(["build"] + options + [source], compiler: compiler, linkTools: tools)
+            let result = Driver.run(["build"] + options + [source], compiler: compiler, linkTools: [tools])
             #expect(result == CommandResult(exitCode: 0, output: "", errors: ""))
             let executable = directory.appendingPathComponent(Executable.fileName("answer"))
             #expect(try values(of: "Arch", in: executable, listedBy: "--file-headers") == [hostArchitecture])
