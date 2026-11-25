@@ -1,38 +1,10 @@
 internal import RayoDiagnostics
 internal import RayoSource
 
-/// Parses expressions, grouping operators by how tightly they bind, and reports one that nests past the limit.
+/// Parses expressions, grouping operators by how tightly they bind.
 extension Parser {
     mutating func parseExpression() throws(ParseFailure) -> Expr {
         try parseBinary(minimumLevel: 1)
-    }
-
-    /// Parses, with `parse`, a part one level deeper than the expression being parsed, such as an operand.
-    private mutating func parseNested<Part>(
-        _ parse: (inout Parser) throws(ParseFailure) -> Part,
-    ) throws(ParseFailure) -> Part {
-        // A part that would start past the limit is reported before the parser recurses into it, which bounds the
-        // parser's own stack.
-        guard depth < Self.expressionLevelLimit else { throw failTooDeep(at: current.range) }
-        depth += 1
-        defer { depth -= 1 }
-        deepestLevel = max(deepestLevel, depth)
-        return try parse(&self)
-    }
-
-    /// `expression`, which the parser has just built, once it is known to nest no deeper than the limit, counted
-    /// from the outermost expression around it.
-    private mutating func checkedDepth(_ expression: Expr) throws(ParseFailure) -> Expr {
-        let level = depth + expression.levels
-        guard level <= Self.expressionLevelLimit else { throw failTooDeep(at: expression.range) }
-        deepestLevel = max(deepestLevel, level)
-        return expression
-    }
-
-    /// Reports an expression at `range` that nests past the limit, and returns the failure to throw.
-    private mutating func failTooDeep(at range: SourceRange) -> ParseFailure {
-        report(.expressionTooDeep(limit: Self.expressionLevelLimit), at: range)
-        return ParseFailure()
     }
 
     /// Parses an expression whose binary operators outside parentheses all bind at `minimumLevel` or tighter.
@@ -285,14 +257,14 @@ extension Parser {
 
     /// After the `if`: the condition, the block, and the `else` part, when there is one.
     mutating func parseIf() throws(ParseFailure) -> IfExpr {
-        // The `if` nests a level deeper than the deepest part in it, its blocks' expressions included, which an `if`
-        // around this one counts in turn.
+        // The `if` nests a level deeper than the deepest part in it, each of its blocks a level and their statements
+        // included, which an `if` around this one counts in turn.
         let enclosingDeepest = deepestLevel
         deepestLevel = depth
         defer { deepestLevel = max(enclosingDeepest, deepestLevel) }
 
         let condition = try parseExpression()
-        let then = try parseBlock()
+        let then = try parseNestedBlock()
         let otherwise = consume(.else) ? try parseElse() : nil
         return IfExpr(condition: condition, then: then, otherwise: otherwise, levels: deepestLevel - depth + 1)
     }
@@ -300,9 +272,13 @@ extension Parser {
     /// After the `else`: a block, or an `if` that is the one statement of the block it stands for.
     private mutating func parseElse() throws(ParseFailure) -> Block {
         // An `else` without an `if` after it takes a block of its own.
-        guard current.isKeyword(.if) else { return try parseBlock() }
+        guard current.isKeyword(.if) else { return try parseNestedBlock() }
+
+        // The block an `else if` stands for is a level too, so each arm of a chain lies a level deeper than the last.
         let start = advance().range
-        let nested = Stmt(kind: .ifStmt(try parseIf()), range: range(from: start))
+        let nested = try parseNested { parser throws(ParseFailure) in
+            Stmt(kind: .ifStmt(try parser.parseIf()), range: parser.range(from: start))
+        }
         // The nested `if` ends with the `}` of its last block, which ends this one too.
         return Block(statements: [nested], closingBrace: previousRange)
     }

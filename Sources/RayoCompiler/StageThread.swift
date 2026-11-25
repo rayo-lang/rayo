@@ -14,7 +14,7 @@ import RayoSyntax
 enum StageThread {
     /// The bytes of stack the thread reserves. A debug build's stages take up to about 20 KiB of it for each level of
     /// an expression, so it reserves 64 KiB a level.
-    static let stackSize = Parser.expressionLevelLimit * (64 << 10)
+    static let stackSize = Parser.nestingLevelLimit * (64 << 10)
 
     /// Runs `body` on a new stage thread, and gives its result once the thread ends; or nil where no thread starts.
     static func run<Result>(_ body: () -> Result) -> Result? {

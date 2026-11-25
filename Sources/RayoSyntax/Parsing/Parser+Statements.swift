@@ -56,7 +56,7 @@ extension Parser {
                 .ifStmt(try parseIf())
             } else if consume(.while) {
                 // A `while` takes a condition and the loop's body.
-                .whileStmt(condition: try parseExpression(), body: try parseBlock())
+                .whileStmt(condition: try parseExpression(), body: try parseNestedBlock())
             } else if consume(.break) {
                 // A `break` is the whole statement.
                 .breakStmt
