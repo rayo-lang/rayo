@@ -40,10 +40,27 @@ extension Parser {
         _ part: CappedPart, _ parse: (inout Parser) throws(ParseFailure) -> Parsed,
     ) throws(ParseFailure) -> Parsed {
         // A part past its cap is reported at its opening bracket, which stays current, so the part is skipped whole.
-        guard cappedDepths[part.rawValue] < part.limit else { throw failTooDeep(past: part.limit, at: current.range) }
-        cappedDepths[part.rawValue] += 1
-        defer { cappedDepths[part.rawValue] -= 1 }
+        guard self[depthIn: part] < part.limit else { throw failTooDeep(past: part.limit, at: current.range) }
+        self[depthIn: part] += 1
+        defer { self[depthIn: part] -= 1 }
         return try parse(&self)
+    }
+
+    /// How many levels deep, in parts of the kind `part`, the part being parsed lies. It reads and writes with `get`
+    /// and `set`, since a `borrow` or `mutate` accessor can't pick between stored properties.
+    private subscript(depthIn part: CappedPart) -> Int {
+        get {
+            switch part {
+            case .structBody: structBodyDepth
+            case .arrayType: arrayTypeDepth
+            }
+        }
+        set {
+            switch part {
+            case .structBody: structBodyDepth = newValue
+            case .arrayType: arrayTypeDepth = newValue
+            }
+        }
     }
 
     /// Reports a part at `range` that nests past `limit`, and returns the failure to throw.

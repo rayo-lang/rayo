@@ -1,6 +1,6 @@
 /// A kind of part whose nesting the parser counts on its own, apart from expressions and blocks, against a cap of
 /// its own.
-package enum CappedPart: Int, CaseIterable {
+package enum CappedPart {
     /// A struct's body, each struct body inside another a level.
     case structBody
     /// An array type written in the source, each array type that is another's element a level.

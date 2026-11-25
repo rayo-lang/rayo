@@ -22,8 +22,10 @@ package struct Parser: ~Copyable {
     /// How many levels deep, inside the function body or the declaration around it, the deepest part parsed so far
     /// lies. An `if` measures by it how deep its blocks nest.
     var deepestLevel = 0
-    /// How many levels deep, in parts of each capped kind, the part being parsed lies, indexed by the kind's raw value.
-    var cappedDepths = [Int](repeating: 0, count: CappedPart.allCases.count)
+    /// How many struct bodies, each inside the one before, the part being parsed lies in.
+    var structBodyDepth = 0
+    /// How many array types, each the element of the one before, the part being parsed lies in.
+    var arrayTypeDepth = 0
     private var diagnostics: [Diagnostic]
 
     /// A parser of `bytes`, held as UTF-8, which lex to `tokens`, at the first token, with the lexer's errors,
