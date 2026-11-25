@@ -12,15 +12,6 @@ package struct Parser: ~Copyable {
     /// level. The stages after parsing walk them by recursing into their parts, so this bounds the stack they need.
     package static let nestingLevelLimit = 10_000
 
-    /// How many levels deep struct bodies may nest, each struct body inside another a level. Real code nests them a
-    /// few levels deep, so this bounds every stage's recursion through them far below the stage thread's stack.
-    package static let structBodyLevelLimit = 64
-
-    /// How many levels deep array types may nest, each array type that is another's element a level. Real code nests
-    /// them a few levels deep, so this keeps small every stage's recursion through them, and the checker's work of
-    /// laying out each level's element anew.
-    package static let arrayTypeLevelLimit = 64
-
     /// The source, as UTF-8.
     let bytes: [UInt8]
     let tokens: [Token]
@@ -31,10 +22,8 @@ package struct Parser: ~Copyable {
     /// How many levels deep, inside the function body or the declaration around it, the deepest part parsed so far
     /// lies. An `if` measures by it how deep its blocks nest.
     var deepestLevel = 0
-    /// How many struct bodies, each inside the one before, the part being parsed lies in.
-    var structBodyDepth = 0
-    /// How many array types, each the element of the one before, the part being parsed lies in.
-    var arrayTypeDepth = 0
+    /// How many levels deep, in parts of each capped kind, the part being parsed lies, indexed by the kind's raw value.
+    var cappedDepths = [Int](repeating: 0, count: CappedPart.allCases.count)
     private var diagnostics: [Diagnostic]
 
     /// A parser of `bytes`, held as UTF-8, which lex to `tokens`, at the first token, with the lexer's errors,

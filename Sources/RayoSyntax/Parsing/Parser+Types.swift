@@ -14,7 +14,7 @@ extension Parser {
         }
         // `[` starts an array type.
         if current.isPunct(.lbracket) {
-            return try parseNestedArrayType { parser throws(ParseFailure) in try parser.parseArrayType(from: start) }
+            return try parseNested(.arrayType) { parser throws(ParseFailure) in try parser.parseArrayType(from: start) }
         }
 
         // Any other type is named.

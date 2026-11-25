@@ -1,8 +1,8 @@
 internal import RayoDiagnostics
 internal import RayoSource
 
-/// Counts how many levels deep the parts being parsed nest: expressions and blocks together, and struct bodies and
-/// array types each on their own. A part that nests past its limit is reported.
+/// Counts how many levels deep the parts being parsed nest: expressions and blocks together, and each kind of capped
+/// part on its own. A part that nests past its limit is reported.
 extension Parser {
     /// Parses, with `parse`, a part one level deeper than the part being parsed, such as an operand or a block.
     mutating func parseNested<Part>(
@@ -34,30 +34,15 @@ extension Parser {
         return expression
     }
 
-    /// Parses, with `parse`, a struct's body at its `{`, one level deeper than the struct body it lies in, if any.
-    mutating func parseNestedStructBody<Body>(
-        _ parse: (inout Parser) throws(ParseFailure) -> Body,
-    ) throws(ParseFailure) -> Body {
-        // A body past the limit is reported at its `{`, which stays current, so the body is skipped whole.
-        guard structBodyDepth < Self.structBodyLevelLimit else {
-            throw failTooDeep(past: Self.structBodyLevelLimit, at: current.range)
-        }
-        structBodyDepth += 1
-        defer { structBodyDepth -= 1 }
-        return try parse(&self)
-    }
-
-    /// Parses, with `parse`, an array type at its `[`, one level deeper than the array type whose element it is, if
-    /// any.
-    mutating func parseNestedArrayType(
-        _ parse: (inout Parser) throws(ParseFailure) -> TypeExpr,
-    ) throws(ParseFailure) -> TypeExpr {
-        // An array type past the limit is reported at its `[`, which stays current, so the type is skipped whole.
-        guard arrayTypeDepth < Self.arrayTypeLevelLimit else {
-            throw failTooDeep(past: Self.arrayTypeLevelLimit, at: current.range)
-        }
-        arrayTypeDepth += 1
-        defer { arrayTypeDepth -= 1 }
+    /// Parses, with `parse`, a part of the kind `part` at its opening bracket, a level deeper than the parts of that
+    /// kind it lies in.
+    mutating func parseNested<Parsed>(
+        _ part: CappedPart, _ parse: (inout Parser) throws(ParseFailure) -> Parsed,
+    ) throws(ParseFailure) -> Parsed {
+        // A part past its cap is reported at its opening bracket, which stays current, so the part is skipped whole.
+        guard cappedDepths[part.rawValue] < part.limit else { throw failTooDeep(past: part.limit, at: current.range) }
+        cappedDepths[part.rawValue] += 1
+        defer { cappedDepths[part.rawValue] -= 1 }
         return try parse(&self)
     }
 
