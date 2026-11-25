@@ -122,17 +122,27 @@ jobs:
           BIN: ${{ steps.test.outputs.release-bin-path }}
           PROGRAM: examples/v0.1/combat.rayo
         run: |
-          # rayoc looks for LLVM's library in the lib beside its bin. The linker writes the search path as a list
-          # separated by colons, in brackets.
+          # Each check prints the lines it reads, and fails the step with its message where none of them matches
+          # what grep's remaining arguments ask for.
+          expect() {
+            local lines=$1 message=$2
+            shift 2
+            printf '%s\n' "$lines"
+            grep -q "$@" <<< "$lines" || { echo "::error::$message"; exit 1; }
+          }
+
+          # rayoc looks for LLVM's library in the lib beside its bin. readelf prints the search path in brackets,
+          # its entries separated by colons.
           rayoc="$BIN/rayoc"
-          readelf -d "$rayoc" | grep -E '\((RUNPATH|RPATH)\)'
-          if ! readelf -d "$rayoc" | grep -q -E '\((RUNPATH|RPATH)\).*[[:]\$ORIGIN/\.\./lib[]:]'; then
-            echo "::error::release rayoc doesn't look for LLVM's library in \$ORIGIN/../lib"
-            exit 1
-          fi
+          entries=$(readelf -d "$rayoc" | sed -n -E 's/.*\((RUNPATH|RPATH)\).*\[(.*)\]/\2/p' | tr ':' '\n')
+          expect "$entries" "release rayoc doesn't look for LLVM's library in \$ORIGIN/../lib" -x -F '$ORIGIN/../lib'
 
           # The folder holds rayoc, and a copy of the LLVM library it names, from where the loader finds it now.
           library=$(readelf -d "$rayoc" | sed -n -E 's/.*\(NEEDED\).*\[(libLLVM[^]]*)\]/\1/p')
+          if [ -z "$library" ]; then
+            echo "::error::release rayoc names no LLVM library that it needs"
+            exit 1
+          fi
           loaded=$(ldd "$rayoc" | awk -v library="$library" '$1 == library { print $3 }')
           toolchain="$RUNNER_TEMP/toolchain"
           mkdir -p "$toolchain/bin" "$toolchain/lib"
@@ -153,18 +163,12 @@ jobs:
           ldconfig
 
           # The rayoc the folder copied has no lib beside its bin, so it finds no LLVM now: the install is hidden.
-          ldd "$rayoc" | grep -F "$library"
-          if ! ldd "$rayoc" | grep -q -F "$library => not found"; then
-            echo "::error::the loader still finds $library outside the toolchain's folder"
-            exit 1
-          fi
+          expect "$(ldd "$rayoc")" "the loader still finds $library outside the toolchain's folder" \
+            -F "$library => not found"
 
           # The folder's rayoc loads the folder's library, and compiles a program to object code with it.
-          ldd "$toolchain/bin/rayoc" | grep -F "$library"
-          if ! ldd "$toolchain/bin/rayoc" | grep -q -F "$library => $toolchain/lib/$library"; then
-            echo "::error::the toolchain folder's rayoc doesn't load $library from the folder's lib"
-            exit 1
-          fi
+          expect "$(ldd "$toolchain/bin/rayoc")" "the toolchain folder's rayoc doesn't load $library from its lib" \
+            -F "$library => $toolchain/lib/$library"
           "$toolchain/bin/rayoc" -o "$RUNNER_TEMP/program.o" -- "$PROGRAM"
           if [ ! -s "$RUNNER_TEMP/program.o" ]; then
             echo "::error::the toolchain folder's rayoc wrote no object code for $PROGRAM"

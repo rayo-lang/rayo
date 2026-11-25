@@ -76,7 +76,7 @@ func manifestPath(_ path: String) -> String {
 
 /// The linker flags that have an executable's loader look for its shared libraries in each of `directories`, in
 /// order.
-func searchPathFlags(_ directories: String...) -> [String] {
+func runtimeSearchPathFlags(_ directories: String...) -> [String] {
     directories.flatMap { ["-Xlinker", "-rpath", "-Xlinker", $0] }
 }
 
@@ -172,8 +172,14 @@ let package = Package(
                 // An executable looks for LLVM's library first in the lib beside its bin, so a toolchain's own copy
                 // wins, and then in the install it was built against. Windows' loader looks beside the executable
                 // first on its own.
-                .unsafeFlags(searchPathFlags("$ORIGIN/../lib", llvmPrefix + "/lib"), .when(platforms: [.linux])),
-                .unsafeFlags(searchPathFlags("@loader_path/../lib", llvmPrefix + "/lib"), .when(platforms: [.macOS])),
+                .unsafeFlags(
+                    runtimeSearchPathFlags("$ORIGIN/../lib", "\(llvmPrefix)/lib"),
+                    .when(platforms: [.linux]),
+                ),
+                .unsafeFlags(
+                    runtimeSearchPathFlags("@loader_path/../lib", "\(llvmPrefix)/lib"),
+                    .when(platforms: [.macOS]),
+                ),
             ],
         ),
         .target(
