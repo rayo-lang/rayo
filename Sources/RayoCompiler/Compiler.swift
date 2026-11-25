@@ -141,11 +141,11 @@ public enum Compiler {
 
         // Compile the file as the arguments ask, on a thread whose stack lets every stage recurse through the deepest
         // expression the parser accepts.
-        let compiled = StageThread.run {
+        let compiled: CompilerResult? = {
             result(compiling: invocation.path) { errors throws(CompilationError) in
                 try compile(invocation, readFile: readFile, writeFile: writeFile, errors: &errors)
             }
-        }
+        }()
         return compiled ?? result(of: .failed("can't start a thread to compile on"), in: invocation.path, warnings: [])
     }
 
