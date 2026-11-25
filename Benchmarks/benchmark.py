@@ -69,6 +69,8 @@ PROGRAM_DESCRIPTIONS = [
     'of main, and loops three times reading it: 7 M + 2 lines',
     'straight-line-N: a main of one block of N turns, each lending s to a call and storing in it a new value worked '
     'out from the result through a let of its own: 2 N + 6 lines',
+    'if-sum-T: a main of one statement that sums T if expressions, the temporary of each + in use across the blocks '
+    'of every if: 5 lines',
 ]
 
 
@@ -120,12 +122,21 @@ def straight_line(turns):
             'func double(_ n: &Int) -> Int { n * 2 }\n')
 
 
+def if_sum(terms):
+    """A `main` of one statement that sums `terms` `if` expressions. The statement declares the temporary of each `+`
+    before it works out any, so they are all in use at once, across the blocks that each `if` branches to."""
+    total = ' + '.join(f'(if seed > {n} {{ {n} }} else {{ 1 }})' for n in range(terms))
+    return f'func main() {{\n    let seed = 3\n    let total = {total}\n    print(total)\n}}\n'
+
+
 def programs(sizes):
     """Each program a benchmark compiles at each of `sizes`, by name, in order of size within each kind. A straight
-    line has five turns for each copy of a loop, since a turn is far smaller than a copy."""
+    line has five turns for each copy of a loop, since a turn is far smaller than a copy, and a sum of `if`s two
+    terms, which keeps it within how deep an expression may nest at each size the script measures unless told."""
     made = [(f'loops-{size}', loops(size)) for size in sizes]
     made += [(f'ref-let-loops-{size}', ref_let_loops(size)) for size in sizes]
     made += [(f'straight-line-{5 * size}', straight_line(5 * size)) for size in sizes]
+    made += [(f'if-sum-{2 * size}', if_sum(2 * size)) for size in sizes]
     return made
 
 

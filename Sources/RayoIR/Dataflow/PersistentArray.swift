@@ -120,6 +120,14 @@ package struct PersistentArray<Element: Equatable>: Equatable {
         first.count == second.count && equal(first.root, second.root)
     }
 
+    /// The indices at which this array and `other` hold different elements, in increasing order.
+    package func indices(differingFrom other: Self) -> [Int] {
+        precondition(count == other.count, "compared arrays have one count")
+        var indices: [Int] = []
+        Self.addIndices(differingBetween: root, other.root, from: 0, shift: rootShift, to: &indices)
+        return indices
+    }
+
     /// Sets the element at `index` under `branch`, whose children hold an index shifted right by `shift`.
     private static func replace(at index: Int, with element: Element, in branch: inout Branch, shift: Int) {
         // A node another copy shares is copied first, so the change reaches this copy alone.
@@ -185,6 +193,47 @@ package struct PersistentArray<Element: Equatable>: Equatable {
         case .first: first
         case .second: second
         case .new(let elements): Leaf(elements, count: first.count)
+        }
+    }
+
+    /// Adds to `indices`, in increasing order, the indices at which `first` and `second` hold different elements:
+    /// branches at the same place in two arrays of one count, whose first index is `start`, and whose children hold an
+    /// index shifted right by `shift`. A node the two share holds the same elements, so the walk skips it.
+    private static func addIndices(
+        differingBetween first: Branch, _ second: Branch, from start: Int, shift: Int, to indices: inout [Int],
+    ) {
+        if first === second { return }
+        first.children.reading { firstChildren in
+            second.children.reading { secondChildren in
+                for slot in 0..<first.count {
+                    let childStart = start + (slot << shift)
+                    switch (firstChildren[slot]!, secondChildren[slot]!) {
+                    case (.leaf(let firstLeaf), .leaf(let secondLeaf)):
+                        addIndices(differingBetween: firstLeaf, secondLeaf, from: childStart, to: &indices)
+                    case (.branch(let firstBranch), .branch(let secondBranch)):
+                        let childShift = shift - bitsPerLevel
+                        addIndices(differingBetween: firstBranch, secondBranch, from: childStart, shift: childShift,
+                                   to: &indices)
+                    default:
+                        preconditionFailure("arrays of one count have nodes of one shape")
+                    }
+                }
+            }
+        }
+    }
+
+    /// Adds to `indices`, in increasing order, the indices at which `first` and `second`, leaves at the same place in
+    /// two arrays whose first index is `start`, hold different elements.
+    private static func addIndices(
+        differingBetween first: Leaf, _ second: Leaf, from start: Int, to indices: inout [Int],
+    ) {
+        if first === second { return }
+        first.elements.reading { firstElements in
+            second.elements.reading { secondElements in
+                for slot in 0..<first.count where firstElements[slot] != secondElements[slot] {
+                    indices.append(start + slot)
+                }
+            }
         }
     }
 
