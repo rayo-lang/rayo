@@ -168,9 +168,10 @@ jobs:
           expect "$(ldd "$rayoc")" "the loader still finds $library outside the toolchain's folder" \
             -F "$library => not found"
 
-          # The folder's rayoc loads the folder's library, and compiles a program to object code with it.
+          # The folder's rayoc loads the folder's library, and compiles a program to object code with it. ldd names
+          # the library by the entry of the search path it was found through, `$ORIGIN/../lib` with `$ORIGIN` filled in.
           expect "$(ldd "$toolchain/bin/rayoc")" "the toolchain folder's rayoc doesn't load $library from its lib" \
-            -F "$library => $toolchain/lib/$library"
+            -F "$library => $toolchain/bin/../lib/$library"
           "$toolchain/bin/rayoc" -o "$RUNNER_TEMP/program.o" -- "$PROGRAM"
           if [ ! -s "$RUNNER_TEMP/program.o" ]; then
             echo "::error::the toolchain folder's rayoc wrote no object code for $PROGRAM"
