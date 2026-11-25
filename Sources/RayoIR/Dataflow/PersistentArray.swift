@@ -264,14 +264,17 @@ private func mergedSlots<Slot>(
         let stillMatchesFirst = matchesFirst && isSame(combined, first[slot])
         let stillMatchesSecond = matchesSecond && isSame(combined, second[slot])
         guard stillMatchesFirst || stillMatchesSecond else {
-            // The slots before this one match the node still matched, so the new slots start as a copy of it, and
-            // combine the two nodes' slots from this one on. One initializer gives every slot, so the node takes the
-            // slots as they are; slots changed after it, through a span, would be copied again, one at a time.
+            // The new slots keep the matched node's where the two nodes' match, and combine them from here on where
+            // they differ. One initializer gives every slot, so the node takes them without copying each again.
             let matched = matchesFirst ? first : second
-            return .new(Slots { later in
-                if later < slot || later >= count { return matched[later] }
-                if later == slot { return combined }
-                return isSame(first[later], second[later]) ? first[later] : combine(first[later], second[later])
+            return .new(Slots { index in
+                if index == slot {
+                    combined
+                } else if index < slot || index >= count || isSame(first[index], second[index]) {
+                    matched[index]
+                } else {
+                    combine(first[index], second[index])
+                }
             })
         }
         matchesFirst = stillMatchesFirst
