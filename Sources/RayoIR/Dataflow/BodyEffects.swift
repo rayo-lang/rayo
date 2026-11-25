@@ -36,7 +36,7 @@ package struct BodyEffects {
 
     /// Whether these effects have one crossing for each statement and terminator of each block of `body`, as the
     /// effects of `body` have, and those of a body with statements written in or taken out don't.
-    package func fit(_ body: IRBody) -> Bool {
+    package func fits(_ body: IRBody) -> Bool {
         guard blockStarts.count == body.blocks.count + 1 else { return false }
         return body.blocks.indices.allSatisfy { index in
             blockStarts[index + 1] - blockStarts[index] == body.blocks[index].statements.count + 1

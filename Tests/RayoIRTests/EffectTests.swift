@@ -72,9 +72,9 @@ struct EffectTests {
               return
             """)
         let effects = BodyEffects(body)
-        #expect(effects.fit(body))
+        #expect(effects.fits(body))
         body.blocks[0].statements.append(.retire(LocalID(index: 0)))
-        #expect(!effects.fit(body))
+        #expect(!effects.fits(body))
     }
 
     @Test func `all of a block's effects are each statement's in turn, then the terminator's`() throws {

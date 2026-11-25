@@ -46,7 +46,7 @@ package struct DataflowSolver<State: DataflowState> {
     }
 
     private init(from start: State, through body: IRBody, effects: BodyEffects, knowing function: State.Function) {
-        assert(effects.fit(body), "a solve reads effects with one crossing for each statement and terminator it walks")
+        assert(effects.fits(body), "a solve reads effects with one crossing for each statement and terminator it walks")
         self.body = body
         self.effects = effects
         self.function = function
