@@ -30,6 +30,30 @@ struct LocalRetirementTests {
             """))
     }
 
+    @Test func `a local that no code uses retires just after its declaration`() throws {
+        let blocks = """
+            bb0:
+              declare %0
+              declare %1
+              %1 @1:1-1:1 = operand 1 @1:1-1:1
+              begin a0 read %1 @1:1-1:1
+              _ = call builtin "print(_: &Int)"(a0) @1:1-1:1
+              return
+            """
+        #expect(try ended(blocks) == body(of: """
+            bb0:
+              declare %0
+              retire %0
+              declare %1
+              %1 @1:1-1:1 = operand 1 @1:1-1:1
+              begin a0 read %1 @1:1-1:1
+              _ = call builtin "print(_: &Int)"(a0) @1:1-1:1
+              end a0
+              retire %1
+              return
+            """))
+    }
+
     @Test func `a local declared in a loop retires on each pass, and one the loop uses retires as it leaves`() throws {
         // As `var x = 0; while x < 3 { x += 1 }; print(x)` lowers: the condition's temporary is declared in the header.
         let blocks = """

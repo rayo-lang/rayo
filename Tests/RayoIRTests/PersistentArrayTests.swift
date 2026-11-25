@@ -63,6 +63,22 @@ struct PersistentArrayTests {
         #expect(merged != first && merged != second)
     }
 
+    @Test func `two arrays differ at the indices whose elements differ, in order, whatever parts they share`() {
+        // The leaf from 32 is written and written back, so it holds the original's elements in a node of its own.
+        let original = PersistentArray(Array(repeating: 0, count: 2000))
+        var changed = original
+        changed[1500] = 1
+        changed[3] = 2
+        changed[40] = 3
+        changed[40] = 0
+        changed[41] = 4
+
+        #expect(changed.indices(differingFrom: original) == [3, 41, 1500])
+        #expect(original.indices(differingFrom: changed) == [3, 41, 1500])
+        #expect(changed.indices(differingFrom: changed).isEmpty)
+        #expect(PersistentArray(Array(repeating: 0, count: 2000)).indices(differingFrom: original).isEmpty)
+    }
+
     @Test func `a merge combines the elements at each index`() {
         let first = PersistentArray(Array(0..<100))
         let second = PersistentArray(Array(100..<200))

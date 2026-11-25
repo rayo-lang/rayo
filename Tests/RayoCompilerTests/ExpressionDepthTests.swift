@@ -55,21 +55,19 @@ private func run(_ arguments: [String], on source: String) -> CompilerResult {
     }
 }
 
-/// Each way `rayoc` runs every stage, as the options that ask for it.
-private let everyOutput = [
-    ["--check"], ["--emit=checked"], ["--emit=ir"], ["--debug", "-o", "main.o"], ["--release", "-o", "main.o"],
+/// Each way `rayoc` runs every stage, as the options that ask for it, but for printing the checked program.
+private let everyOutputButTheCheckedProgram = [
+    ["--check"], ["--emit=ir"], ["--debug", "-o", "main.o"], ["--release", "-o", "main.o"],
 ]
 
-/// The compiles of an expression as deep as the limit that the tests run: a sum and parentheses in every output,
-/// calls, whose levels take the most stack of any shape, through every stage of a compile to object code, and calls
-/// that go on inside an `if`.
-private let compilesAtTheLimit = everyOutput.map { (Shape.sum, $0) } + everyOutput.map { (Shape.parentheses, $0) }
-    + [(Shape.calls, ["--debug", "-o", "main.o"]), (Shape.callsInIf, ["--check"])]
+/// The compiles of an expression as deep as the limit that the tests run: each shape through every stage, and a sum and
+/// parentheses printed as the checked program too. The checked program indents each level, so its text grows with the
+/// square of the depth, to hundreds of megabytes for each shape but parentheses: a sum stands for the rest.
+private let compilesAtTheLimit = Shape.allCases.flatMap { shape in everyOutputButTheCheckedProgram.map { (shape, $0) } }
+    + [(Shape.sum, ["--emit=checked"]), (Shape.parentheses, ["--emit=checked"])]
 
 struct ExpressionDepthTests {
-    /// A deep sum or call takes a debug `rayoc` seconds to check, so these compiles run one at a time, which leaves
-    /// the processor's other cores to the other tests.
-    @Test(.serialized, arguments: compilesAtTheLimit)
+    @Test(arguments: compilesAtTheLimit)
     private func `every stage takes an expression as deep as the limit`(shape: Shape, arguments: [String]) {
         let result = run(arguments, on: printing(shape.expression(levels: Parser.expressionLevelLimit)))
         #expect(result.exitCode == 0, "\(result.errors)")

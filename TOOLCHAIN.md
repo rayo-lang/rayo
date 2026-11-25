@@ -75,8 +75,9 @@ Each benchmark runs `rayoc` to one stop point over one program, and is named `st
 - `loops-M` is a `main` of M copies of a block of two loops over an array of eight structs, each copy with names of its own: 16 M + 5 lines.
 - `ref-let-loops-M` is a `main` of M copies of a block that borrows a `var` with a `ref let`, which stays in scope to the end, and loops three times reading it: 7 M + 2 lines.
 - `straight-line-N` is a `main` of one block of N turns, each lending a `var` to a call and storing in it a value worked out from the result through a `let` of its own: 2 N + 6 lines.
+- `if-sum-T` is a `main` of one statement that sums T `if` expressions, so the temporary of each `+` is in use across the blocks of every `if`: 5 lines.
 
-M is 200, 400, 800 and 1600 unless `--sizes` names others, and N is five times M. `--stops` names the stop points to measure, such as `check,compile-debug`. The script measures the instructions `rayoc` retires and its peak memory, as the system reports them for the process, and its wall-clock time, and gives the median of three runs.
+M is 200, 400, 800 and 1600 unless `--sizes` names others, N is five times M, and T twice M, which keeps the sum within how deep an expression may nest at the default sizes. `--stops` names the stop points to measure, such as `check,compile-debug`. The script measures the instructions `rayoc` retires and its peak memory, as the system reports them for the process, and its wall-clock time, and gives the median of three runs.
 
 On Linux, `--counter valgrind` has Valgrind's Cachegrind count the instructions instead, with its cache and branch simulations off, on a processor it simulates, and takes peak memory and wall-clock time from a run of its own outside Valgrind.
 
