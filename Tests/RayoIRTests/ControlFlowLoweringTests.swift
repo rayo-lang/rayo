@@ -78,6 +78,19 @@ struct ControlFlowLoweringTests {
         try expectLowering(of: source, toMatch: "if-branch-leaves")
     }
 
+    @Test
+    func `a 'ref let' of nested 'if's has every branch borrow its place into the local, with no temporary`() throws {
+        let body = """
+            let c = true
+            let d = false
+            let a = 1
+            let b = 2
+            ref let v = if c { if d { &a } else { &b } } else { &a }
+            print(v)
+            """
+        try expectLowering(ofMain: body, toMatch: "ref-let-nested-if")
+    }
+
     @Test func `an 'if' whose value is dropped computes each branch's value for what it does`() throws {
         try expectLowering(ofMain: "let c = true\n_ = if c { print(1) } else { print(2) }", toMatch: "if-dropped")
     }
