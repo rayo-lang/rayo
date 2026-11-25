@@ -23,6 +23,15 @@ enum CheckedValue {
         }
     }
 
+    /// How many levels of array types, each the element of the one around it, any type the value settles to nests at
+    /// the least.
+    var arrayLevels: Int {
+        switch self {
+        case .typed(let value): value.type.arrayLevels
+        case .waiting(let value): value.arrayLevels
+        }
+    }
+
     /// Whether the value fits `type`, as a call asks when it picks among overloads, where `declarations` gives the
     /// members an implicit member names. An integer literal's value counts, so it fits only a type that holds it.
     func fits(_ type: RayoType, in declarations: Declarations) -> Bool {

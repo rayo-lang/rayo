@@ -44,6 +44,9 @@ struct IfValue {
             if case .value(let value) = self { value.typeOrDefault } else { type }
         }
 
+        /// How many levels of array types the end's value nests at the least: none where it gives Void or no value.
+        var arrayLevels: Int { value?.arrayLevels ?? 0 }
+
         /// Whether the end fits `type`, as a call asks when it picks among overloads. One that no run reaches fits
         /// any type.
         func fits(_ type: RayoType, in declarations: Declarations) -> Bool {
@@ -76,6 +79,8 @@ struct IfValue {
     let agreedType: RayoType?
     /// Whether a branch fixes a type, whatever position the `if` stands in.
     private let fixesType: Bool
+    /// How many levels of array types any type the `if` settles to nests at the least: as many as its deepest branch.
+    let arrayLevels: Int
 
     /// The `if` of `condition`, `then` and `otherwise` that the source gives at `range`, whose branches agree on a
     /// type only where each can take it, as `declarations` gives the members an implicit member names.
@@ -85,8 +90,8 @@ struct IfValue {
         self.otherwise = otherwise
         self.range = range
 
-        // Work out the types once, from the branches' own, which an `if` in a branch worked out when it was made, so
-        // making each `if` of a nest costs the same at any depth.
+        // Work out the types and array levels once, from the branches' own, which an `if` in a branch worked out when
+        // it was made, so making each `if` of a nest costs the same at any depth.
         let ends = [then.end, otherwise.end]
         let ruledType = CheckedValue.agreedType(of: ends.map { ($0.type, $0.typeOrDefault) })
         self.ruledType = ruledType
@@ -94,6 +99,7 @@ struct IfValue {
             ends.allSatisfy { $0.canSettle(to: type, in: declarations) } ? type : nil
         }
         fixesType = ends.contains { $0.type != nil }
+        arrayLevels = ends.map(\.arrayLevels).max() ?? 0
     }
 
     var branches: [Branch] { [then, otherwise] }
