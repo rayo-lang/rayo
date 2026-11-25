@@ -15,6 +15,9 @@ private enum Shape: CaseIterable {
     case calls
     /// `xs[xs[…[0]…]]`, an element whose index is an element.
     case elements
+    /// `f(x: …if true { f(x: …1…) } else { 0 }…)`: calls around an `if`, and calls in the block whose value it
+    /// gives, each about half the levels.
+    case callsInIf
 
     func expression(levels: Int) -> String {
         switch self {
@@ -23,16 +26,10 @@ private enum Shape: CaseIterable {
         case .negations: String(repeating: "!", count: levels) + "true"
         case .calls: String(repeating: "f(x: ", count: levels) + "1" + String(repeating: ")", count: levels)
         case .elements: String(repeating: "xs[", count: levels) + "0" + String(repeating: "]", count: levels)
-        }
-    }
-
-    /// How many bytes into the expression the part that passes the limit starts, when it nests `levels` deep: for a
-    /// sum, the sum itself, and for parentheses, what the innermost pair holds.
-    func startOfTooDeep(levels: Int) -> Int {
-        switch self {
-        case .sum: 0
-        case .parentheses: levels
-        case .negations, .calls, .elements: preconditionFailure("no test reports this shape")
+        case .callsInIf:
+            String(repeating: "f(x: ", count: levels / 2) + "if true { "
+                + Shape.calls.expression(levels: levels - levels / 2 - 1) + " } else { 0 }"
+                + String(repeating: ")", count: levels / 2)
         }
     }
 }
@@ -63,10 +60,11 @@ private let everyOutput = [
     ["--check"], ["--emit=checked"], ["--emit=ir"], ["--debug", "-o", "main.o"], ["--release", "-o", "main.o"],
 ]
 
-/// The compiles of an expression as deep as the limit that the tests run: a sum and parentheses in every output, and
-/// calls, whose levels take the most stack of any shape, through every stage of a compile to object code.
+/// The compiles of an expression as deep as the limit that the tests run: a sum and parentheses in every output,
+/// calls, whose levels take the most stack of any shape, through every stage of a compile to object code, and calls
+/// that go on inside an `if`.
 private let compilesAtTheLimit = everyOutput.map { (Shape.sum, $0) } + everyOutput.map { (Shape.parentheses, $0) }
-    + [(Shape.calls, ["--debug", "-o", "main.o"])]
+    + [(Shape.calls, ["--debug", "-o", "main.o"]), (Shape.callsInIf, ["--check"])]
 
 struct ExpressionDepthTests {
     /// A deep sum or call takes a debug `rayoc` seconds to check, so these compiles run one at a time, which leaves
@@ -77,12 +75,16 @@ struct ExpressionDepthTests {
         #expect(result.exitCode == 0, "\(result.errors)")
     }
 
-    @Test(arguments: [Shape.sum, .parentheses])
-    private func `an expression a level past the limit is reported once, at the part that passes it`(shape: Shape) {
-        let levels = Parser.expressionLevelLimit + 1
-        let diagnostics = run(["--check"], on: printing(shape.expression(levels: levels))).diagnostics
+    /// Each shape, and how many bytes into it the part that passes the limit starts: for a sum, the sum itself, and
+    /// for parentheses, what the innermost pair holds.
+    @Test(arguments: [(Shape.sum, 0), (.parentheses, Parser.expressionLevelLimit + 1)])
+    private func `an expression a level past the limit is reported once, at the part that passes it`(
+        shape: Shape, startOfTooDeep: Int,
+    ) {
+        let source = printing(shape.expression(levels: Parser.expressionLevelLimit + 1))
+        let diagnostics = run(["--check"], on: source).diagnostics
         #expect(diagnostics.map(\.code) == [.expressionTooDeep(limit: Parser.expressionLevelLimit)])
-        #expect(diagnostics.first?.range.start.offset == printPrefix.utf8.count + shape.startOfTooDeep(levels: levels))
+        #expect(diagnostics.first?.range.start.offset == printPrefix.utf8.count + startOfTooDeep)
     }
 
     @Test func `the error names the limit, which is 10,000 levels`() {

@@ -146,7 +146,7 @@ public enum Compiler {
                 try compile(invocation, readFile: readFile, writeFile: writeFile, errors: &errors)
             }
         }
-        return compiled ?? CompilerResult(exitCode: 1, errors: "rayoc: can't start a thread to compile on\n")
+        return compiled ?? result(of: .failed("can't start a thread to compile on"), in: invocation.path, warnings: [])
     }
 
     /// Returns what `rayoc` gives when `compile` compiles the source file at `path`, adding the program's errors and

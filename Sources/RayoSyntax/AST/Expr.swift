@@ -20,8 +20,7 @@ public struct Expr: Sendable {
 }
 
 private extension ExprKind {
-    /// How many levels deep an expression of this kind nests, one more than its deepest part. The blocks of an `if`
-    /// count for nothing, since their statements' expressions are expressions of their own.
+    /// How many levels deep an expression of this kind nests, one more than its deepest part.
     var levels: Int {
         switch self {
         case .intLiteral, .negativeIntLiteral, .boolLiteral, .name, .implicitMember:
@@ -36,7 +35,7 @@ private extension ExprKind {
         case .arrayLiteral(let elements):
             elements.isEmpty ? 0 : elements.reduce(0) { deepest, element in max(deepest, element.levels) } + 1
         case .if(let ifExpr):
-            ifExpr.condition.levels + 1
+            ifExpr.levels
         }
     }
 }
