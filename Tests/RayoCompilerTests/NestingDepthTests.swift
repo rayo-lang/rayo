@@ -210,10 +210,15 @@ private func nestedArrayType(levels: Int) -> String {
 /// The file up to the type of `main`'s local.
 private let programUpToArrayType = "func main() {\n    let xs: "
 
+/// `[[…leaf…]]`, array literals nested `levels` levels deep around `leaf`.
+private func nestedArrayLiteral(levels: Int, around leaf: String = "0") -> String {
+    String(repeating: "[", count: levels) + leaf + String(repeating: "]", count: levels)
+}
+
 /// A program whose `main` binds a local whose type nests array types `levels` levels deep, followed by the
 /// declarations in `after`. The local is consumed whole, since indexing down to its Int would nest as deep as its type.
 private func nestedArray(levels: Int, then after: String = "") -> String {
-    let value = String(repeating: "[", count: levels) + "0" + String(repeating: "]", count: levels)
+    let value = nestedArrayLiteral(levels: levels)
     return programUpToArrayType + nestedArrayType(levels: levels) + " = " + value + "\n    _ = consume xs\n}\n" + after
 }
 
@@ -253,5 +258,94 @@ struct ArrayTypeNestingTests {
         #expect(diagnostics.map(\.code) == [
             .nestingTooDeep(limit: arrayTypeLimit), .missingCopiedName(found: .token("}")),
         ])
+    }
+}
+
+/// The file up to the statements of `main`.
+private let programUpToMainBody = "func main() {\n"
+
+/// The statement that binds `xs`, with no type written, up to its value.
+private let untypedBinding = "    let xs = "
+
+/// The statement that binds the condition of an `if`.
+private let conditionBinding = "    let b = true\n"
+
+/// A program whose `main` runs `statements`, then binds `xs` to `value` with no type written and consumes it whole,
+/// followed by the declarations in `declarations`.
+private func programBinding(_ value: String, after statements: String = "", then declarations: String = "") -> String {
+    programUpToMainBody + statements + untypedBinding + value + "\n    _ = consume xs\n}\n" + declarations
+}
+
+/// A literal as deep as the limit, around an Int.
+private let literalAtTheLimit = nestedArrayLiteral(levels: arrayTypeLimit)
+
+/// A literal as deep as the limit, around an empty literal.
+private let emptyLiteralAtTheLimit = nestedArrayLiteral(levels: arrayTypeLimit - 1, around: "[]")
+
+/// Values of `xs` whose outermost literal would take an array type a level past the limit, each after the statements
+/// `main` runs before it. The literal holds a literal, around an Int or an empty one; a local whose type is as deep as
+/// the limit; or an `if` whose branches are such literals.
+private let literalsPastTheLimit = [
+    ("", "[" + literalAtTheLimit + "]"),
+    ("", "[" + emptyLiteralAtTheLimit + "]"),
+    ("    let inner = " + literalAtTheLimit + "\n", "[inner]"),
+    (conditionBinding, "[if b { " + literalAtTheLimit + " } else { " + literalAtTheLimit + " }]"),
+    (conditionBinding, "[if b { " + emptyLiteralAtTheLimit + " } else { [] }]"),
+]
+
+struct ArrayLiteralNestingTests {
+    @Test(arguments: everyOutputButTheCheckedProgram + [["--emit=checked"]])
+    private func `every stage takes a literal as deep as the limit with no type written`(arguments: [String]) {
+        let result = run(arguments, on: programBinding(literalAtTheLimit))
+        #expect(result.exitCode == 0, "\(result.errors)")
+    }
+
+    @Test(arguments: everyOutputButTheCheckedProgram)
+    private func `a literal takes a parameter's type as deep as the limit`(arguments: [String]) {
+        let function = "func f(xs: \(nestedArrayType(levels: arrayTypeLimit))) { _ = consume xs }\n"
+        let source = function + "func main() {\n    f(xs: \(literalAtTheLimit))\n}\n"
+        let result = run(arguments, on: source)
+        #expect(result.exitCode == 0, "\(result.errors)")
+    }
+
+    @Test(arguments: everyOutputButTheCheckedProgram)
+    private func `a literal no element gives a type takes an annotation's type as deep as the limit`(
+        arguments: [String],
+    ) {
+        let type = String(repeating: arrayTypeOpening, count: arrayTypeLimit - 1) + "[0 of Int]"
+            + String(repeating: "]", count: arrayTypeLimit - 1)
+        let source = programUpToArrayType + type + " = " + emptyLiteralAtTheLimit + "\n    _ = consume xs\n}\n"
+        let result = run(arguments, on: source)
+        #expect(result.exitCode == 0, "\(result.errors)")
+    }
+
+    @Test(arguments: literalsPastTheLimit)
+    private func `a literal whose type would nest past the limit is reported once, at that literal`(
+        statements: String, value: String,
+    ) {
+        let diagnostics = run(["--check"], on: programBinding(value, after: statements)).diagnostics
+        let tooDeep = diagnostics.filter { $0.code == .nestingTooDeep(limit: arrayTypeLimit) }
+        #expect(tooDeep.count == 1)
+        #expect(tooDeep.first?.range.start.offset == (programUpToMainBody + statements + untypedBinding).utf8.count)
+    }
+
+    @Test func `a literal past the limit still reports its elements' own errors`() {
+        let value = nestedArrayLiteral(levels: arrayTypeLimit + 1, around: "9223372036854775808")
+        let diagnostics = run(["--check"], on: programBinding(value)).diagnostics
+        let codeBeforeInt = programUpToMainBody + untypedBinding + String(repeating: "[", count: arrayTypeLimit + 1)
+        #expect(diagnostics.map(\.code) == [
+            .nestingTooDeep(limit: arrayTypeLimit), .literalDoesntFit(type: "Int"),
+        ])
+        #expect(diagnostics.last?.range.start.offset == codeBeforeInt.utf8.count)
+    }
+
+    @Test(arguments: [arrayTypeLimit + 1, Parser.nestingLevelLimit])
+    private func `a literal past the limit fails alone, and the compile goes on after it`(levels: Int) {
+        let source = programBinding(nestedArrayLiteral(levels: levels), then: "func g() { _ = [] }\n")
+        let diagnostics = run(["--check"], on: source).diagnostics
+        let codeBefore = programUpToMainBody + untypedBinding
+            + String(repeating: "[", count: levels - arrayTypeLimit - 1)
+        #expect(diagnostics.map(\.code) == [.nestingTooDeep(limit: arrayTypeLimit), .emptyArrayLiteral])
+        #expect(diagnostics.first?.range.start.offset == codeBefore.utf8.count)
     }
 }

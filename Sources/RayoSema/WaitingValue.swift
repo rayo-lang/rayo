@@ -12,6 +12,9 @@ protocol WaitingValue {
     /// `[]` can't.
     var defaultType: RayoType? { get }
 
+    /// The fewest levels of nested array types that any type the value settles to has.
+    var arrayLevels: Int { get }
+
     /// Whether the value fits `type`, as a call asks when it picks among overloads: it can settle to `type`, and
     /// `type` holds the value of an integer literal that stands outside arithmetic. `declarations` gives the members
     /// an implicit member names.
@@ -46,6 +49,10 @@ protocol WaitingValue {
 }
 
 extension WaitingValue {
+    /// A value has the levels of the type it fixes, or else of the one it settles to where its position gives none,
+    /// unless it says otherwise, as one that holds array literals does.
+    var arrayLevels: Int { (type ?? defaultType)?.arrayLevels ?? 0 }
+
     /// A value can settle to just the types it fits, unless it says otherwise, as one a literal's value keeps from
     /// fitting does.
     func canSettle(to type: RayoType, in declarations: Declarations) -> Bool {

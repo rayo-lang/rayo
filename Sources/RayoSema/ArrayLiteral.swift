@@ -3,8 +3,19 @@ import RayoSource
 
 /// An array literal's elements, each checked on its own, and where the source writes the literal.
 struct ArrayLiteral {
-    var elements: [CheckedValue]
-    var range: SourceRange
+    let elements: [CheckedValue]
+    let range: SourceRange
+    /// The fewest levels of nested array types that any type the literal settles to has: one more than its deepest
+    /// element has, whether or not an element gives the literal a type.
+    let arrayLevels: Int
+
+    init(elements: [CheckedValue], range: SourceRange) {
+        self.elements = elements
+        self.range = range
+        // The elements worked out their own levels when they were made, so making each literal of a nest costs the
+        // same at any depth.
+        arrayLevels = 1 + (elements.map(\.arrayLevels).max() ?? 0)
+    }
 
     /// The type the elements settle to where the literal's position gives none: the one type they agree on.
     var defaultElementType: RayoType? {

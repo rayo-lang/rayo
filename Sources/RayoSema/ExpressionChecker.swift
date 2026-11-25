@@ -212,7 +212,19 @@ struct ExpressionChecker {
             reportSettlingErrors(of: values)
             return nil
         }
-        return .waiting(ArrayLiteral(elements: checked, range: range))
+        return capped(ArrayLiteral(elements: checked, range: range)).map(CheckedValue.waiting)
+    }
+
+    /// `literal`, where no type it settles to nests array types past their cap. One past the cap is reported, with its
+    /// elements' own errors, and fails, so the literals around it fail unreported.
+    private func capped(_ literal: ArrayLiteral) -> ArrayLiteral? {
+        let limit = CappedPart.arrayType.limit
+        guard literal.arrayLevels <= limit else {
+            errors.report(.nestingTooDeep(limit: limit), at: literal.range)
+            reportSettlingErrors(of: literal.elements)
+            return nil
+        }
+        return literal
     }
 
     /// Checks `op operandExpr`, which is untyped where `op` is `-` and its operand is untyped.
