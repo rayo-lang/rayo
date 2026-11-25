@@ -1,6 +1,6 @@
 import LLVM
 import RayoIR
-import RayoStageThread
+package import RayoStageThread
 
 /// Compiles Rayo IR to object code for the host, through LLVM.
 package enum LLVMEmitter {

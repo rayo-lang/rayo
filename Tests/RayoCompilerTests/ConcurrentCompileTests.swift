@@ -1,13 +1,6 @@
 import Testing
 import RayoCompiler
 
-/// Runs `rayoc` with `arguments` before the path of the file that holds `source`, writing nothing.
-private func run(_ arguments: [String], on source: String) -> CompilerResult {
-    Compiler.run(arguments + ["main.rayo"], readFile: { $0 == "main.rayo" ? Array(source.utf8) : nil }) { _, _ in
-        false
-    }
-}
-
 /// Compiles that give different results, as the arguments and the source of each: one prints its IR, and one finds
 /// an error.
 private let compiles = [

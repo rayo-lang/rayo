@@ -19,6 +19,10 @@ private final class Occupancy: Sendable {
     }
 }
 
+/// The bytes of stack a thread of a client that isn't the compiler's own may have: 512 KiB, a secondary thread's on
+/// macOS.
+private let smallStackSize = 512 << 10
+
 /// Runs `body` on a new thread whose stack holds `stackSize` bytes, and gives what it gives once it ends.
 private func onNewThread<Result: Sendable>(
     stackSize: Int, _ body: @escaping @Sendable () -> Result,
@@ -37,7 +41,7 @@ struct StageThreadTests {
             // Each client hands over work that stays on the stage thread long enough for the others to arrive.
             for client in 0..<8 {
                 group.addTask {
-                    await onNewThread(stackSize: 512 << 10) {
+                    await onNewThread(stackSize: smallStackSize) {
                         StageThread.run { _ in
                             occupancy.counting {
                                 Thread.sleep(forTimeInterval: 0.01)

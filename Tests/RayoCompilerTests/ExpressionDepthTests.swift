@@ -48,13 +48,6 @@ private func printing(_ expression: String, then after: String = "") -> String {
     printPrefix + expression + "\n    print(value)\n    print(xs[0])\n}\n" + after
 }
 
-/// Runs `rayoc` with `arguments` before the path of the file that holds `source`, writing nothing.
-private func run(_ arguments: [String], on source: String) -> CompilerResult {
-    Compiler.run(arguments + ["main.rayo"], readFile: { $0 == "main.rayo" ? Array(source.utf8) : nil }) { _, _ in
-        true
-    }
-}
-
 /// Each way `rayoc` runs every stage, as the options that ask for it.
 private let everyOutput = [
     ["--check"], ["--emit=checked"], ["--emit=ir"], ["--debug", "-o", "main.o"], ["--release", "-o", "main.o"],

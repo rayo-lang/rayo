@@ -1,8 +1,9 @@
 /// The work handed to the stage thread that it hasn't run, oldest first, and how much it has run. A client waits on
 /// the queue until its own work has run, and the stage thread waits on it until there is work.
 ///
-/// The operating system's lock guards every property but the lock and the condition, and its condition variable
-/// wakes the threads that wait. So the queue is safe to share between threads, though the compiler can't check it.
+/// Its threads wait for each other, which `Mutex` can't do, so the operating system's lock guards every property but
+/// the lock and the condition, and its condition variable wakes the threads that wait. That makes the queue safe to
+/// share between threads, though the compiler can't check it.
 final class StageQueue: @unchecked Sendable {
     /// The work handed to the stage thread that it hasn't begun, oldest first.
     private var waiting: [() -> Void] = []
@@ -10,8 +11,9 @@ final class StageQueue: @unchecked Sendable {
     private var handed = 0
     /// How many pieces of work the stage thread has run, which are the oldest that many.
     private var finished = 0
-    /// The lock and the condition variable, each at the one address the system needs.
+    /// The lock, at the one address the system needs.
     let lock = UnsafeMutablePointer<SystemLock>.allocate(capacity: 1)
+    /// The condition variable, at the one address the system needs.
     let condition = UnsafeMutablePointer<SystemCondition>.allocate(capacity: 1)
 
     init() {

@@ -22,7 +22,7 @@ extension StageWorker {
         #endif
     }
 
-    /// Starts the stage thread, whose stack reserves `StageThread.stackSize` bytes, running `runJobs()`, and returns
+    /// Starts the stage thread, whose stack reserves `StageThread.stackSize` bytes, running `runWork()`, and returns
     /// whether it started. Nothing waits for it to end, since it lives as long as the process.
     static func startThread() -> Bool {
         // Each system reserves the stack's pages and commits only those the thread reaches, so a compile's memory
@@ -31,7 +31,7 @@ extension StageWorker {
         #if canImport(WinSDK)
         // The flag has Windows reserve the stack's size, where without it Windows would commit all of it.
         let flags = DWORD(STACK_SIZE_PARAM_IS_A_RESERVATION)
-        let start: LPTHREAD_START_ROUTINE = { _ in StageWorker.runJobs() }
+        let start: LPTHREAD_START_ROUTINE = { _ in StageWorker.runWork() }
         guard let thread = CreateThread(nil, SIZE_T(stackSize), start, nil, flags, nil) else { return false }
         CloseHandle(thread)
         return true
@@ -48,7 +48,7 @@ extension StageWorker {
         #else
         var thread: pthread_t?
         #endif
-        return pthread_create(&thread, &attributes, { _ in StageWorker.runJobs() }, nil) == 0
+        return pthread_create(&thread, &attributes, { _ in StageWorker.runWork() }, nil) == 0
         #endif
     }
 }

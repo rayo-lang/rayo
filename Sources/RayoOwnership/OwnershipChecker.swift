@@ -1,7 +1,7 @@
 import RayoCheckedProgram
 import RayoDiagnostics
 import RayoIR
-import RayoStageThread
+package import RayoStageThread
 
 /// Checks what each function of a lowered program does with its places: its moves, the values its locals hold at each
 /// use, its accesses, and the values it leaves unread. It writes the end of each access and the retirement of each

@@ -218,7 +218,7 @@ struct OwnedModule: ~Copyable {
 
 - `count(where:)` counts, in place of `filter { … }.count` or a loop.
 - `"\(value, default: "none")"` interpolates an optional, in place of `value.map { "\($0)" } ?? "none"`.
-- `Mutex` and `Atomic`, from `Synchronization`, guard state that threads share, in place of a lock.
+- `Mutex` and `Atomic`, from `Synchronization`, guard state that threads share, in place of a lock. State a thread waits on until another changes it, which `Mutex` can't do, is guarded by the operating system's lock and condition variable instead.
 - A list that runs over several lines, of arguments, parameters or a literal's items, ends with a trailing comma, in place of a last item that ends without one.
 - An existential is spelled `any P`, in place of a bare `P`.
 - `package` marks a declaration that only this package's modules share, in place of `public`. `internal import` brings in a module that only the importing module's implementation uses, and `package import` one whose types its `package` declarations show.

@@ -1,6 +1,6 @@
 import RayoCheckedProgram
 import RayoDiagnostics
-import RayoStageThread
+package import RayoStageThread
 import RayoSyntax
 
 /// Resolves the names and checks the types of a parsed file.

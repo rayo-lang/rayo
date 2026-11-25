@@ -3,6 +3,7 @@ import RayoDiagnostics
 import RayoIR
 import RayoOwnership
 import RayoStageThread
+import RayoSyntax
 import Testing
 
 /// IR that breaks one of the IR's rules, the stage that gave it, and what the verifier says is wrong with it.
@@ -75,6 +76,18 @@ struct IRVerificationTests {
         let owned = try ownedIR(of: mainOfRounds(4))
         #expect(try verified(owned, from: .ownership, in: build) == owned)
     }
+
+    /// A debug `rayoc` checks every rule of the IR of a compile at the limit, but a release one checks only the
+    /// emitter's, so this checks those on such IR.
+    @Test func `a release build checks the emitter's rules of an expression as deep as the limit, for any client`()
+        async throws {
+        let sum = "0" + String(repeating: " + 1", count: Parser.expressionLevelLimit)
+        let owned = try ownedIR(of: "func main() {\n    let value = \(sum)\n    print(value)\n}\n")
+        let verified = await onNewThread(stackSize: smallStackSize) {
+            StageThread.run { thread in try? Compiler.verified(owned, from: .ownership, on: thread, in: .release) }
+        }
+        #expect(verified == owned)
+    }
 }
 
 /// `program`, which `stage` gave, once it has passed, on the stage thread, the checks `build` of `rayoc` runs on that
@@ -95,8 +108,7 @@ private func ownedIR(of source: String) throws -> IRProgram {
         return checked.map { OwnershipChecker.check(Lowering.lower($0.program, on: thread), on: thread) }
     }
     // The stage thread starts, and the source is UTF-8 text.
-    let ownedOnStageThread = try #require(owned)
-    let (program, ownershipErrors) = try #require(ownedOnStageThread)
+    let (program, ownershipErrors) = try #require(owned.flatMap { $0 })
     try #require(errors.allSatisfy { $0.severity != .error } && ownershipErrors.isEmpty)
     return program
 }

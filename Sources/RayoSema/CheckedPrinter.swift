@@ -1,6 +1,6 @@
 import RayoCheckedProgram
 import RayoSource
-import RayoStageThread
+package import RayoStageThread
 
 /// Writes a checked program as text, for a reader to see what checking made of the source.
 ///

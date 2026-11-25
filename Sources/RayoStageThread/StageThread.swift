@@ -2,7 +2,8 @@
 /// recurse through an expression as deep as the parser lets one nest. Each stage's entry point takes one, and only
 /// `run(_:)` makes one, so a client reaches the stages only through `run(_:)`.
 package struct StageThread: ~Copyable {
-    /// The bytes of stack the stage thread reserves, which bounds how deep the parser lets an expression nest.
+    /// The bytes of stack the stage thread reserves, 625 MiB, which bounds how deep the parser lets an expression nest:
+    /// 64 KiB for each of 10,000 levels.
     package static let stackSize = 625 << 20
 
     private init() {}
@@ -23,3 +24,8 @@ package struct StageThread: ~Copyable {
         return try outcome.get()
     }
 }
+
+/// A stage thread can't be sent to another thread, so Swift's concurrency checking reports a closure that captures
+/// one and may run elsewhere, such as on a pool of threads.
+@available(*, unavailable)
+extension StageThread: Sendable {}

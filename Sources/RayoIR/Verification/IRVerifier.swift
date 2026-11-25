@@ -1,5 +1,5 @@
 import RayoCheckedProgram
-import RayoStageThread
+package import RayoStageThread
 
 /// Checks the rules of IR that the stages after the one that gave it take as given.
 public enum IRVerifier {

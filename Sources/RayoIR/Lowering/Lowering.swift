@@ -1,5 +1,5 @@
 import RayoCheckedProgram
-import RayoStageThread
+package import RayoStageThread
 
 /// Lowers a checked program to Rayo IR, one function body at a time. A function the checked program holds no body
 /// for, since its body is tainted, has none in the IR either.

@@ -24,14 +24,14 @@ enum StageWorker {
     /// Starts the stage thread unless it has started, and returns whether it runs. A thread that couldn't start is
     /// tried again when the next client arrives.
     private static func startIfNeeded() -> Bool {
-        started.withLock { started in
-            if !started { started = startThread() }
-            return started
+        started.withLock { hasStarted in
+            if !hasStarted { hasStarted = startThread() }
+            return hasStarted
         }
     }
 
     /// Runs each piece of work handed to the stage thread, oldest first, for as long as the process lives.
-    static func runJobs() -> Never {
+    static func runWork() -> Never {
         threadIdentity.store(currentThreadIdentity, ordering: .releasing)
         while true { queue.runOldest() }
     }
