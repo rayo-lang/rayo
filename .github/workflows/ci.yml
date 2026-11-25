@@ -118,6 +118,8 @@ jobs:
       # LLVM from the loader, and has the folder's rayoc compile a proof program.
       - name: Run rayoc from a toolchain folder of its own
         if: ${{ !cancelled() && steps.test.outcome == 'success' }}
+        # A container's steps run in sh unless they name another shell.
+        shell: bash
         env:
           BIN: ${{ steps.test.outputs.release-bin-path }}
           PROGRAM: examples/v0.1/combat.rayo
