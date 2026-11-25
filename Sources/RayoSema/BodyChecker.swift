@@ -10,9 +10,10 @@ struct BodyChecker {
     /// A checker of the body of a function whose result type is `result`, with `parameters`, which `signature`
     /// declares, as its first locals, reporting what in them can't be declared.
     init(file: FileChecker, parameters: [Param], declaredAs signature: [Parameter], result: RayoType?) {
-        // Give the body names of its own, which every checker it builds shares.
-        self.init(expressions: ExpressionChecker(file: file, names: NameScopes(file: file),
-                                                 jumps: JumpTargets(result: result)))
+        // Give the body names and a reachability of its own, which every checker it builds shares.
+        let expressions = ExpressionChecker(file: file, names: NameScopes(file: file), reachability: Reachability(),
+                                            jumps: JumpTargets(result: result))
+        self.init(expressions: expressions)
 
         // Declare the parameters in the scope around the body's blocks.
         bindingChecker.declare(parameters, declaredAs: signature)

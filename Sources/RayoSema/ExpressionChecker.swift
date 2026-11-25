@@ -7,6 +7,8 @@ import RayoSyntax
 struct ExpressionChecker {
     let file: FileChecker
     let names: NameScopes
+    /// Where a run of the body being checked can go.
+    let reachability: Reachability
     /// Where a `return`, a `break` and a `continue` in the code being checked leave for.
     let jumps: JumpTargets
 
@@ -14,7 +16,7 @@ struct ExpressionChecker {
 
     /// A checker of the expressions in the body of a loop that the code being checked holds.
     var insideLoop: ExpressionChecker {
-        ExpressionChecker(file: file, names: names, jumps: jumps.insideLoop)
+        ExpressionChecker(file: file, names: names, reachability: reachability, jumps: jumps.insideLoop)
     }
 
     /// The name an error gives `type`.

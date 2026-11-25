@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from unittest import mock
 
-from benchmark import (STOP_POINTS, UNCOUNTED, cachegrind_instructions, cachegrind_run, copied_rayoc, if_sum,
+from benchmark import (STOP_POINTS, UNCOUNTED, cachegrind_instructions, cachegrind_run, copied_rayoc, if_nest, if_sum,
                        linux_measures, loops, macos_measures, main, parse_arguments, programs, read, ref_let_loops,
                        regressions, scratch_directory, stage_costs, straight_line, summary)
 
@@ -237,11 +237,13 @@ class ProgramTests(unittest.TestCase):
         self.assertEqual(len(straight_line(10).splitlines()), 2 * 10 + 6)
         self.assertEqual(len(if_sum(10).splitlines()), 5)
         self.assertEqual(if_sum(10).count('if '), 10)
+        self.assertEqual(len(if_nest(10).splitlines()), 5)
+        self.assertEqual(if_nest(10).count('if '), 10)
 
     def test_each_size_makes_each_program_with_five_turns_and_two_ifs_for_each_copy_of_a_loop(self):
         self.assertEqual([name for name, _ in programs([200, 400])], [
             'loops-200', 'loops-400', 'ref-let-loops-200', 'ref-let-loops-400', 'straight-line-1000',
-            'straight-line-2000', 'if-sum-400', 'if-sum-800',
+            'straight-line-2000', 'if-sum-400', 'if-sum-800', 'if-nest-200', 'if-nest-400',
         ])
 
 
