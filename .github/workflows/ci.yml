@@ -105,6 +105,7 @@ jobs:
         id: toolchain
 
       - uses: ./.github/actions/swift-test
+        id: test
         with:
           platform: linux
           llvm-version: ${{ steps.toolchain.outputs.llvm-version }}
@@ -112,6 +113,63 @@ jobs:
           # One platform builds the release toolchain users run, and runs the proof programs with it; what differs
           # between platforms the debug tests cover on each.
           release-proof-programs: "true"
+      # A toolchain's folder holds rayoc in its bin and LLVM's library in the lib beside it, and runs on a machine
+      # whose loader finds no other LLVM. So the step lays out such a folder from the release build, hides apt's
+      # LLVM from the loader, and has the folder's rayoc compile a proof program.
+      - name: Run rayoc from a toolchain folder of its own
+        if: ${{ !cancelled() && steps.test.outcome == 'success' }}
+        env:
+          BIN: ${{ steps.test.outputs.release-bin-path }}
+          PROGRAM: examples/v0.1/combat.rayo
+        run: |
+          # rayoc looks for LLVM's library in the lib beside its bin. The linker writes the search path as a list
+          # separated by colons, in brackets.
+          rayoc="$BIN/rayoc"
+          readelf -d "$rayoc" | grep -E '\((RUNPATH|RPATH)\)'
+          if ! readelf -d "$rayoc" | grep -q -E '\((RUNPATH|RPATH)\).*[[:]\$ORIGIN/\.\./lib[]:]'; then
+            echo "::error::release rayoc doesn't look for LLVM's library in \$ORIGIN/../lib"
+            exit 1
+          fi
+
+          # The folder holds rayoc, and a copy of the LLVM library it names, from where the loader finds it now.
+          library=$(readelf -d "$rayoc" | sed -n -E 's/.*\(NEEDED\).*\[(libLLVM[^]]*)\]/\1/p')
+          loaded=$(ldd "$rayoc" | awk -v library="$library" '$1 == library { print $3 }')
+          toolchain="$RUNNER_TEMP/toolchain"
+          mkdir -p "$toolchain/bin" "$toolchain/lib"
+          cp "$rayoc" "$toolchain/bin/rayoc"
+          cp -L "$loaded" "$toolchain/lib/$library"
+
+          # Every other file of that name is moved aside, and the loader's cache rebuilt without it. They are put
+          # back however the step ends.
+          hidden="$RUNNER_TEMP/hidden-llvm"
+          mkdir -p "$hidden"
+          mapfile -t copies < <(find /usr -name "$library")
+          restore() {
+            for index in "${!copies[@]}"; do mv "$hidden/$index" "${copies[$index]}"; done
+            ldconfig
+          }
+          trap restore EXIT
+          for index in "${!copies[@]}"; do mv "${copies[$index]}" "$hidden/$index"; done
+          ldconfig
+
+          # The rayoc the folder copied has no lib beside its bin, so it finds no LLVM now: the install is hidden.
+          ldd "$rayoc" | grep -F "$library"
+          if ! ldd "$rayoc" | grep -q -F "$library => not found"; then
+            echo "::error::the loader still finds $library outside the toolchain's folder"
+            exit 1
+          fi
+
+          # The folder's rayoc loads the folder's library, and compiles a program to object code with it.
+          ldd "$toolchain/bin/rayoc" | grep -F "$library"
+          if ! ldd "$toolchain/bin/rayoc" | grep -q -F "$library => $toolchain/lib/$library"; then
+            echo "::error::the toolchain folder's rayoc doesn't load $library from the folder's lib"
+            exit 1
+          fi
+          "$toolchain/bin/rayoc" -o "$RUNNER_TEMP/program.o" -- "$PROGRAM"
+          if [ ! -s "$RUNNER_TEMP/program.o" ]; then
+            echo "::error::the toolchain folder's rayoc wrote no object code for $PROGRAM"
+            exit 1
+          fi
       # A target can import a module through a dependency it doesn't name, so the check reads the imports
       # themselves: of LLVM's C module, and of syntax after semantic checking. They are the same on every platform,
       # so it runs here alone, whether or not the tests passed. It runs once LLVM is installed, since LLVM's
