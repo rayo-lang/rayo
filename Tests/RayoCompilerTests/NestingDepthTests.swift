@@ -22,6 +22,8 @@ private enum Shape: CaseIterable {
     case ifValues
     /// `if b {} else if b {} … else {}`, whose each `else if` arm lies a block deeper than the arm before it.
     case elseIfChain
+    /// `if b { if b { … } }`, an `if` statement in the block of the `if` around it.
+    case ifStatements
     /// `while b { while b { … } }`, a loop in a loop's body.
     case loops
     /// `while b { … _ = f(x: f(x: …1…)) … }`: loops, and calls in the innermost body, each about half the levels.
@@ -32,6 +34,7 @@ private enum Shape: CaseIterable {
         case .sum, .parentheses, .negations, .calls, .elements, .callsInIf, .ifValues:
             valueBinding + expression(levels: levels) + "\n    print(value)"
         case .elseIfChain: "if b {}" + String(repeating: " else if b {}", count: levels - 1) + " else {}"
+        case .ifStatements: String(repeating: "if b { ", count: levels) + String(repeating: "}", count: levels)
         case .loops: String(repeating: "while b { ", count: levels) + String(repeating: "}", count: levels)
         case .callsInLoops:
             String(repeating: "while b { ", count: levels / 2) + "_ = "
@@ -56,7 +59,7 @@ private enum Shape: CaseIterable {
         case .ifValues:
             String(repeating: "if b { ", count: levels - 1) + "0"
                 + String(repeating: " } else { 0 }", count: levels - 1)
-        case .elseIfChain, .loops, .callsInLoops: preconditionFailure("the shape nests as statements")
+        case .elseIfChain, .ifStatements, .loops, .callsInLoops: preconditionFailure("the shape nests as statements")
         }
     }
 }
@@ -103,6 +106,7 @@ private let codeBeforeTooDeep = [
     (.parentheses, valueBinding + String(repeating: "(", count: Parser.nestingLevelLimit + 1)),
     (.ifValues, valueBinding + String(repeating: "if b { ", count: Parser.nestingLevelLimit - 1) + "if b "),
     (.elseIfChain, "if b {}" + String(repeating: " else if b {}", count: Parser.nestingLevelLimit - 1) + " else if b "),
+    (.ifStatements, String(repeating: "if b { ", count: Parser.nestingLevelLimit) + "if b "),
     (.loops, String(repeating: "while b { ", count: Parser.nestingLevelLimit) + "while b "),
 ]
 
