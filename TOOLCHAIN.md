@@ -77,6 +77,7 @@ Each benchmark runs `rayoc` to one stop point over one program, and is named `st
 - `straight-line-N` is a `main` of one block of N turns, each lending a `var` to a call and storing in it a value worked out from the result through a `let` of its own: 2 N + 6 lines.
 - `if-sum-T` is a `main` of one statement that sums T `if` expressions, so the temporary of each `+` is in use across the blocks of every `if`: 5 lines.
 - `if-nest-D` is a `main` that binds the value of D `if`s, each the value of the first branch of the `if` around it: 5 lines.
+- `loop-nest-D` is a `main` of D loops, each in the body of the loop around it, and each testing a `let`: 5 lines.
 
 M is 200, 400, 800 and 1600 unless `--sizes` names others, N is five times M, D is M, and T twice M, which keeps the sum within how deep an expression may nest at the default sizes. `--stops` names the stop points to measure, such as `check,compile-debug`. The script measures the instructions `rayoc` retires and its peak memory, as the system reports them for the process, and its wall-clock time, and gives the median of three runs.
 

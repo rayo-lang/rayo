@@ -44,6 +44,58 @@ struct DataflowTests {
         #expect(states(of: results, in: 1)?[statement] == expected)
     }
 
+    // The outer loop's header is bb1, the inner loop's bb2, and bb4 goes back from the inner loop to the outer one.
+    @Test func `going forward, nested loops hand on what every pass of each body brings`() throws {
+        let blocks = """
+            bb0:
+              \(reading(1))
+              goto bb1
+            bb1:
+              \(reading(2))
+              branch true, bb2, bb5
+            bb2:
+              \(reading(3))
+              branch true, bb3, bb4
+            bb3:
+              \(reading(4))
+              goto bb2
+            bb4:
+              \(reading(5))
+              goto bb1
+            bb5:
+              \(reading(6))
+              return
+            """
+        let results = try solve(EvaluatedOperands(direction: .forward), blocks)
+        #expect(states(of: results, in: 2)?.first == Set(1...5))
+        #expect(states(of: results, in: 5)?.first == Set(1...5))
+    }
+
+    // bb1 and bb2 make a loop that a path enters at either, whichever the walk from the entry reaches first.
+    @Test(arguments: ["bb1, bb2", "bb2, bb1"])
+    func `going forward, a loop entered past its first block holds what every path through it brings`(
+        entries: String,
+    ) throws {
+        let blocks = """
+            bb0:
+              \(reading(1))
+              branch true, \(entries)
+            bb1:
+              \(reading(2))
+              goto bb2
+            bb2:
+              \(reading(3))
+              branch true, bb1, bb3
+            bb3:
+              \(reading(4))
+              return
+            """
+        let results = try solve(EvaluatedOperands(direction: .forward), blocks)
+        #expect(states(of: results, in: 1)?.first == Set(1...3))
+        #expect(states(of: results, in: 2)?.first == Set(1...3))
+        #expect(states(of: results, in: 3)?.first == Set(1...3))
+    }
+
     @Test func `going backward, a loop that no path leaves starts from the start state`() throws {
         let blocks = """
             bb0:
