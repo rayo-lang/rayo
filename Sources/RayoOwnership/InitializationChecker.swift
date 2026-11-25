@@ -27,9 +27,9 @@ enum InitializationChecker {
     }
 
     /// Takes `state` forward across `effects`, a block's, and gives what its uses and stores may find, in order.
-    private static func crossing(_ effects: [[Effect]], with state: inout InitializationState) -> [Finding] {
+    private static func crossing(_ effects: BlockEffects, with state: inout InitializationState) -> [Finding] {
         var findings: [Finding] = []
-        for effect in effects.joined() {
+        for effect in effects.all {
             state.apply(
                 effect, use: { findings.append(.use($0, at: $1, missing: $2)) },
                 store: { destination, held in

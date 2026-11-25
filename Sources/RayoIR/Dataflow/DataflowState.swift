@@ -19,24 +19,21 @@ package protocol DataflowState: Equatable {
 }
 
 extension DataflowState {
-    /// Takes the state across `effects`, the effects of one statement or terminator in `function`, in its direction:
-    /// in their order going forward, and in reverse going backward.
-    package mutating func apply(_ effects: [Effect], in function: Function) {
+    /// Takes the state across `effects`, the effects of one statement or terminator in `function`, or of a run of them,
+    /// in its direction: in their order going forward, and in reverse going backward.
+    package mutating func apply(_ effects: ArraySlice<Effect>, in function: Function) {
         switch direction {
         case .forward:
             for effect in effects { apply(effect, in: function) }
+        // A slice reversed is a view of it, so the walk back copies none of the effects.
         case .backward:
             for effect in effects.reversed() { apply(effect, in: function) }
         }
     }
 
-    /// Takes the state across a whole block of `function`, whose statements and terminator have `effects`, as
-    /// `BasicBlock.effects` gives them: from its entry to its exit going forward, and from its exit to its entry going
-    /// backward.
-    package mutating func apply(across effects: [[Effect]], in function: Function) {
-        let ordered = direction == .forward ? effects : effects.reversed()
-        for crossing in ordered {
-            apply(crossing, in: function)
-        }
+    /// Takes the state across a whole block of `function`, whose statements and terminator have `effects`: from its
+    /// entry to its exit going forward, and from its exit to its entry going backward.
+    package mutating func apply(across effects: BlockEffects, in function: Function) {
+        apply(effects.all, in: function)
     }
 }

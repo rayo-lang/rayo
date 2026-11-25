@@ -8,6 +8,7 @@ import RayoIR
 /// statements is just before the terminator, and the last index is just after it.
 struct AccessExtents {
     private let body: IRBody
+    private let effects: BodyEffects
     /// What code after each point uses, carried backward.
     private let uses: DataflowResults<AccessUseState>
     /// What each local's value depends on at each point, carried forward.
@@ -18,15 +19,17 @@ struct AccessExtents {
     /// other local keeps no access live.
     private let holdsDependentValue: [Bool]
 
-    /// The extents of the accesses of `body`, where `uses` says what code after each of its points uses.
-    init(_ body: IRBody, uses: DataflowResults<AccessUseState>) {
+    /// The extents of the accesses of `body`, whose effects are `effects`, where `uses` says what code after each of
+    /// its points uses.
+    init(_ body: IRBody, effects: BodyEffects, uses: DataflowResults<AccessUseState>) {
         self.body = body
+        self.effects = effects
         self.uses = uses
         holdsDependentValue = Self.localsHoldingDependentValues(in: body)
 
         let (dependencyEntry, unbegunEntry) = Self.entryStates(of: body)
-        dependencies = DataflowSolver.solve(from: dependencyEntry, through: body, knowing: ())
-        unbegun = DataflowSolver.solve(from: unbegunEntry, through: body, knowing: ())
+        dependencies = DataflowSolver.solve(from: dependencyEntry, through: body, effects: effects, knowing: ())
+        unbegun = DataflowSolver.solve(from: unbegunEntry, through: body, effects: effects, knowing: ())
     }
 
     /// The dependence and unbegun-access states on entry to `body`, which the extents carry through it.
@@ -47,12 +50,11 @@ struct AccessExtents {
         return holds
     }
 
-    /// The accesses live at each point of `block`, and just after each of `effects`, which are the block's as
-    /// `BasicBlock.effects` gives them. Nil where no path reaches the block.
-    func live(
-        in block: BlockID, crossing effects: [[Effect]],
-    ) -> (atPoints: [Set<AccessID>], afterEffects: [Set<AccessID>])? {
-        let states = effects.joined().count + 1
+    /// The accesses live at each point of `block`, and just after each of its effects. Nil where no path reaches the
+    /// block.
+    func live(in block: BlockID) -> (atPoints: [Set<AccessID>], afterEffects: [Set<AccessID>])? {
+        let crossings = effects[block]
+        let states = crossings.all.count + 1
 
         // Walk back through what later code uses, keeping the accesses it uses and the locals it reads that may hold
         // a dependent value, before the block's first effect and after each of its effects.
@@ -72,7 +74,7 @@ struct AccessExtents {
         // A point comes after every effect of the statements before it, and the last point after the terminator's.
         var atPoints = [live[0]]
         var effectsBefore = 0
-        for crossing in effects {
+        for crossing in crossings {
             effectsBefore += crossing.count
             atPoints.append(live[effectsBefore])
         }

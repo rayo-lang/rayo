@@ -41,7 +41,44 @@ struct EffectTests {
               %0 @1:1-1:2 = operand 1 @1:3-1:4
               return
             """)
-        #expect(body.blocks[0].effects.map { $0.map(effectText) } == [["declare %0"], ["store %0 @1:1-1:2"], ["exit"]])
+        let effects = BodyEffects(body)[BlockID(index: 0)]
+        #expect(effects.map { $0.map(effectText) } == [["declare %0"], ["store %0 @1:1-1:2"], ["exit"]])
+    }
+
+    @Test func `a body's effects give each block its own, including a statement or jump with none`() throws {
+        let body = try mainBody(from: """
+            bb0:
+              declare %0
+              goto bb1
+            bb1:
+              _ = operand 1 @1:1-1:2
+              %0 @1:1-1:2 = operand read %0 @1:3-1:4 @1:3-1:4
+              goto bb2
+            bb2:
+              return
+            """)
+        let effects = BodyEffects(body)
+        #expect(effects[BlockID(index: 0)].map { $0.map(effectText) } == [["declare %0"], []])
+        #expect(effects[BlockID(index: 1)].map { $0.map(effectText) } == [
+            [], ["read %0 @1:3-1:4", "store %0 @1:1-1:2"], [],
+        ])
+        #expect(effects[BlockID(index: 2)].map { $0.map(effectText) } == [["exit"]])
+    }
+
+    @Test func `all of a block's effects are each statement's in turn, then the terminator's`() throws {
+        let body = try mainBody(from: """
+            bb0:
+              goto bb1
+            bb1:
+              declare %0
+              %0 @1:1-1:2 = operand read %0 @1:3-1:4 @1:3-1:4
+              return move %0 @2:1-2:2
+            """)
+        let effects = BodyEffects(body)
+        #expect(effects[BlockID(index: 0)].all.isEmpty)
+        #expect(effects[BlockID(index: 1)].all.map(effectText) == [
+            "declare %0", "read %0 @1:3-1:4", "store %0 @1:1-1:2", "move %0 @2:1-2:2", "exit",
+        ])
     }
 
     @Test func `a walk of a block's effects takes each statement's in turn, then the terminator's`() throws {
