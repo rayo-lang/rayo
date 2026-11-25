@@ -7,8 +7,9 @@ import unittest
 from unittest import mock
 
 from benchmark import (STOP_POINTS, UNCOUNTED, cachegrind_instructions, cachegrind_run, copied_rayoc, if_nest, if_sum,
-                       linux_measures, loop_nest, loops, macos_measures, main, parse_arguments, programs, read,
-                       ref_let_loops, regressions, scratch_directory, stage_costs, straight_line, summary)
+                       linux_measures, loop_call_nest, loop_nest, loops, macos_measures, main, parse_arguments,
+                       programs, read, ref_let_loops, regressions, scratch_directory, stage_costs, straight_line,
+                       summary)
 
 MACOS_TIME = '''        0.31 real         0.27 user         0.03 sys
             52183040  maximum resident set size
@@ -241,12 +242,15 @@ class ProgramTests(unittest.TestCase):
         self.assertEqual(if_nest(10).count('if '), 10)
         self.assertEqual(len(loop_nest(10).splitlines()), 5)
         self.assertEqual(loop_nest(10).count('while '), 10)
+        self.assertEqual(len(loop_call_nest(10).splitlines()), 7)
+        self.assertEqual(loop_call_nest(10).count('while '), 10)
+        self.assertEqual(loop_call_nest(10).count('next('), 10 + 1)
 
     def test_each_size_makes_each_program_with_five_turns_and_two_ifs_for_each_copy_of_a_loop(self):
         self.assertEqual([name for name, _ in programs([200, 400])], [
             'loops-200', 'loops-400', 'ref-let-loops-200', 'ref-let-loops-400', 'straight-line-1000',
             'straight-line-2000', 'if-sum-400', 'if-sum-800', 'if-nest-200', 'if-nest-400', 'loop-nest-200',
-            'loop-nest-400',
+            'loop-nest-400', 'loop-call-nest-200', 'loop-call-nest-400',
         ])
 
 

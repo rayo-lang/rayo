@@ -73,6 +73,8 @@ PROGRAM_DESCRIPTIONS = [
     'of every if: 5 lines',
     'if-nest-D: a main that binds the value of D ifs, each the value of the first branch of the if around it: 5 lines',
     'loop-nest-D: a main of D loops, each in the body of the loop around it, and each testing a let: 5 lines',
+    'loop-call-nest-D: a main of D loops, each in the body of the loop around it, the innermost printing the result '
+    'of D calls, each an argument of the call around it: 7 lines',
 ]
 
 
@@ -144,6 +146,16 @@ def loop_nest(depth):
     return f'func main() {{\n    let seed = 3\n    let go = seed > 0\n    {nest}\n}}\n'
 
 
+def loop_call_nest(depth):
+    """A `main` of `depth` loops, each in the body of the loop around it and each testing a `let`, the innermost
+    printing the result of `depth` calls, each an argument of the call around it, so the temporaries of all the calls
+    lie inside every loop."""
+    calls = 'next(' * depth + 'seed' + ')' * depth
+    nest = 'while go { ' * depth + f'print({calls})' + ' }' * depth
+    return (f'func main() {{\n    let seed = 3\n    let go = seed > 0\n    {nest}\n}}\n\n'
+            'func next(_ n: Int) -> Int { n + 1 }\n')
+
+
 def programs(sizes):
     """Each program a benchmark compiles at each of `sizes`, by name, in order of size within each kind. A straight
     line has five turns for each copy of a loop, since a turn is far smaller than a copy, and a sum of `if`s two terms
@@ -154,6 +166,7 @@ def programs(sizes):
     made += [(f'if-sum-{2 * size}', if_sum(2 * size)) for size in sizes]
     made += [(f'if-nest-{size}', if_nest(size)) for size in sizes]
     made += [(f'loop-nest-{size}', loop_nest(size)) for size in sizes]
+    made += [(f'loop-call-nest-{size}', loop_call_nest(size)) for size in sizes]
     return made
 
 
