@@ -17,9 +17,11 @@ package struct Parser: ~Copyable {
     let tokens: [Token]
     /// The index of the current token.
     private(set) var position = 0
-    /// How many levels deep, inside the outermost expression around it, the expression being parsed lies. A block's
-    /// statements start again from none.
+    /// How many levels deep, inside the outermost expression around it, the expression being parsed lies.
     var depth = 0
+    /// How many levels deep, inside the outermost expression around it, the deepest part parsed so far lies. An `if`
+    /// measures by it how deep its blocks nest.
+    var deepestLevel = 0
     private var diagnostics: [Diagnostic]
 
     /// A parser of `bytes`, held as UTF-8, which lex to `tokens`, at the first token, with the lexer's errors,

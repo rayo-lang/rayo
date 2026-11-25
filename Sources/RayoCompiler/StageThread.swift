@@ -4,7 +4,7 @@ import Glibc
 import Musl
 #elseif canImport(Darwin)
 import Darwin
-#elseif os(Windows)
+#elseif canImport(WinSDK)
 import WinSDK
 #endif
 import RayoSyntax
@@ -13,8 +13,7 @@ import RayoSyntax
 /// expression as deep as the parser lets one nest.
 enum StageThread {
     /// The bytes of stack the thread reserves. A debug build's stages take up to about 20 KiB of it for each level of
-    /// an expression, so it reserves 64 KiB a level. The stack is reserved, not committed, so a compile uses only
-    /// what it reaches.
+    /// an expression, so it reserves 64 KiB a level.
     static let stackSize = Parser.expressionLevelLimit * (64 << 10)
 
     /// Runs `body` on a new stage thread, and gives its result once the thread ends; or nil where no thread starts.
@@ -28,8 +27,10 @@ enum StageThread {
     /// whether the thread started.
     private static func runOnNewThread(_ work: @escaping () -> Void) -> Bool {
         var work = work
+        // Each system reserves the stack's pages and commits only those the thread reaches, so a compile's memory
+        // grows only with how deep it recurses.
         return withUnsafeMutablePointer(to: &work) { context in
-            #if os(Windows)
+            #if canImport(WinSDK)
             // The flag has Windows reserve the stack's size, where without it Windows would commit all of it.
             let flags = DWORD(STACK_SIZE_PARAM_IS_A_RESERVATION)
             let start: LPTHREAD_START_ROUTINE = { context in
