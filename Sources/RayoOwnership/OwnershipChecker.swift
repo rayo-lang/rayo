@@ -46,7 +46,8 @@ public enum OwnershipChecker {
 
         // The initialization check runs on the retired body, where the paths that meet at a join agree on each local no
         // later code uses, so a join costs only the locals still in use, however deep a nest is. Its errors come first,
-        // so a misused local, such as a `let` assigned twice, isn't reported again for the accesses it is in.
+        // so a misused local, such as a `let` assigned twice, isn't reported again for the accesses it is in, or for
+        // the values it leaves unread.
         let missing = InitializationChecker.errors(in: PlaceTypes(body: retired, types: places.types))
         guard missing.isEmpty else { return (nil, missing) }
 
