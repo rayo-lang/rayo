@@ -9,12 +9,12 @@ import WinSDK
 #endif
 import RayoSyntax
 
-/// The thread a compile runs its stages on, whose stack is large enough for every stage to recurse through an
-/// expression as deep as the parser lets one nest.
+/// The thread a compile runs its stages on, whose stack is large enough for every stage to recurse through code as
+/// deep as the parser lets it nest.
 enum StageThread {
-    /// The bytes of stack the thread reserves. A debug build's stages take up to about 20 KiB of it for each level of
-    /// an expression, so it reserves 64 KiB a level.
-    static let stackSize = Parser.expressionLevelLimit * (64 << 10)
+    /// The bytes of stack the thread reserves. A release build's stages take up to about 40 KiB of it for a level of
+    /// nested calls, and a debug build's about 16 KiB, and less for a block in either, so it reserves 64 KiB a level.
+    static let stackSize = Parser.nestingLevelLimit * (64 << 10)
 
     /// Runs `body` on a new stage thread, and gives its result once the thread ends; or nil where no thread starts.
     static func run<Result>(_ body: () -> Result) -> Result? {

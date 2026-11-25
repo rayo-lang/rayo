@@ -129,8 +129,8 @@ public enum ErrorCode: Sendable, Hashable {
 
     // 137 is unused, and stays so.
 
-    @Code(138, error: "the expression nests more than {limit} levels deep")
-    case expressionTooDeep(limit: Int)
+    @Code(138, error: "the code nests more than {limit} levels deep")
+    case nestingTooDeep(limit: Int)
 
     // MARK: Checking
 

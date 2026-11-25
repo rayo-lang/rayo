@@ -8,19 +8,19 @@ package struct Parser: ~Copyable {
     /// else.
     typealias ErrorCase = (FoundToken) -> ErrorCode
 
-    /// How many levels deep an expression may nest. The stages after parsing walk an expression by recursing into its
-    /// parts, so this bounds the stack they need.
-    package static let expressionLevelLimit = 10_000
+    /// How many levels deep expressions and blocks may nest, counted together, each block inside a function body a
+    /// level. The stages after parsing walk them by recursing into their parts, so this bounds the stack they need.
+    package static let nestingLevelLimit = 10_000
 
     /// The source, as UTF-8.
     let bytes: [UInt8]
     let tokens: [Token]
     /// The index of the current token.
     private(set) var position = 0
-    /// How many levels deep, inside the outermost expression around it, the expression being parsed lies.
+    /// How many levels deep, inside the function body or the declaration around it, the part being parsed lies.
     var depth = 0
-    /// How many levels deep, inside the outermost expression around it, the deepest part parsed so far lies. An `if`
-    /// measures by it how deep its blocks nest.
+    /// How many levels deep, inside the function body or the declaration around it, the deepest part parsed so far
+    /// lies. An `if` measures by it how deep its blocks nest.
     var deepestLevel = 0
     private var diagnostics: [Diagnostic]
 
