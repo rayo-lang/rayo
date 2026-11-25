@@ -23,7 +23,7 @@ struct IRTextTests {
             main "main()" func "main()"(
             ) -> Void { temp %0: Int bb0: %0 @1:1-1:2 = operand -9223372036854775808 @1:1-1:2 return }
             """)
-        #expect(IRPrinter.text(of: program) == """
+        #expect(try irText(of: program) == """
             main "main()"
 
             func "main()"() -> Void {
@@ -53,7 +53,7 @@ struct IRTextTests {
 
             """
         let program = try IRParser.program(from: text)
-        #expect(IRPrinter.text(of: program) == text)
+        #expect(try irText(of: program) == text)
     }
 
     @Test func `each parameter's label and convention, and where the source declares each local, read back the same`()
@@ -78,7 +78,7 @@ struct IRTextTests {
 
             """
         let program = try IRParser.program(from: text)
-        #expect(IRPrinter.text(of: program) == text)
+        #expect(try irText(of: program) == text)
     }
 
     @Test func `an access begun, passed to a call and ended reads back the same`() throws {
@@ -101,7 +101,7 @@ struct IRTextTests {
 
             """
         let program = try IRParser.program(from: text)
-        #expect(IRPrinter.text(of: program) == text)
+        #expect(try irText(of: program) == text)
 
         // The statements hold the accesses as they are written.
         let statements = try #require(program.bodies[FunctionID(index: 0)]).blocks[0].statements
@@ -138,7 +138,7 @@ struct IRTextTests {
 
             """
         let program = try IRParser.program(from: text)
-        #expect(IRPrinter.text(of: program) == text)
+        #expect(try irText(of: program) == text)
 
         // Each retirement names the local it ends the life of.
         let statements = try #require(program.bodies[FunctionID(index: 0)]).blocks[0].statements
@@ -155,7 +155,7 @@ struct IRTextTests {
 
             """
         let program = try IRParser.program(from: text)
-        #expect(IRPrinter.text(of: program) == text)
+        #expect(try irText(of: program) == text)
         #expect(program.types.structs.first?.fields == [
             Field(name: "hp", kind: .var, type: .int), Field(name: "armor", kind: .let, type: .uint),
         ])
@@ -180,7 +180,7 @@ struct IRTextTests {
 
             """
         let program = try IRParser.program(from: text)
-        #expect(IRPrinter.text(of: program) == text)
+        #expect(try irText(of: program) == text)
 
         // The array names its element type, and holds its elements in order.
         let statements = try #require(program.bodies[FunctionID(index: 0)]).blocks[0].statements
@@ -210,7 +210,7 @@ struct IRTextTests {
 
             """
         let program = try IRParser.program(from: text)
-        #expect(IRPrinter.text(of: program) == text)
+        #expect(try irText(of: program) == text)
 
         // The array holds as many copies as it says, of the value its operand reads.
         let statements = try #require(program.bodies[FunctionID(index: 0)]).blocks[0].statements
@@ -237,7 +237,7 @@ struct IRTextTests {
 
             """
         let program = try IRParser.program(from: text)
-        #expect(IRPrinter.text(of: program) == text)
+        #expect(try irText(of: program) == text)
 
         // The index names the array's count, and the read steps into the element at `1`, then the one at `%1`.
         let statements = try #require(program.bodies[FunctionID(index: 0)]).blocks[0].statements

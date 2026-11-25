@@ -1,5 +1,6 @@
 import RayoCheckedProgram
 import RayoSource
+import RayoStageThread
 
 /// Writes Rayo IR as text, which `IRParser` reads back into the same program.
 ///
@@ -42,7 +43,7 @@ import RayoSource
 /// line, after its destination's and its operands'.
 public enum IRPrinter {
     /// `program` as text.
-    public static func text(of program: IRProgram) -> String {
+    package static func text(of program: IRProgram, on thread: borrowing StageThread) -> String {
         // Structs and the function a run starts at come before the functions, which name them.
         var sections = program.types.structs.map(text(of:))
         if let main = program.main { sections.append("main \(quoted(program.functions[main].name))\n") }

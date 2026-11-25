@@ -18,7 +18,7 @@ struct LocalLifeTests {
     ) throws {
         let program = try IRParser.program(from: assigningThreeLocals(use.blocks))
         let violation = IRViolation(function: "main()", message: use.message)
-        #expect(IRVerifier.verify(program, from: .ownership) == violation)
+        #expect(try verify(program, from: .ownership) == violation)
     }
 
     @Test func `a local declared again after its retirement may be used, and retired again`() throws {
@@ -37,7 +37,7 @@ struct LocalLifeTests {
               retire %0
               goto bb1
             """))
-        #expect(IRVerifier.verify(program, from: .ownership) == nil)
+        #expect(try verify(program, from: .ownership) == nil)
     }
 
     @Test func `a block that no path reaches may use a retired local, since it never runs`() throws {
@@ -50,12 +50,12 @@ struct LocalLifeTests {
               end a0
               return
             """))
-        #expect(IRVerifier.verify(program, from: .ownership) == nil)
+        #expect(try verify(program, from: .ownership) == nil)
     }
 
     @Test func `loops in a row that each retire their own locals as they end use no retired local`() throws {
         let program = try IRParser.program(from: retiringLoops(3))
-        #expect(IRVerifier.verify(program, from: .ownership) == nil)
+        #expect(try verify(program, from: .ownership) == nil)
     }
 }
 

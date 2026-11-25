@@ -1,11 +1,13 @@
 import RayoIR
+import RayoStageThread
 import Testing
 
 /// The executable that `text` writes as Rayo IR. Throws where the text isn't Rayo IR or breaks the IR's types, and
 /// fails the test where it names no function a run starts at.
 func executable(_ text: String) throws -> IRExecutable {
     let program = try IRParser.program(from: text)
-    if let violation = IRVerifier.verify(program, from: .ownership) { throw violation }
+    let violation = try #require(StageThread.run { thread in IRVerifier.verify(program, from: .ownership, on: thread) })
+    if let violation { throw violation }
     return try #require(IRExecutable(program))
 }
 

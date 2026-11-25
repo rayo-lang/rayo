@@ -1,5 +1,6 @@
 package import RayoDiagnostics
 internal import RayoSource
+package import RayoStageThread
 
 /// A recursive-descent parser. It reports what it can't parse and recovers at the next statement, parameter or field,
 /// so one run lists every syntax error, after the lexer's.
@@ -8,9 +9,9 @@ package struct Parser: ~Copyable {
     /// else.
     typealias ErrorCase = (FoundToken) -> ErrorCode
 
-    /// How many levels deep an expression may nest. The stages after parsing walk an expression by recursing into its
-    /// parts, so this bounds the stack they need.
-    package static let expressionLevelLimit = 10_000
+    /// How many levels deep an expression may nest. The stages walk an expression by recursing into its parts, which
+    /// in a debug build takes up to about 20 KiB of the stage thread's stack a level, so each level gets 64 KiB.
+    package static let expressionLevelLimit = StageThread.stackSize / (64 << 10)
 
     /// The source, as UTF-8.
     let bytes: [UInt8]
@@ -32,8 +33,10 @@ package struct Parser: ~Copyable {
         diagnostics = lexerErrors
     }
 
-    package static func parse(_ source: String) -> (file: SourceFile, diagnostics: [Diagnostic]) {
-        let (file, diagnostics) = parse(Array(source.utf8))
+    package static func parse(
+        _ source: String, on thread: borrowing StageThread,
+    ) -> (file: SourceFile, diagnostics: [Diagnostic]) {
+        let (file, diagnostics) = parse(Array(source.utf8), on: thread)
         // A string is UTF-8, so it always parses to a file.
         guard let file else { preconditionFailure("a string is UTF-8") }
         return (file, diagnostics)
@@ -41,7 +44,9 @@ package struct Parser: ~Copyable {
 
     /// Parses `bytes`, with the lexer's and the parser's diagnostics in source order. Bytes that aren't UTF-8 can't
     /// be read as text at all, and parse to no file.
-    package static func parse(_ bytes: [UInt8]) -> (file: SourceFile?, diagnostics: [Diagnostic]) {
+    package static func parse(
+        _ bytes: [UInt8], on thread: borrowing StageThread,
+    ) -> (file: SourceFile?, diagnostics: [Diagnostic]) {
         let (tokens, lexerErrors) = Lexer.tokenize(bytes)
         guard let tokens else { return (nil, lexerErrors) }
 

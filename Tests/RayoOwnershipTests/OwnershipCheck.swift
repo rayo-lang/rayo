@@ -2,6 +2,14 @@ import RayoCheckedProgram
 import RayoDiagnostics
 import RayoIR
 import RayoOwnership
+import RayoStageThread
+import Testing
+
+/// What the ownership checks, run on the stage thread, make of `program`: the program with the end of each access and
+/// the retirement of each local written in, and the errors the checks find, under the ID of each function.
+func ownershipChecked(_ program: IRProgram) throws -> (program: IRProgram, errors: [FunctionID: [Diagnostic]]) {
+    try #require(StageThread.run { thread in OwnershipChecker.check(program, on: thread) })
+}
 
 /// What the ownership stage makes of `function`, checked as the first function of a program beside the `callees` and
 /// `others`, as the pipeline runs the stage: its body with the end of each access and the retirement of each local
@@ -9,7 +17,7 @@ import RayoOwnership
 func checked(
     _ function: (name: String, text: String), beside others: [(name: String, text: String)] = [],
 ) throws -> (body: IRBody?, errors: [Diagnostic]) {
-    let (program, errors) = OwnershipChecker.check(try program(of: [function] + callees + others, from: .lowering))
+    let (program, errors) = try ownershipChecked(try program(of: [function] + callees + others, from: .lowering))
     let first = FunctionID(index: 0)
     return (program.bodies[first], errors[first] ?? [])
 }

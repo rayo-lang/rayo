@@ -19,14 +19,14 @@ struct AccessBeginningTests {
     ) throws {
         let program = try IRParser.program(from: borrowing(access.blocks))
         let violation = IRViolation(function: "main()", message: access.message)
-        #expect(IRVerifier.verify(program, from: .ownership) == violation)
-        #expect(IRVerifier.verifyEmitterRules(program) == violation)
+        #expect(try verify(program, from: .ownership) == violation)
+        #expect(try verifyEmitterRules(program) == violation)
     }
 
     @Test(arguments: accessesSomePathHasNotBegun)
     func `a use that a path reaches without beginning the access is a violation`(access: UnbegunAccess) throws {
         let program = try IRParser.program(from: borrowing(access.blocks))
-        #expect(IRVerifier.verifyEmitterRules(program) == IRViolation(function: "main()", message: access.message))
+        #expect(try verifyEmitterRules(program) == IRViolation(function: "main()", message: access.message))
     }
 
     @Test func `an access that a second statement begins is a violation`() throws {
@@ -50,8 +50,8 @@ struct AccessBeginningTests {
         let violation = IRViolation(
             function: "main()", message: "the IR begins a0 at bb2, after another statement that begins it",
         )
-        #expect(IRVerifier.verify(program, from: .ownership) == violation)
-        #expect(IRVerifier.verifyEmitterRules(program) == violation)
+        #expect(try verify(program, from: .ownership) == violation)
+        #expect(try verifyEmitterRules(program) == violation)
     }
 
     @Test func `an access that begins on each pass of a loop, before its use, is no violation`() throws {
@@ -65,8 +65,8 @@ struct AccessBeginningTests {
             bb2:
               return
             """))
-        #expect(IRVerifier.verify(program, from: .ownership) == nil)
-        #expect(IRVerifier.verifyEmitterRules(program) == nil)
+        #expect(try verify(program, from: .ownership) == nil)
+        #expect(try verifyEmitterRules(program) == nil)
     }
 
     @Test func `a use in a later block that every path reaches through the beginning is no violation`() throws {
@@ -80,8 +80,8 @@ struct AccessBeginningTests {
               end a0
               return
             """))
-        #expect(IRVerifier.verify(program, from: .ownership) == nil)
-        #expect(IRVerifier.verifyEmitterRules(program) == nil)
+        #expect(try verify(program, from: .ownership) == nil)
+        #expect(try verifyEmitterRules(program) == nil)
     }
 
     @Test func `a use after the access ends is no violation of the rules the emitter trusts`() throws {
@@ -91,7 +91,7 @@ struct AccessBeginningTests {
               _ = call "f(_: &Int)"(a0) @1:1-1:2
               return
             """))
-        #expect(IRVerifier.verifyEmitterRules(program) == nil)
+        #expect(try verifyEmitterRules(program) == nil)
     }
 }
 

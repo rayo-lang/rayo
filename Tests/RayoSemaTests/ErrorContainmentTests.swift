@@ -1,13 +1,10 @@
 import Testing
 import RayoDiagnostics
-import RayoSema
-import RayoSyntax
 
 /// The codes of the errors and warnings that checking `source` reports, and whether the checked program holds a body
 /// for its `main`, which the stages after checking would go on to check, or nil where it declares no `main`.
-private func checked(_ source: String) -> (errors: [ErrorCode], mainHasBody: Bool?) {
-    let (file, syntaxErrors) = Parser.parse(source)
-    let (program, checkErrors, _) = Checker.check(file)
+private func checked(_ source: String) throws -> (errors: [ErrorCode], mainHasBody: Bool?) {
+    let (syntaxErrors, program, checkErrors, _) = try checking(source)
     let main = program.functions.ids.first { program.functions[$0].name == "main()" }
     return ((syntaxErrors + checkErrors).inSourceOrder.map(\.code), main.map { program.bodies[$0] != nil })
 }
@@ -28,8 +25,8 @@ struct ErrorContainmentTests {
     ])
     func `a call to a function whose declaration failed reports nothing more, and taints its caller`(
         declaration: String, expected: [ErrorCode],
-    ) {
-        let reported = checked("func main() {\n    broken(1)\n}\n" + declaration)
+    ) throws {
+        let reported = try checked("func main() {\n    broken(1)\n}\n" + declaration)
         #expect(reported.errors == expected)
         #expect(reported.mainHasBody == false)
     }
@@ -44,8 +41,8 @@ struct ErrorContainmentTests {
     ])
     func `a use of a struct whose declaration failed reports nothing more, and taints the body`(
         declaration: String, expected: [ErrorCode],
-    ) {
-        let reported = checked("func main() {\n    let b: Broken = Broken(x: 1)\n    print(b)\n}\n" + declaration)
+    ) throws {
+        let reported = try checked("func main() {\n    let b: Broken = Broken(x: 1)\n    print(b)\n}\n" + declaration)
         #expect(reported.errors == expected)
         #expect(reported.mainHasBody == false)
     }
@@ -84,7 +81,7 @@ struct ErrorContainmentTests {
     ])
     func `checking says whether a function that failed to parse may have been 'main'`(
         source: String, mayHaveBeenMain: Bool,
-    ) {
-        #expect(Checker.check(Parser.parse(source).file).mainMayHaveFailed == mayHaveBeenMain)
+    ) throws {
+        #expect(try checking(source).mainMayHaveFailed == mayHaveBeenMain)
     }
 }

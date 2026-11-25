@@ -3,7 +3,8 @@ import Testing
 import RayoSyntax
 
 private func errors(_ source: String) -> [ErrorCode] {
-    Parser.parse(source).diagnostics.map(\.code)
+    // A stage thread that can't start has already failed the test, and leaves no errors.
+    (try? parsed(source))?.diagnostics.map(\.code) ?? []
 }
 
 struct ParserErrorTests {
@@ -337,8 +338,8 @@ struct ParserErrorTests {
     ])
     func `a declaration's words say whether its bindings refer to a place, and whether they may change`(
         source: String, kind: DeclarationKind,
-    ) {
-        let (file, errors) = Parser.parse(source)
+    ) throws {
+        let (file, errors) = try parsed(source)
         guard case .function(let function)? = file.declarations.first,
               case .declaration(let declared, _)? = function.body.statements.first?.kind else {
             Issue.record("expected a function whose body starts with a declaration")

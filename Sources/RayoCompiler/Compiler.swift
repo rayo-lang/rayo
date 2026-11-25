@@ -2,6 +2,7 @@ import RayoDiagnostics
 import RayoIR
 import RayoLLVM
 import RayoSema
+import RayoStageThread
 import RayoSyntax
 
 /// The compiler, `rayoc`, which checks a source file, prints what a stage makes of it, or compiles it to object code
@@ -139,11 +140,10 @@ public enum Compiler {
             return CompilerResult(exitCode: 2, errors: usage)
         }
 
-        // Compile the file as the arguments ask, on a thread whose stack lets every stage recurse through the deepest
-        // expression the parser accepts.
-        let compiled = StageThread.run {
+        // Compile the file as the arguments ask, on the stage thread.
+        let compiled = StageThread.run { thread in
             result(compiling: invocation.path) { errors throws(CompilationError) in
-                try compile(invocation, readFile: readFile, writeFile: writeFile, errors: &errors)
+                try compile(invocation, on: thread, readFile: readFile, writeFile: writeFile, errors: &errors)
             }
         }
         return compiled ?? result(of: .failed("can't start a thread to compile on"), in: invocation.path, warnings: [])
@@ -177,62 +177,63 @@ public enum Compiler {
     /// Each stage skips only what an earlier stage found failed, and the compile ends on the program's errors only
     /// before it prints or writes anything. So every error that every stage finds is reported together.
     private static func compile(
-        _ invocation: Invocation, readFile: (String) -> [UInt8]?, writeFile: (String, [UInt8]) -> Bool,
-        errors: inout [Diagnostic],
+        _ invocation: Invocation, on thread: borrowing StageThread, readFile: (String) -> [UInt8]?,
+        writeFile: (String, [UInt8]) -> Bool, errors: inout [Diagnostic],
     ) throws(CompilationError) -> String {
         let path = invocation.path
         return switch invocation.output {
         case .check:
-            try check(path, readFile: readFile, errors: &errors)
+            try check(path, on: thread, readFile: readFile, errors: &errors)
         case .dump(.checked):
-            try checkedProgramText(of: path, readFile: readFile, errors: &errors)
+            try checkedProgramText(of: path, on: thread, readFile: readFile, errors: &errors)
         case .dump(.ir):
-            try irText(of: path, readFile: readFile, errors: &errors)
+            try irText(of: path, on: thread, readFile: readFile, errors: &errors)
         case .objectFile(let objectPath, let build):
-            try writeObjectCode(of: path, to: objectPath, build: build, readFile: readFile, writeFile: writeFile,
-                                errors: &errors)
+            try writeObjectCode(of: path, to: objectPath, build: build, on: thread, readFile: readFile,
+                                writeFile: writeFile, errors: &errors)
         }
     }
 
     /// Checks the source file at `path`, and prints nothing.
     private static func check(
-        _ path: String, readFile: (String) -> [UInt8]?, errors: inout [Diagnostic],
+        _ path: String, on thread: borrowing StageThread, readFile: (String) -> [UInt8]?, errors: inout [Diagnostic],
     ) throws(CompilationError) -> String {
-        let program = try frontEnd(path, readFile: readFile, errors: &errors)
+        let program = try frontEnd(path, on: thread, readFile: readFile, errors: &errors)
         _ = try accepted(program, errors: errors)
         return ""
     }
 
     /// The checked program of the source file at `path`, as text, once the stages after checking accept it too.
     private static func checkedProgramText(
-        of path: String, readFile: (String) -> [UInt8]?, errors: inout [Diagnostic],
+        of path: String, on thread: borrowing StageThread, readFile: (String) -> [UInt8]?, errors: inout [Diagnostic],
     ) throws(CompilationError) -> String {
-        let checked = try checkedProgram(path, readFile: readFile, errors: &errors)
+        let checked = try checkedProgram(path, on: thread, readFile: readFile, errors: &errors)
         // The stages after checking run only for the errors they find, which keep the program from being printed.
-        if let checked { _ = try ir(of: checked.program, errors: &errors) }
-        return CheckedPrinter.text(of: try accepted(checked, errors: errors).program)
+        if let checked { _ = try ir(of: checked.program, on: thread, errors: &errors) }
+        return CheckedPrinter.text(of: try accepted(checked, errors: errors).program, on: thread)
     }
 
     /// The Rayo IR of the source file at `path`, as text, once it checks.
     private static func irText(
-        of path: String, readFile: (String) -> [UInt8]?, errors: inout [Diagnostic],
+        of path: String, on thread: borrowing StageThread, readFile: (String) -> [UInt8]?, errors: inout [Diagnostic],
     ) throws(CompilationError) -> String {
-        let program = try frontEnd(path, readFile: readFile, errors: &errors)
-        return IRPrinter.text(of: try accepted(program, errors: errors).program)
+        let program = try frontEnd(path, on: thread, readFile: readFile, errors: &errors)
+        return IRPrinter.text(of: try accepted(program, errors: errors).program, on: thread)
     }
 
     /// Compiles the source file at `path` as `build` asks, writes its object code to the file at `objectPath`, and
     /// prints nothing.
     private static func writeObjectCode(
-        of path: String, to objectPath: String, build: Build, readFile: (String) -> [UInt8]?,
-        writeFile: (String, [UInt8]) -> Bool, errors: inout [Diagnostic],
+        of path: String, to objectPath: String, build: Build, on thread: borrowing StageThread,
+        readFile: (String) -> [UInt8]?, writeFile: (String, [UInt8]) -> Bool, errors: inout [Diagnostic],
     ) throws(CompilationError) -> String {
-        let program = try frontEnd(path, readFile: readFile, errors: &errors)
+        let program = try frontEnd(path, on: thread, readFile: readFile, errors: &errors)
         let executable = program.flatMap {
             Self.executable(of: $0.program, mainMayHaveFailed: $0.mainMayHaveFailed, errors: &errors)
         }
         let accepted = try accepted(executable, errors: errors)
-        try write(objectCode(of: accepted, build: build, sourcePath: path), to: objectPath, writeFile: writeFile)
+        let objectCode = try objectCode(of: accepted, build: build, sourcePath: path, on: thread)
+        try write(objectCode, to: objectPath, writeFile: writeFile)
         return ""
     }
 

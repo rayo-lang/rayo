@@ -70,8 +70,11 @@ struct ExpressionDepthTests {
     /// A deep sum or call takes a debug `rayoc` seconds to check, so these compiles run one at a time, which leaves
     /// the processor's other cores to the other tests.
     @Test(.serialized, arguments: compilesAtTheLimit)
-    private func `every stage takes an expression as deep as the limit`(shape: Shape, arguments: [String]) {
-        let result = run(arguments, on: printing(shape.expression(levels: Parser.expressionLevelLimit)))
+    private func `every stage takes an expression as deep as the limit, from a client whose stack is small`(
+        shape: Shape, arguments: [String],
+    ) async {
+        let source = printing(shape.expression(levels: Parser.expressionLevelLimit))
+        let result = await onNewThread(stackSize: smallStackSize) { run(arguments, on: source) }
         #expect(result.exitCode == 0, "\(result.errors)")
     }
 

@@ -1,12 +1,14 @@
 import LLVM
 import RayoIR
+import RayoStageThread
 
 /// Compiles Rayo IR to object code for the host, through LLVM.
 package enum LLVMEmitter {
     /// The object code of `executable` and the program runtime, whose panics name `sourcePath` as the file they
     /// happen in, compiled for `build` and ready to link into an executable for the host.
-    package static func objectCode(for executable: IRExecutable, sourcePath: String, build: Build) throws(LLVMError)
-        -> [UInt8] {
+    package static func objectCode(
+        for executable: IRExecutable, sourcePath: String, build: Build, on thread: borrowing StageThread,
+    ) throws(LLVMError) -> [UInt8] {
         let target = try TargetMachine(optimizes: build.optimizes)
         let program = try ProgramEmitter(sourcePath: sourcePath, for: target, build: build)
 

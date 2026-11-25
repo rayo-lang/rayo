@@ -16,15 +16,15 @@ private func summary(of declaration: Declaration) -> String {
 }
 
 struct DeclarationTests {
-    @Test func `a file keeps its declarations in source order, the failed ones among them`() {
-        let file = Parser.parse("struct A\nfunc f() {}\nstruct B(var 1)\nfunc h(x) {}\nfunc g() {}\nstruct C").file
+    @Test func `a file keeps its declarations in source order, the failed ones among them`() throws {
+        let file = try parsed("struct A\nfunc f() {}\nstruct B(var 1)\nfunc h(x) {}\nfunc g() {}\nstruct C").file
         #expect(file.declarations.map(summary(of:)) == [
             "struct A", "func f", "failed struct B", "failed func h", "func g", "struct C",
         ])
     }
 
     @Test func `a struct's body holds its members in source order, the failed ones among them`() throws {
-        let file = Parser.parse("struct S {\n    func f() {}\n    struct T\n    func g(x) {}\n}").file
+        let file = try parsed("struct S {\n    func f() {}\n    struct T\n    func g(x) {}\n}").file
         guard case .structure(let structure)? = file.declarations.first else {
             Issue.record("expected a struct, found \(file.declarations)")
             return
@@ -33,7 +33,7 @@ struct DeclarationTests {
     }
 
     @Test func `a parameter's type says whether it borrows its argument, borrows it for change, or owns it`() throws {
-        let file = Parser.parse("func f(_ a: &Int, b: mutable &[2 of Int], c: Bool) {}").file
+        let file = try parsed("func f(_ a: &Int, b: mutable &[2 of Int], c: Bool) {}").file
         guard case .function(let function)? = file.declarations.first else {
             Issue.record("expected a function, found \(file.declarations)")
             return
@@ -49,7 +49,7 @@ struct DeclarationTests {
     func `a struct declares a type, and a function doesn't, whether or not it parsed`(
         source: String, declaresType: Bool,
     ) throws {
-        let declaration = try #require(Parser.parse(source).file.declarations.first)
+        let declaration = try #require(try parsed(source).file.declarations.first)
         #expect(declaration.declaresType == declaresType)
     }
 }

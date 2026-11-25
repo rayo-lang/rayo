@@ -257,7 +257,7 @@ private func body(of blocks: String, result: String = "Void") throws -> IRBody {
         \(blocks)
         }
         """)
-    #expect(IRVerifier.verify(program, from: .lowering) == nil)
+    #expect(try verify(program, from: .lowering) == nil)
     // The program's one function has a body.
     return try #require(program.bodies[FunctionID(index: 0)])
 }

@@ -1,10 +1,13 @@
 import RayoCheckedProgram
+import RayoStageThread
 
 /// Checks the rules of IR that the stages after the one that gave it take as given.
 public enum IRVerifier {
     /// The first declaration or operation in `program`, which `stage` gave, that breaks the IR's rules, or nil where
     /// none does. Declarations are checked before bodies, each in the order of its function's ID.
-    public static func verify(_ program: IRProgram, from stage: IRStage) -> IRViolation? {
+    package static func verify(
+        _ program: IRProgram, from stage: IRStage, on thread: borrowing StageThread,
+    ) -> IRViolation? {
         firstViolation(in: program) { body, declaration throws(IRViolation) in
             try verifySharedRules(in: body, of: declaration, in: program)
             try verifyStageRules(of: stage, in: body, of: declaration)
@@ -13,7 +16,7 @@ public enum IRVerifier {
 
     /// The first declaration or operation in `program`, which the ownership stage gave, that breaks a rule the emitter
     /// takes as given, or nil where none does. Those are all its rules but where its accesses end.
-    package static func verifyEmitterRules(_ program: IRProgram) -> IRViolation? {
+    package static func verifyEmitterRules(_ program: IRProgram, on thread: borrowing StageThread) -> IRViolation? {
         firstViolation(in: program) { body, declaration throws(IRViolation) in
             try verifySharedRules(in: body, of: declaration, in: program)
             try verifyOwnershipRulesTheEmitterTrusts(in: body, of: declaration)

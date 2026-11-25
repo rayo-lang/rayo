@@ -2,6 +2,7 @@ import Testing
 import RayoIR
 import RayoCheckedProgram
 import RayoSource
+import RayoStageThread
 
 // The tests write their IR as text. A test names the source ranges it checks on line 2, each at the column it numbers
 // it by, as in `read %0 @2:3-2:3`; every other range is `@1:1-1:1`, ahead of them all.
@@ -15,7 +16,8 @@ func at(_ column: Int) -> SourceRange {
 /// The program `text` writes, which must read as Rayo IR and keep the rules of the IR that `stage` gives.
 func parsedIR(_ text: String, from stage: IRStage) throws -> IRProgram {
     let program = try IRParser.program(from: text)
-    if let violation = IRVerifier.verify(program, from: stage) { throw violation }
+    let violation = try #require(StageThread.run { thread in IRVerifier.verify(program, from: stage, on: thread) })
+    if let violation { throw violation }
     return program
 }
 

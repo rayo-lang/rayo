@@ -61,7 +61,7 @@ struct ElementIndexTests {
     func `is a violation that names the local and the count`(index: UncheckedIndex) throws {
         let program = try IRParser.program(from: indexing(index.local, after: index.store))
         let violation = IRViolation(function: "main()", message: index.message)
-        #expect(IRVerifier.verify(program, from: .lowering) == violation)
+        #expect(try verify(program, from: .lowering) == violation)
     }
 
     @Test(arguments: namedElements)
@@ -81,14 +81,14 @@ struct ElementIndexTests {
             }
             """)
         let message = "the IR indexes an array of 2 elements at %1, which no statement stores"
-        #expect(IRVerifier.verify(program, from: .lowering) == IRViolation(function: "main()", message: message))
+        #expect(try verify(program, from: .lowering) == IRViolation(function: "main()", message: message))
     }
 
     @Test func `a temporary index stored only by a check below its array's count is no violation`() throws {
         let program = try IRParser.program(from: indexing("temp %1: UInt", after: """
             %1 @1:1-1:2 = index UInt 1 below 2 @1:1-1:2
             """))
-        #expect(IRVerifier.verify(program, from: .lowering) == nil)
+        #expect(try verify(program, from: .lowering) == nil)
     }
 
     @Test func `an index into an inner array is checked against the inner array's count`() throws {
@@ -107,7 +107,7 @@ struct ElementIndexTests {
             }
             """)
         let message = "the IR indexes an array of 3 elements at %1, which it changes without checking it is below 3"
-        #expect(IRVerifier.verify(program, from: .lowering) == IRViolation(function: "main()", message: message))
+        #expect(try verify(program, from: .lowering) == IRViolation(function: "main()", message: message))
     }
 }
 

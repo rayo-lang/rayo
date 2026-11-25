@@ -2,6 +2,7 @@
 import RayoDiagnostics
 import RayoIR
 import RayoOwnership
+import RayoStageThread
 import Testing
 
 /// IR that breaks one of the IR's rules, the stage that gave it, and what the verifier says is wrong with it.
@@ -39,7 +40,7 @@ struct IRVerificationTests {
     ) throws {
         let program = try program(running: broken.blocks)
         #expect(throws: CompilationError.failed("internal error: in 'main()': \(broken.message)")) {
-            try Compiler.verified(program, from: broken.stage, in: .debug)
+            try verified(program, from: broken.stage, in: .debug)
         }
     }
 
@@ -49,7 +50,7 @@ struct IRVerificationTests {
     ) throws {
         let program = try program(running: broken.blocks)
         #expect(throws: CompilationError.failed("internal error: in 'main()': \(broken.message)")) {
-            try Compiler.verified(program, from: broken.stage, in: .release)
+            try verified(program, from: broken.stage, in: .release)
         }
     }
 
@@ -58,13 +59,13 @@ struct IRVerificationTests {
         broken: BrokenIR,
     ) throws {
         let program = try program(running: broken.blocks)
-        #expect(try Compiler.verified(program, from: broken.stage, in: .release) == program)
+        #expect(try verified(program, from: broken.stage, in: .release) == program)
     }
 
     @Test(arguments: [IRStage.lowering, .ownership], [CompilerBuild.debug, .release])
     func `IR that keeps its rules goes on as it is`(stage: IRStage, build: CompilerBuild) throws {
         let program = try program(running: "  return")
-        #expect(try Compiler.verified(program, from: stage, in: build) == program)
+        #expect(try verified(program, from: stage, in: build) == program)
     }
 
     @Test(arguments: [CompilerBuild.debug, .release])
@@ -72,18 +73,32 @@ struct IRVerificationTests {
         build: CompilerBuild,
     ) throws {
         let owned = try ownedIR(of: mainOfRounds(4))
-        #expect(try Compiler.verified(owned, from: .ownership, in: build) == owned)
+        #expect(try verified(owned, from: .ownership, in: build) == owned)
     }
+}
+
+/// `program`, which `stage` gave, once it has passed, on the stage thread, the checks `build` of `rayoc` runs on that
+/// stage's IR.
+private func verified(_ program: IRProgram, from stage: IRStage, in build: CompilerBuild) throws -> IRProgram {
+    let verified = try StageThread.run { thread throws(CompilationError) in
+        try Compiler.verified(program, from: stage, on: thread, in: build)
+    }
+    return try #require(verified)
 }
 
 /// The IR that the ownership stage gives for `source`, which must check with no error.
 private func ownedIR(of source: String) throws -> IRProgram {
     var errors: [Diagnostic] = []
     let readSource = { (_: String) in Array(source.utf8) }
-    let checked = try #require(try Compiler.checkedProgram("main.rayo", readFile: readSource, errors: &errors))
-    let (owned, ownershipErrors) = OwnershipChecker.check(Lowering.lower(checked.program))
+    let owned = try StageThread.run { thread throws(CompilationError) in
+        let checked = try Compiler.checkedProgram("main.rayo", on: thread, readFile: readSource, errors: &errors)
+        return checked.map { OwnershipChecker.check(Lowering.lower($0.program, on: thread), on: thread) }
+    }
+    // The stage thread starts, and the source is UTF-8 text.
+    let ownedOnStageThread = try #require(owned)
+    let (program, ownershipErrors) = try #require(ownedOnStageThread)
     try #require(errors.allSatisfy { $0.severity != .error } && ownershipErrors.isEmpty)
-    return owned
+    return program
 }
 
 /// A `main` that takes `count` rounds over the array `a` of four Ints. Each round finds an element at an index a `let`

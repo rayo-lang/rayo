@@ -1,5 +1,5 @@
 import RayoSema
-import RayoSyntax
+import RayoStageThread
 import SnapshotTesting
 import Testing
 
@@ -7,11 +7,11 @@ import Testing
 private func expectChecking(
     of source: String, toMatch name: String, sourceLocation: Testing.SourceLocation = #_sourceLocation,
 ) throws {
-    let (file, syntaxErrors) = Parser.parse(source)
+    let (syntaxErrors, program, checkErrors, _) = try checking(source)
     try #require(syntaxErrors.isEmpty, "\(syntaxErrors)", sourceLocation: sourceLocation)
-    let (program, checkErrors, _) = Checker.check(file)
     try #require(checkErrors.isEmpty, "\(checkErrors)", sourceLocation: sourceLocation)
-    Snapshot("\(name).checked").expect(CheckedPrinter.text(of: program), sourceLocation: sourceLocation)
+    let text = try #require(StageThread.run { thread in CheckedPrinter.text(of: program, on: thread) })
+    Snapshot("\(name).checked").expect(text, sourceLocation: sourceLocation)
 }
 
 @Suite("The checked program of each construct")

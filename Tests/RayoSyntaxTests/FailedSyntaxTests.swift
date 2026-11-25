@@ -28,7 +28,7 @@ struct FailedSyntaxTests {
         source: String, declaresType: Bool, name: String?, coveredText: String,
     ) throws {
         let text = "func g() {}\n" + source
-        let file = Parser.parse(text).file
+        let file = try parsed(text).file
         try #require(file.declarations.count == 2)
         guard case .failed(let failed) = file.declarations[1] else {
             Issue.record("expected a failed declaration, found \(file.declarations[1])")
@@ -45,7 +45,7 @@ struct FailedSyntaxTests {
     }
 
     @Test func `a function whose header fails keeps its parameters and its body in the tree`() throws {
-        let file = Parser.parse("func f(a: Int, b, c: Bool) -> Int {\n    print(1)\n    copy\n}").file
+        let file = try parsed("func f(a: Int, b, c: Bool) -> Int {\n    print(1)\n    copy\n}").file
         guard case .failed(let failed)? = file.declarations.first,
               case .function(let parameters, let result, let body) = failed.parts
         else {
@@ -62,8 +62,8 @@ struct FailedSyntaxTests {
         }
     }
 
-    @Test func `a struct with a field that fails keeps its other fields and its members in the tree`() {
-        let file = Parser.parse("struct S(var a: Int, b: Bool, let c: Int) {\n    func f() {}\n}").file
+    @Test func `a struct with a field that fails keeps its other fields and its members in the tree`() throws {
+        let file = try parsed("struct S(var a: Int, b: Bool, let c: Int) {\n    func f() {}\n}").file
         guard case .failed(let failed)? = file.declarations.first,
               case .structure(let fields, let members) = failed.parts
         else {
@@ -74,14 +74,14 @@ struct FailedSyntaxTests {
         #expect(members.map(\.name) == ["f"])
     }
 
-    @Test func `text that begins no declaration leaves nothing in the tree`() {
-        let file = Parser.parse("let x = 1\nfunc g() {}").file
+    @Test func `text that begins no declaration leaves nothing in the tree`() throws {
+        let file = try parsed("let x = 1\nfunc g() {}").file
         #expect(file.declarations.map(\.name) == ["g"])
     }
 
     @Test(arguments: ["let = 1", "print(1) 2", "x = )"])
     func `a statement that fails to parse leaves an error statement in its place`(statement: String) throws {
-        let file = Parser.parse("func f() {\n    print(0)\n    \(statement)\n    print(2)\n}").file
+        let file = try parsed("func f() {\n    print(0)\n    \(statement)\n    print(2)\n}").file
         guard case .function(let function)? = file.declarations.first else {
             Issue.record("expected a function, found \(file.declarations)")
             return
@@ -101,7 +101,7 @@ struct FailedSyntaxTests {
     func `a statement that fails to parse keeps the names its 'let' or 'var' binds before the error`(
         statement: String, names: [String],
     ) throws {
-        let file = Parser.parse("func f() {\n    \(statement)\n}").file
+        let file = try parsed("func f() {\n    \(statement)\n}").file
         guard case .function(let function)? = file.declarations.first else {
             Issue.record("expected a function, found \(file.declarations)")
             return

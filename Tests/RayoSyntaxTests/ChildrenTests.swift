@@ -3,7 +3,7 @@ import RayoSyntax
 
 /// The statements of the body of `source`'s one function.
 private func statements(of source: String) throws -> [Stmt] {
-    guard case .function(let function)? = Parser.parse(source).file.declarations.first else {
+    guard case .function(let function)? = try parsed(source).file.declarations.first else {
         throw ExpectedFunction()
     }
     return function.body.statements

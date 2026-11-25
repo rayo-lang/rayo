@@ -7,8 +7,8 @@ struct BuiltinTests {
     @Test(arguments: Builtin.allCases)
     func `the prelude gives each built-in where a call finds it, a function by its name and an initializer in its type`(
         builtin: Builtin,
-    ) {
-        var declarations = Declarations(names: TopLevelNames(of: Parser.parse("").file))
+    ) throws {
+        var declarations = Declarations(names: TopLevelNames(of: try parsed("").file))
         declarations.declarePrelude()
 
         let found = if let type = builtin.initializedType {
@@ -30,8 +30,8 @@ struct BuiltinTests {
         #expect(BuiltinName.function("print").spelling == "print")
     }
 
-    @Test func `an initializer of a prelude type is a member of the type, and no function`() {
-        var declarations = Declarations(names: TopLevelNames(of: Parser.parse("").file))
+    @Test func `an initializer of a prelude type is a member of the type, and no function`() throws {
+        var declarations = Declarations(names: TopLevelNames(of: try parsed("").file))
         declarations.declarePrelude()
 
         #expect(initializers(of: .int, in: declarations).map(\.description) == ["Int(_: Int)", "Int(_: UInt)"])
@@ -40,8 +40,8 @@ struct BuiltinTests {
         #expect(declarations.functions(named: "Int").isEmpty)
     }
 
-    @Test func `'print' borrows each scalar type`() {
-        var declarations = Declarations(names: TopLevelNames(of: Parser.parse("").file))
+    @Test func `'print' borrows each scalar type`() throws {
+        var declarations = Declarations(names: TopLevelNames(of: try parsed("").file))
         declarations.declarePrelude()
 
         let prints = declarations.functions(named: "print").map(\.description)
@@ -49,8 +49,8 @@ struct BuiltinTests {
     }
 
     @Test(arguments: ["func Int() {}", "struct Int"])
-    func `a struct or a function of the file shadows a prelude type`(source: String) {
-        let declarations = Declarations(names: TopLevelNames(of: Parser.parse(source).file))
+    func `a struct or a function of the file shadows a prelude type`(source: String) throws {
+        let declarations = Declarations(names: TopLevelNames(of: try parsed(source).file))
 
         #expect(declarations.preludeType(named: "Int") == nil)
         #expect(declarations.preludeType(named: "UInt") == .uint)

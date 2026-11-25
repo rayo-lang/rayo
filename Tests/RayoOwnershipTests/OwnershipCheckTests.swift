@@ -79,7 +79,7 @@ struct OwnershipCheckTests {
               return
             """, named: "passing()")
 
-        let (checked, errors) = OwnershipChecker.check(try program(of: [failing, passing] + callees, from: .lowering))
+        let (checked, errors) = try ownershipChecked(try program(of: [failing, passing] + callees, from: .lowering))
         let expected = try program(of: [failing, ended] + callees, from: .ownership)
         #expect(errors == [FunctionID(index: 0): [Diagnostic(.unreadValue(name: "y"), at: at(5))]])
         #expect(checked.bodies[FunctionID(index: 0)] == nil)
@@ -98,14 +98,14 @@ struct OwnershipCheckTests {
         let early = function("bb0:\n  %0 @2:5-2:5 = operand 1 @1:1-1:1\n  return", named: "early()")
         let clean = function("bb0:\n  return", named: "clean()")
 
-        let (_, reported) = OwnershipChecker.check(try program(of: [late, early, clean], from: .lowering))
+        let (_, reported) = try ownershipChecked(try program(of: [late, early, clean], from: .lowering))
         #expect(reported.mapValues { $0.map(\.range.start.column) } == [
             FunctionID(index: 0): [6, 7], FunctionID(index: 1): [5],
         ])
     }
 
     @Test func `a function of turns that each work out a new value from the old one passes every check`() throws {
-        let (_, errors) = OwnershipChecker.check(try program(of: [longFunction(rounds: 3)] + callees, from: .lowering))
+        let (_, errors) = try ownershipChecked(try program(of: [longFunction(rounds: 3)] + callees, from: .lowering))
         #expect(errors.isEmpty)
     }
 }

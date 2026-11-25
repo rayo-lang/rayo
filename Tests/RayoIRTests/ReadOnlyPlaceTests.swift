@@ -24,7 +24,7 @@ struct ReadOnlyPlaceTests {
     ) throws {
         let program = try IRParser.program(from: changingPoints(change.statements))
         let violation = IRViolation(function: pointsFunction, message: change.message)
-        #expect(IRVerifier.verify(program, from: stage) == violation)
+        #expect(try verify(program, from: stage) == violation)
     }
 
     @Test(arguments: readOnlyChanges)
@@ -33,14 +33,14 @@ struct ReadOnlyPlaceTests {
     ) throws {
         let program = try IRParser.program(from: changingPoints(change.statements))
         let violation = IRViolation(function: pointsFunction, message: change.message)
-        #expect(IRVerifier.verifyEmitterRules(program) == violation)
+        #expect(try verifyEmitterRules(program) == violation)
     }
 
     @Test(arguments: allowedChanges)
     func `a change of a place code may change is no violation`(change: AllowedChange) throws {
         let program = try IRParser.program(from: changingPoints(change.statements))
-        #expect(IRVerifier.verify(program, from: .lowering) == nil)
-        #expect(IRVerifier.verifyEmitterRules(program) == nil)
+        #expect(try verify(program, from: .lowering) == nil)
+        #expect(try verifyEmitterRules(program) == nil)
     }
 }
 

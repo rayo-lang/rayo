@@ -4,6 +4,7 @@ import Testing
 import RayoIR
 import RayoSema
 import RayoSource
+import RayoStageThread
 
 /// An error at `line` of the file.
 private func error(on line: Int) -> Diagnostic {
@@ -46,13 +47,15 @@ struct PipelineTests {
         }
     }
 
-    @Test func `a warning is shown as one, and doesn't fail the compile`() {
-        let result = Compiler.result(compiling: "a.rayo") { errors throws(CompilationError) in
-            let program = try Compiler.frontEnd("a.rayo", readFile: emptyMain, errors: &errors)
-            errors.append(warning(on: 1))
-            _ = try Compiler.accepted(program, errors: errors)
-            return ""
-        }
+    @Test func `a warning is shown as one, and doesn't fail the compile`() throws {
+        let result = try #require(StageThread.run { thread in
+            Compiler.result(compiling: "a.rayo") { errors throws(CompilationError) in
+                let program = try Compiler.frontEnd("a.rayo", on: thread, readFile: emptyMain, errors: &errors)
+                errors.append(warning(on: 1))
+                _ = try Compiler.accepted(program, errors: errors)
+                return ""
+            }
+        })
         #expect(result.exitCode == 0)
         #expect(result.diagnostics == [warning(on: 1)])
         #expect(result.errors == """
@@ -76,7 +79,9 @@ struct PipelineTests {
     @Test func `a file that can't be read stops the compile with why`() {
         var errors: [Diagnostic] = []
         #expect(throws: CompilationError.failed("can't read 'a.rayo'")) {
-            try Compiler.frontEnd("a.rayo", readFile: { _ in nil }, errors: &errors)
+            try StageThread.run { thread throws(CompilationError) in
+                try Compiler.frontEnd("a.rayo", on: thread, readFile: { _ in nil }, errors: &errors)
+            }
         }
     }
 }

@@ -4,8 +4,8 @@ import RayoCheckedProgram
 import RayoSyntax
 
 /// The names of the functions of the program `source` checks to, and the names of those it holds a body for.
-private func checked(_ source: String) -> (declared: [String], withBodies: [String]) {
-    let program = Checker.check(Parser.parse(source).file).program
+private func checked(_ source: String) throws -> (declared: [String], withBodies: [String]) {
+    let program = try checking(source).program
     let ids = program.functions.ids
     return (ids.map { program.functions[$0].name }, ids.filter { program.bodies[$0] != nil }.map {
         program.functions[$0].name
@@ -13,8 +13,8 @@ private func checked(_ source: String) -> (declared: [String], withBodies: [Stri
 }
 
 struct TaintTests {
-    @Test func `a file with errors checks to a program that holds a body for each untainted function alone`() {
-        let program = checked("""
+    @Test func `a file with errors checks to a program that holds a body for each untainted function alone`() throws {
+        let program = try checked("""
             func clean() {}
             func parses() {
                 let = 1
@@ -37,8 +37,8 @@ struct TaintTests {
         #expect(program.withBodies == ["clean()", "callsTainted()"])
     }
 
-    @Test func `an error that leaves a body's meaning whole taints nothing, unless what it is in fails`() {
-        let program = checked("""
+    @Test func `an error that leaves a body's meaning whole taints nothing, unless what it is in fails`() throws {
+        let program = try checked("""
             func unused() -> Int { 1 }
             func unusedValue() {
                 unused()
@@ -65,14 +65,14 @@ struct TaintTests {
         ])
     }
 
-    @Test func `a function whose declaration fails to check keeps its ID, with no declaration`() {
-        let program = Checker.check(Parser.parse("func a(_ n: Nope) {}\nfunc b() {}").file).program
+    @Test func `a function whose declaration fails to check keeps its ID, with no declaration`() throws {
+        let program = try checking("func a(_ n: Nope) {}\nfunc b() {}").program
         #expect(program.functions.ids.map(\.index) == [1])
         #expect(program.bodies.keys.map(\.index) == [1])
     }
 
-    @Test func `a use of a parameter whose type failed taints the body`() {
-        let checker = FileChecker(Parser.parse("func f(n: Nope) {\n    print(n)\n    print(1)\n}").file)
+    @Test func `a use of a parameter whose type failed taints the body`() throws {
+        let checker = FileChecker(try parsed("func f(n: Nope) {\n    print(n)\n    print(1)\n}").file)
         _ = checker.check()
         #expect(checker.errors.taints.functions == [FunctionID(index: 0)])
     }
@@ -84,7 +84,7 @@ struct UntaintedFailureTests {
     @Test func `a statement left out where no body is tainted stops the compiler`() async throws {
         let exit = await #expect(processExitsWith: .failure, observing: [\.standardErrorContent]) {
             // A `break` outside a loop fails, and is left out.
-            let file = Parser.parse("func main() {\n    break\n}").file
+            let file = try parsed("func main() {\n    break\n}").file
             guard case .function(let main) = file.declarations.first else { return }
             let body = BodyChecker(file: FileChecker(file), parameters: [], declaredAs: [], result: .void)
             _ = body.check(main.body)
@@ -95,7 +95,7 @@ struct UntaintedFailureTests {
     @Test func `a single expression left out where no body is tainted stops the compiler`() async throws {
         let exit = await #expect(processExitsWith: .failure, observing: [\.standardErrorContent]) {
             // A body whose single expression failed returns nothing.
-            let body = BodyChecker(file: FileChecker(Parser.parse("").file), parameters: [], declaredAs: [],
+            let body = BodyChecker(file: FileChecker(try parsed("").file), parameters: [], declaredAs: [],
                                    result: .int)
             _ = body.statements(returning: nil)
         }

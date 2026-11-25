@@ -19,7 +19,7 @@ struct UnreachableBlockTests {
         let program = try IRParser.program(from: main(reached.blocks))
         let message = "the IR reaches bb\(reached.block), which ends in unreachable"
         let violation = IRViolation(function: "main()", message: message)
-        #expect(IRVerifier.verify(program, from: stage) == violation)
+        #expect(try verify(program, from: stage) == violation)
     }
 
     @Test(arguments: [IRStage.lowering, .ownership])
@@ -34,7 +34,7 @@ struct UnreachableBlockTests {
             bb3:
               branch true, bb3, bb1
             """))
-        #expect(IRVerifier.verify(program, from: stage) == nil)
+        #expect(try verify(program, from: stage) == nil)
     }
 }
 

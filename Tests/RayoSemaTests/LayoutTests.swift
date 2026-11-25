@@ -1,6 +1,4 @@
 @testable import RayoCheckedProgram
-import RayoSema
-import RayoSyntax
 import Testing
 
 struct LayoutTests {
@@ -93,8 +91,8 @@ private let hit = StructType(name: "Hit", fields: [
 
 /// The types of the program `declarations` make, after an empty `main`.
 private func types(_ declarations: String) throws -> TypeTable {
-    let checked = Checker.check(Parser.parse("func main() {}\n" + declarations).file)
-    #expect(checked.diagnostics.isEmpty)
+    let checked = try checking("func main() {}\n" + declarations)
+    #expect(checked.checkErrors.isEmpty)
     return checked.program.types
 }
 

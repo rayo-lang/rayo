@@ -1,6 +1,7 @@
 import RayoCheckedProgram
 import RayoDiagnostics
 import RayoIR
+import RayoStageThread
 
 /// Checks what each function of a lowered program does with its places: its moves, the values its locals hold at each
 /// use, its accesses, and the values it leaves unread. It writes the end of each access and the retirement of each
@@ -9,7 +10,9 @@ public enum OwnershipChecker {
     /// The program with the end of each access and the retirement of each local written into the body of each function
     /// that passes every check, and without the body of each function that fails one, and the errors the checks find,
     /// under the ID of each function that has any, in source order.
-    public static func check(_ program: IRProgram) -> (program: IRProgram, errors: [FunctionID: [Diagnostic]]) {
+    package static func check(
+        _ program: IRProgram, on thread: borrowing StageThread,
+    ) -> (program: IRProgram, errors: [FunctionID: [Diagnostic]]) {
         var checked = program
         var errors: [FunctionID: [Diagnostic]] = [:]
         for (id, body) in program.definedFunctions {

@@ -18,13 +18,13 @@ struct OwnershipStatementTests {
     ) throws {
         let program = try IRParser.program(from: assigningALocal(statement.blocks))
         let violation = IRViolation(function: "main()", message: statement.message)
-        #expect(IRVerifier.verify(program, from: .lowering) == violation)
+        #expect(try verify(program, from: .lowering) == violation)
     }
 
     @Test(arguments: ownershipStatements)
     func `an end or a retirement in the ownership stage's IR is no violation`(statement: OwnershipStatement) throws {
         let program = try IRParser.program(from: assigningALocal(statement.blocks))
-        #expect(IRVerifier.verify(program, from: .ownership) == nil)
+        #expect(try verify(program, from: .ownership) == nil)
     }
 }
 

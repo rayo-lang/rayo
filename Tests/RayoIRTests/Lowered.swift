@@ -3,6 +3,7 @@ import RayoDiagnostics
 import RayoIR
 import RayoSema
 import RayoSource
+import RayoStageThread
 import RayoSyntax
 import SnapshotTesting
 import Testing
@@ -12,15 +13,19 @@ struct RejectedSource: Error {
     let diagnostics: [Diagnostic]
 }
 
-/// Parses, checks and lowers `source`, throwing a `RejectedSource` where the parser or the checker rejects it.
-func lowered(_ source: String) throws(RejectedSource) -> IRProgram {
-    let (file, syntaxErrors) = Parser.parse(source)
-    guard syntaxErrors.isEmpty else { throw RejectedSource(diagnostics: syntaxErrors) }
+/// Parses, checks and lowers `source` on the stage thread, throwing a `RejectedSource` where the parser or the
+/// checker rejects it.
+func lowered(_ source: String) throws -> IRProgram {
+    let lowered = try StageThread.run { thread throws(RejectedSource) in
+        let (file, syntaxErrors) = Parser.parse(source, on: thread)
+        guard syntaxErrors.isEmpty else { throw RejectedSource(diagnostics: syntaxErrors) }
 
-    let (program, checkErrors, _) = Checker.check(file)
-    guard checkErrors.isEmpty else { throw RejectedSource(diagnostics: checkErrors) }
+        let (program, checkErrors, _) = Checker.check(file, on: thread)
+        guard checkErrors.isEmpty else { throw RejectedSource(diagnostics: checkErrors) }
 
-    return Lowering.lower(program)
+        return Lowering.lower(program, on: thread)
+    }
+    return try #require(lowered)
 }
 
 /// Lowers `source`, and expects the IR's text to be the snapshot `name.ir`, to read back as the same IR, and to keep
@@ -29,10 +34,10 @@ func expectLowering(
     of source: String, toMatch name: String, sourceLocation: Testing.SourceLocation = #_sourceLocation,
 ) throws {
     let program = try lowered(source)
-    let text = IRPrinter.text(of: program)
+    let text = try irText(of: program)
     Snapshot("\(name).ir").expect(text, sourceLocation: sourceLocation)
     #expect(try IRParser.program(from: text) == program, sourceLocation: sourceLocation)
-    #expect(IRVerifier.verify(program, from: .lowering) == nil, sourceLocation: sourceLocation)
+    #expect(try verify(program, from: .lowering) == nil, sourceLocation: sourceLocation)
 }
 
 /// Lowers a `main` whose body is `body`, and expects the IR's text to be the snapshot `name.ir`, to read back as the

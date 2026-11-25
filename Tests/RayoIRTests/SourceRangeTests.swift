@@ -6,7 +6,7 @@ import Testing
 struct SourceRangeTests {
     @Test
     func `an operation and its temporary keep the range of the expression, and an operand the range of its local`()
-        throws(RejectedSource) {
+        throws {
         let source = "func main() {\n    let a = 7\n    print(a / 0)\n}"
         let main = try lowered(source).body(at: 0)
 
@@ -23,7 +23,7 @@ struct SourceRangeTests {
         #expect(text(of: dividend, in: source) == "a")
     }
 
-    @Test func `a declaration and an assignment keep the range of their value`() throws(RejectedSource) {
+    @Test func `a declaration and an assignment keep the range of their value`() throws {
         let source = "func main() {\n    var x = 1 + 2\n    x = 3\n}"
         let main = try lowered(source).body(at: 0)
 
@@ -41,7 +41,7 @@ struct SourceRangeTests {
         #expect(text(of: assigned.range, in: source) == "x")
     }
 
-    @Test func `a compound assignment keeps the range of its local's name`() throws(RejectedSource) {
+    @Test func `a compound assignment keeps the range of its local's name`() throws {
         let source = "func main() {\n    var x = 0\n    x += 1\n}"
         let main = try lowered(source).body(at: 0)
 
@@ -57,7 +57,7 @@ struct SourceRangeTests {
         #expect(text(of: operand, in: source) == "x")
     }
 
-    @Test func `a '&&' and its temporary keep the range of the whole '&&'`() throws(RejectedSource) {
+    @Test func `a '&&' and its temporary keep the range of the whole '&&'`() throws {
         let source = "func main() {\n    let a = true\n    let b = a && false\n}"
         let main = try lowered(source).body(at: 0)
 
@@ -74,7 +74,7 @@ struct SourceRangeTests {
         #expect(text(of: rightRange, in: source) == "a && false")
     }
 
-    @Test func `two uses of one place name one place, each at the range of its own use`() throws(RejectedSource) {
+    @Test func `two uses of one place name one place, each at the range of its own use`() throws {
         let source = """
             func main() {
                 let e = Enemy(hp: 1)
@@ -107,7 +107,7 @@ struct SourceRangeTests {
             (body: "let c = true\n    if c {}", condition: "c"),
         ],
     )
-    func branchConditionRange(body: String, condition: String) throws(RejectedSource) {
+    func branchConditionRange(body: String, condition: String) throws {
         let source = "func main() {\n    \(body)\n}"
         let main = try lowered(source).body(at: 0)
 
@@ -126,7 +126,7 @@ struct SourceRangeTests {
             (body: "let x = copy n\n    return x", value: "x"),
         ],
     )
-    func returnedValueRange(body: String, value: String) throws(RejectedSource) {
+    func returnedValueRange(body: String, value: String) throws {
         let source = "func main() {}\nfunc result(_ n: Int) -> Int {\n    \(body)\n}"
         let result = try lowered(source).body(at: 1)
 

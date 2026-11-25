@@ -17,7 +17,7 @@ struct AccessScopeTests {
     func `is a violation that names the access and the block`(access: UnscopedAccess) throws {
         let program = try IRParser.program(from: borrowing(access.blocks))
         let violation = IRViolation(function: "main()", message: access.message)
-        #expect(IRVerifier.verify(program, from: .ownership) == violation)
+        #expect(try verify(program, from: .ownership) == violation)
     }
 
     @Test func `an access that ends once on every path from its beginning is no violation`() throws {
@@ -34,7 +34,7 @@ struct AccessScopeTests {
             bb3:
               return
             """))
-        #expect(IRVerifier.verify(program, from: .ownership) == nil)
+        #expect(try verify(program, from: .ownership) == nil)
     }
 
     @Test func `an access begun again while it is held is a violation`() throws {
@@ -50,7 +50,7 @@ struct AccessScopeTests {
         program.bodies[main] = body
 
         let message = "the IR begins a0 at bb0, where it is already held"
-        #expect(IRVerifier.verify(program, from: .ownership) == IRViolation(function: "main()", message: message))
+        #expect(try verify(program, from: .ownership) == IRViolation(function: "main()", message: message))
     }
 
     @Test func `an access still held where a block ends in 'unreachable' is a violation`() throws {
@@ -73,7 +73,7 @@ struct AccessScopeTests {
               _ = call "f(_: &Int)"(a0) @1:1-1:2
               return
             """))
-        #expect(IRVerifier.verify(program, from: .lowering) == nil)
+        #expect(try verify(program, from: .lowering) == nil)
     }
 
     @Test func `a block that no path reaches is no violation, whatever its accesses`() throws {
@@ -83,7 +83,7 @@ struct AccessScopeTests {
               begin a0 read %0 @1:1-1:2
               return
             """))
-        #expect(IRVerifier.verify(program, from: .ownership) == nil)
+        #expect(try verify(program, from: .ownership) == nil)
     }
 }
 

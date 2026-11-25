@@ -1,5 +1,6 @@
 import RayoCheckedProgram
 import RayoSource
+import RayoStageThread
 
 /// Writes a checked program as text, for a reader to see what checking made of the source.
 ///
@@ -27,7 +28,7 @@ public struct CheckedPrinter: ~Copyable {
     }
 
     /// `program` as text.
-    public static func text(of program: CheckedProgram) -> String {
+    package static func text(of program: CheckedProgram, on thread: borrowing StageThread) -> String {
         var printer = CheckedPrinter(program)
         printer.writeProgram()
         return printer.lines.map { $0 + "\n" }.joined()

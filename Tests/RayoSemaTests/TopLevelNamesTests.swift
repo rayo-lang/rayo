@@ -13,11 +13,11 @@ struct TopLevelNamesTests {
     ])
     func `a name belongs to the kind, type or function, that declares it first`(
         source: String, kind: TopLevelNames.Kind,
-    ) {
-        #expect(TopLevelNames(of: Parser.parse(source).file).kind(of: "S") == kind)
+    ) throws {
+        #expect(TopLevelNames(of: try parsed(source).file).kind(of: "S") == kind)
     }
 
-    @Test func `a name that no type or function declares belongs to neither`() {
-        #expect(TopLevelNames(of: Parser.parse("func f() {}\nstruct T").file).kind(of: "S") == nil)
+    @Test func `a name that no type or function declares belongs to neither`() throws {
+        #expect(TopLevelNames(of: try parsed("func f() {}\nstruct T").file).kind(of: "S") == nil)
     }
 }

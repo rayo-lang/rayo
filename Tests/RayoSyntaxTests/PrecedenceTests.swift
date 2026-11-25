@@ -4,7 +4,7 @@ import RayoSyntax
 /// The expression that `_ = expression` drops, with each operator's operands in parentheses around it, as the parser
 /// groups them.
 private func grouping(of expression: String) throws -> String {
-    let (file, diagnostics) = Parser.parse("func f() {\n    _ = \(expression)\n}")
+    let (file, diagnostics) = try parsed("func f() {\n    _ = \(expression)\n}")
     try #require(diagnostics.isEmpty, "\(diagnostics)")
     guard case .function(let function)? = file.declarations.first else { throw NotADrop() }
     let statement = try #require(function.body.statements.first)

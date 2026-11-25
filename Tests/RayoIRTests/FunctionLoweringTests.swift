@@ -1,5 +1,6 @@
 import RayoCheckedProgram
 import RayoIR
+import RayoStageThread
 import Testing
 
 @Suite("Lowering functions")
@@ -88,7 +89,7 @@ struct FunctionLoweringTests {
                                      bodies: [main: CheckedBody(locals: [], statements: [])], main: main)
 
         // Lowering keeps both declarations and their IDs, and lowers the one body there is.
-        let program = Lowering.lower(checked)
+        let program = try #require(StageThread.run { thread in Lowering.lower(checked, on: thread) })
         #expect([bodiless, main] == [FunctionID(index: 0), FunctionID(index: 1)])
         #expect(program == (try IRParser.program(from: """
             main "main()"

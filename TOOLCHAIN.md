@@ -202,6 +202,7 @@ Each row says what a module or test target holds, and changes only when one is a
 | Path | Holds |
 | --- | --- |
 | `Sources/RayoSource` | Positions and spans in a source file |
+| `Sources/RayoStageThread` | The stage thread, which every stage runs on, and the proof a stage's entry point takes that it runs there |
 | `Sources/RayoDiagnostics` | Diagnostics, and the macros that build the table of diagnostic codes |
 | `Sources/RayoDiagnosticsMacros` | Those macros' implementation |
 | `Sources/RayoSyntax` | The parsing of source text into a syntax tree |
@@ -220,6 +221,7 @@ Each row says what a module or test target holds, and changes only when one is a
 | `Sources/RayoDriver` | What each `rayo` command does |
 | `Sources/rayo` | The driver's executable |
 | `Tests/RayoSourceTests` | Tests of source positions |
+| `Tests/RayoStageThreadTests` | Tests of how the stage thread runs the work handed to it |
 | `Tests/RayoDiagnosticsTests` | Tests of diagnostics and the table of codes the macros build |
 | `Tests/RayoDiagnosticsMacrosTests` | Tests of the macros' implementation |
 | `Tests/RayoSyntaxTests` | Tests of parsing |
