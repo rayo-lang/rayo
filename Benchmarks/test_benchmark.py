@@ -244,7 +244,8 @@ class ProgramTests(unittest.TestCase):
         self.assertEqual(loop_nest(10).count('while '), 10)
         self.assertEqual(len(loop_call_nest(10).splitlines()), 7)
         self.assertEqual(loop_call_nest(10).count('while '), 10)
-        self.assertEqual(loop_call_nest(10).count('next('), 10 + 1)
+        self.assertEqual(loop_call_nest(10).splitlines()[3].count('next('), 10)
+        self.assertEqual(loop_call_nest(10).count('func next('), 1)
 
     def test_each_size_makes_each_program_with_five_turns_and_two_ifs_for_each_copy_of_a_loop(self):
         self.assertEqual([name for name, _ in programs([200, 400])], [
