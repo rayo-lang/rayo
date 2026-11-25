@@ -39,7 +39,7 @@ struct IfChecker {
     /// Checks `block` as a branch of an `if` used for its value, leaving the value it ends in unsettled.
     private func branch(_ block: Block) -> IfValue.Branch? {
         // A branch that no run gets through gives no value; it is checked as a statement's branch.
-        guard Reachability.canComplete(block) else {
+        guard expressions.reachability.canComplete(block) else {
             return IfValue.Branch(statements: bodyChecker.check(block), end: .leaves)
         }
 

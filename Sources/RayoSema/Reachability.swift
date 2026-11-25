@@ -1,11 +1,16 @@
+import RayoSource
 import RayoSyntax
 
 /// Where a run of a function body can go, worked out from its syntax alone, so a statement that fails to check still
-/// counts for what it does. Only the forms that change where a run goes are told apart; every other form completes,
-/// and leaves a loop, as its parts do.
-enum Reachability {
+/// counts for what it does, and what it has worked out of the body's `if`s. Only the forms that change where a run
+/// goes are told apart; every other form completes, and leaves a loop, as its parts do.
+final class Reachability {
+    /// Whether a run can go on past each `if` worked out so far, by its condition's range, which no two `if`s share.
+    /// Each `if` whose branch is checked for its value asks about the `if`s nested in it, so each is worked out once.
+    private var completingIfs: [SourceRange: Bool] = [:]
+
     /// Whether a run can reach the end of `block`.
-    static func canComplete(_ block: Block) -> Bool {
+    func canComplete(_ block: Block) -> Bool {
         block.statements.allSatisfy(canComplete)
     }
 
@@ -16,7 +21,7 @@ enum Reachability {
     }
 
     /// Whether a run can go on past `statement`.
-    private static func canComplete(_ statement: Stmt) -> Bool {
+    private func canComplete(_ statement: Stmt) -> Bool {
         switch statement.kind {
         // A `return`, a `break` and a `continue` go elsewhere.
         case .returnStmt, .breakStmt, .continueStmt:
@@ -34,7 +39,7 @@ enum Reachability {
         // A loop completes once its condition fails, and one whose condition always holds only where a `break` leaves
         // it.
         case .whileStmt(let condition, let body):
-            if alwaysHolds(condition) { return breaks(body) }
+            if Self.alwaysHolds(condition) { return Self.breaks(body) }
             return canComplete(condition)
 
         // Any other statement completes once the values it evaluates do.
@@ -44,7 +49,15 @@ enum Reachability {
     }
 
     /// Whether a run can go on past `ifExpr`.
-    private static func canComplete(_ ifExpr: IfExpr) -> Bool {
+    private func canComplete(_ ifExpr: IfExpr) -> Bool {
+        if let completes = completingIfs[ifExpr.condition.range] { return completes }
+        let completes = workOutCanComplete(ifExpr)
+        completingIfs[ifExpr.condition.range] = completes
+        return completes
+    }
+
+    /// Whether a run can go on past `ifExpr`, worked out from its parts.
+    private func workOutCanComplete(_ ifExpr: IfExpr) -> Bool {
         // A condition that can't complete leaves before either branch runs.
         guard canComplete(ifExpr.condition) else { return false }
         // Without an `else`, a run goes on where the condition fails.
@@ -53,7 +66,7 @@ enum Reachability {
     }
 
     /// Whether a run can go on past `expr`, which it can't where an `if` it evaluates can't.
-    private static func canComplete(_ expr: Expr) -> Bool {
+    private func canComplete(_ expr: Expr) -> Bool {
         switch expr.kind {
         // An `if` completes when a run gets through it.
         case .if(let ifExpr): canComplete(ifExpr)
@@ -65,7 +78,7 @@ enum Reachability {
     }
 
     /// Whether a run can go on past `child`, a part of a statement or an expression that evaluates it whole.
-    private static func canComplete(_ child: SyntaxChild) -> Bool {
+    private func canComplete(_ child: SyntaxChild) -> Bool {
         switch child {
         case .expression(let expr): canComplete(expr)
         case .block(let block): canComplete(block)

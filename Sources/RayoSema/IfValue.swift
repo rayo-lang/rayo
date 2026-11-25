@@ -65,42 +65,46 @@ struct IfValue {
         }
     }
 
-    var condition: CheckedExpr
-    var then: Branch
-    var otherwise: Branch
+    let condition: CheckedExpr
+    let then: Branch
+    let otherwise: Branch
     /// Where the source writes the whole `if`.
-    var range: SourceRange
+    let range: SourceRange
+    /// The type the one rule for values side by side picks for the branches, whether or not each can take it.
+    let ruledType: RayoType?
     /// The type the branches agree on that each of them can take, or nil where they agree on none that all take.
-    private(set) var agreedType: RayoType?
+    let agreedType: RayoType?
+    /// Whether a branch fixes a type, whatever position the `if` stands in.
+    private let fixesType: Bool
 
     /// The `if` of `condition`, `then` and `otherwise` that the source gives at `range`, whose branches agree on a
-    /// type only where each can take it, as `declarations` gives the members an implicit member names.
+    /// type only where each can take it, as `declarations` gives the members an implicit member names. An `if` in a
+    /// branch has worked out its own types already, so building each `if` of a nest costs the same at any depth.
     init(condition: CheckedExpr, then: Branch, otherwise: Branch, range: SourceRange, in declarations: Declarations) {
         self.condition = condition
         self.then = then
         self.otherwise = otherwise
         self.range = range
+        let ends = [then.end, otherwise.end]
+        let ruledType = CheckedValue.agreedType(of: ends.map { ($0.type, $0.typeOrDefault) })
+        self.ruledType = ruledType
         agreedType = ruledType.flatMap { type in
             ends.allSatisfy { $0.canSettle(to: type, in: declarations) } ? type : nil
         }
+        fixesType = ends.contains { $0.type != nil }
     }
 
     var branches: [Branch] { [then, otherwise] }
 
     /// How each branch ends.
     var ends: [End] { branches.map(\.end) }
-
-    /// The type the one rule for values side by side picks for the branches, whether or not each can take it.
-    var ruledType: RayoType? {
-        CheckedValue.agreedType(of: ends.map { ($0.type, $0.typeOrDefault) })
-    }
 }
 
 extension IfValue: WaitingValue {
     /// The type the branches agree on, where one of them fixes it, so a branch that waits takes the typed branches'
     /// type. None where a branch can't take it, since the `if` then fails wherever it stands.
     var type: RayoType? {
-        ends.contains { $0.type != nil } ? agreedType : nil
+        fixesType ? agreedType : nil
     }
 
     var defaultType: RayoType? { agreedType }
@@ -115,7 +119,11 @@ extension IfValue: WaitingValue {
     /// Whether every branch that runs to its end gives a value that can settle to `type`, by the same rule.
     func canSettle(to type: RayoType, in declarations: Declarations) -> Bool {
         let reached = ends.filter(\.isReached)
-        return !reached.isEmpty && reached.allSatisfy { $0.canSettle(to: type, in: declarations) }
+        guard !reached.isEmpty else { return false }
+        // The branches were asked about the ruled type when the `if` was built, so an `if` around this one, which
+        // asks about the type this one gives, doesn't ask every `if` nested in it again.
+        if type == ruledType { return agreedType != nil }
+        return reached.allSatisfy { $0.canSettle(to: type, in: declarations) }
     }
 
     /// Whether every branch that runs to its end ends in a `&` of a place.
