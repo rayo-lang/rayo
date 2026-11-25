@@ -11,16 +11,15 @@ struct Parameter {
     var spelledType: String
     /// Whether a bare value that no local holds may be lent to the parameter as a temporary.
     var borrowsTemporaries: Bool
-    /// What the parameter, where it owns its argument, does with a bare place of a type that isn't implicitly copyable.
-    var barePlaceUse: BarePlaceUse
+    var kind: ParameterKind
 }
 
 extension Parameter {
-    /// The parameter that the checked program declares as `parameter`.
-    init(_ parameter: FunctionParameter, borrowsTemporaries: Bool, barePlaceUse: BarePlaceUse) {
+    /// The parameter that the checked program declares as `parameter`, which `kind` declares.
+    init(_ parameter: FunctionParameter, of kind: ParameterKind, borrowsTemporaries: Bool) {
         self.init(label: parameter.label, convention: parameter.convention, type: parameter.type,
                   spelledType: parameter.convention.spelling(of: parameter.type),
-                  borrowsTemporaries: borrowsTemporaries, barePlaceUse: barePlaceUse)
+                  borrowsTemporaries: borrowsTemporaries, kind: kind)
     }
 
     /// The parameter as the checked program declares it, or nil where its type isn't known.
@@ -32,9 +31,9 @@ extension Parameter {
     /// parameter's type isn't known. The flag says whether a function of the callee's name that the call's arguments
     /// fit borrows the argument.
     func expectation(calledAs callee: String, isBorrowedByOverload: Bool) -> Expectation? {
-        let parameter = ArgumentParameter(callee: callee, convention: convention,
-                                          borrowsTemporaries: borrowsTemporaries, barePlaceUse: barePlaceUse,
+        let parameter = ArgumentParameter(callee: callee, convention: convention, kind: kind,
+                                          borrowsTemporaries: borrowsTemporaries,
                                           isBorrowedByOverload: isBorrowedByOverload)
-        return type.map { Expectation($0, recipient: .parameter(parameter)) }
+        return type.map { Expectation($0, at: .argument(parameter)) }
     }
 }

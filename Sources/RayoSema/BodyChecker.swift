@@ -65,8 +65,7 @@ struct BodyChecker {
     func returned(_ expr: Expr) -> CheckedExpr? {
         // A function whose result type isn't known takes any value: its body gives the type, or its written type
         // failed and was reported.
-        let expected = jumps.result.map { Expectation($0) }
-        return expressions.check(expr, expecting: expected)
+        expressions.check(expr, expecting: jumps.result, at: .returned)
     }
 
     /// Checks `statement`, giving a checked statement, or nil where one fails, for each binding of a declaration
@@ -105,7 +104,7 @@ struct BodyChecker {
     /// Checks `ifExpr`, the `if` that `range` covers, as a statement, whose branches give no value.
     private func checkIf(_ ifExpr: IfExpr, in range: SourceRange) -> CheckedStmt? {
         // Check the condition, and each branch as a block of statements.
-        let condition = expressions.check(ifExpr.condition, expecting: Expectation(.bool))
+        let condition = expressions.check(ifExpr.condition, expecting: Expectation(.bool, at: .operand))
         let then = CheckedBranch(statements: check(ifExpr.then), value: nil)
         let otherwise = CheckedBranch(statements: ifExpr.otherwise.map { check($0) } ?? [], value: nil)
 
@@ -117,7 +116,7 @@ struct BodyChecker {
 
     private func checkWhile(_ condition: Expr, body: Block) -> CheckedStmt? {
         let alwaysHolds = Reachability.alwaysHolds(condition)
-        let condition = expressions.check(condition, expecting: Expectation(.bool))
+        let condition = expressions.check(condition, expecting: Expectation(.bool, at: .operand))
         let body = checkLoopBody(body)
         return condition.map { .whileStmt(condition: $0, alwaysHolds: alwaysHolds, body: body) }
     }
@@ -137,27 +136,24 @@ struct BodyChecker {
 
     /// Checks `expr` as a statement, whose value no code uses, so it must be Void.
     private func checkUnused(_ expr: Expr) -> CheckedExpr? {
-        // An expression that failed was reported.
-        guard let value = expressions.check(expr) else { return nil }
+        // An expression that failed was reported. The statement only reads a place it names, so a mistake in it moves
+        // nothing out of the place.
+        guard let value = expressions.check(expr, at: .statement) else { return nil }
         guard !TypeFit.fits(value.type, .void) else { return value }
 
         // A value that no code uses is a mistake, unless `_ =` drops it on purpose. The statement keeps a meaning all
-        // the same: a place it names is only read, so the mistake moves nothing out of it, and any other value is
-        // dropped as `_ =` drops it.
+        // the same: it drops the value it reads.
         let unused = ErrorCode.unusedValue(type: expressions.typeName(of: value.type),
                                            drop: expressions.dropMark(of: value))
         errors.reportKeepingMeaning(unused, at: value.range)
-        guard case .place(let place) = value.kind else { return value }
-        return CheckedExpr(kind: .copy(place), type: value.type, range: value.range)
+        return value
     }
 
-    /// Checks `expr` as the value of `_ =`, which a temporary holds until the statement drops it.
+    /// Checks `expr` as the value of `_ =`, which a temporary holds until the statement drops it. The temporary owns
+    /// its value, as any assignment's target does, so its position reports a place it can't take.
     private func checkDropped(_ expr: Expr) -> CheckedExpr? {
         // An expression that failed was reported.
-        guard let value = expressions.check(expr) else { return nil }
-
-        // The temporary owns its value, as any assignment's target does, so it can't borrow a place.
-        expressions.reportHandedPlaces(of: value, as: ErrorCode.assignmentBorrowsPlace)
+        guard let value = expressions.check(expr, at: .drop) else { return nil }
 
         // A temporary lies on the stack, so one too large for it is reported.
         return declarations.fittingOnStack(value, reporting: errors)

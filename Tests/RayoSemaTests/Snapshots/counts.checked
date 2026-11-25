@@ -26,7 +26,7 @@ func "main()"() -> Void {
       &
         count 3: UInt @5:11-5:24
           place %0 @5:11-5:15 [of 2] @5:11-5:18
-            value: UInt @5:16-5:17
+            value copied: UInt @5:16-5:17
               place %1 @5:16-5:17
   bind %2 @6:9-6:10
     copy: UInt @6:13-6:28
@@ -36,6 +36,6 @@ func "main()"() -> Void {
   expression
     call builtin "print(_: &UInt)": Void @7:5-7:13
       &
-        value: UInt @7:11-7:12
+        value lent: UInt @7:11-7:12
           place %2 @7:11-7:12
 }

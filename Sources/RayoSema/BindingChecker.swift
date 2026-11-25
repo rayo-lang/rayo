@@ -70,21 +70,30 @@ struct BindingChecker {
         return local.map { .binding($0, at: binding.nameRange, declared.value) }
     }
 
-    /// Reports what `binding`, declared with `kind`, can't hold of `value`, the value it is given.
+    /// Reports what `binding`, declared with `kind`, can't hold of `value`, the value it is given, beyond what the
+    /// value's position reported.
     private func checkHolding(_ value: CheckedExpr, in binding: Binding, declaredWith kind: DeclarationKind) {
         switch kind {
-        // A `let` or `var` owns its value, while a place's value has an owner already, so a place it is given says how
-        // the binding takes the value, or that the binding refers to the place.
+        // A `let` or `var` owns its value, which its position took as it can.
         case .let, .var:
-            expressions.reportHandedPlaces(of: value) { .ownerBorrowsPlace(keyword: kind.keyword, place: $0.place) }
+            break
 
         // A `ref let` refers to a place, which each branch of its value gives, as its position reported, and one that
         // lasts as long as the `ref let` does.
         case .refLet:
-            expressions.reportEndedPlaces(of: value, referredToBy: binding.name)
+            reportEndedPlaces(of: value, referredToBy: binding.name)
 
         case .refVar:
             errors.report(.unsupportedReferenceVar, at: binding.nameRange)
+        }
+    }
+
+    /// Reports each place that `value` hands the `ref let` called `binding` in a local out of scope here: one that a
+    /// branch of an `if` declares, which ends with the branch while the `ref let` lives on.
+    private func reportEndedPlaces(of value: CheckedExpr, referredToBy binding: String) {
+        for handed in value.handedPlaces where !names.isInScope(handed.local) {
+            let place = expressions.file.spelling(of: handed.place.range)
+            errors.report(.referenceOutlivesPlace(binding: binding, place: place), at: handed.place.range)
         }
     }
 
@@ -95,12 +104,14 @@ struct BindingChecker {
         // Without a value, the annotation alone gives the local's type.
         guard let valueExpr = binding.value else { return Declared(annotation) }
 
+        // A binding of `_` declares no local, so nothing takes its value, which reports only its own errors.
+        let position: Position = binding.name == "_" ? .unnamedDeclaration : kind.valuePosition
+
         // A value that failed, or that has another type than the annotation names, was reported; otherwise the value
         // has the local's type, which the annotation gives where there is one.
-        let recipient = Recipient.declaration(kind)
         let value: CheckedExpr? = switch annotation {
-        case .resolved(let type, _): expressions.check(valueExpr, expecting: Expectation(type, recipient: recipient))
-        case .absent: expressions.value(of: valueExpr).flatMap { expressions.settled($0, takenBy: recipient) }
+        case .resolved(let type, _): expressions.check(valueExpr, expecting: Expectation(type, at: position))
+        case .absent: expressions.check(valueExpr, at: position)
         // An annotation that failed was reported, and leaves the value no type to settle to, so the value reports
         // only the errors it has on its own, and not those the missing type would bring, such as an implicit
         // member's.

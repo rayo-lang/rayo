@@ -15,29 +15,23 @@ struct AssignmentChecker {
         guard let current, let value else { return nil }
 
         return switch op.binary {
-        case nil: plainAssign(value, to: current)
+        case nil: .assign(current.place, value)
         case let binaryOp?:
             compoundAssign(value, CheckedBinaryOperator(binaryOp), spelled: op.rawValue, to: current, in: range)
         }
     }
 
-    /// Checks an assignment of `value` to `place` with `=`. Its target owns what it holds, so it can't borrow a place
-    /// that `value` hands it, which is reported.
-    private func plainAssign(_ value: CheckedExpr, to place: TypedPlace) -> CheckedStmt {
-        expressions.reportHandedPlaces(of: value, as: ErrorCode.assignmentBorrowsPlace)
-        return .assign(place.place, value)
-    }
-
     /// Checks the value an assignment gives its target. It is checked against the target's type where that is known,
     /// and by itself where the target can't be assigned.
     private func checkAssigned(_ expr: Expr, by op: AssignOperator, to type: RayoType?) -> CheckedExpr? {
-        // A plain assignment takes the value, which must have the place's type.
+        // A plain assignment takes the value, which must have the place's type. Its target owns what it holds, so
+        // the value's position reports a place it can't take.
         if op.binary == nil {
-            expressions.check(expr, expecting: type.map { Expectation($0) })
+            expressions.check(expr, expecting: type, at: .assignment)
         } else {
             // A compound one reads it, as its operator's right operand, so an untyped value takes the place's type
             // as the other operand's.
-            expressions.value(of: expr).flatMap { expressions.settled($0, toward: type) }
+            expressions.value(of: expr).flatMap { expressions.settled($0, toward: type, at: .operand) }
         }
     }
 
@@ -45,9 +39,11 @@ struct AssignmentChecker {
     /// reports the same mistakes in the operands.
     private func compoundAssign(_ value: CheckedExpr, _ op: CheckedBinaryOperator, spelled: String,
                                 to place: TypedPlace, in range: SourceRange) -> CheckedStmt? {
-        let current = CheckedExpr(kind: .place(place.place), type: place.type, range: place.place.range)
-        // Operands the operator doesn't take were reported.
-        guard expressions.binary(op, current, value, spelled: spelled, in: range) != nil else { return nil }
+        // The operator reads the target as its left operand. Operands the operator doesn't take were reported.
+        let target = BarePlace(place: place.place, placeType: place.type, range: place.place.range)
+        guard let current = expressions.given(target, to: .operand),
+              expressions.binary(op, current, value, spelled: spelled, in: range) != nil
+        else { return nil }
         return .compoundAssign(place.place, op, value)
     }
 }

@@ -11,9 +11,11 @@ struct MutablyLentPlace {
     /// Where the source writes the `mutable` and the place.
     var range: SourceRange
 
-    /// The place itself, as the value of a position that takes it, where the source writes the `mutable`.
+    /// The place itself, lent for change, as the value of a position that takes it, where the source writes the
+    /// `mutable`: a call's argument, which passes the parameter the place itself, or the value of a `ref var` or of a
+    /// declaration of `_`, which are reported.
     var placeExpression: CheckedExpr {
-        CheckedExpr(kind: .place(place), type: placeType, range: range)
+        CheckedExpr(kind: .place(place, .lendForChange), type: placeType, range: range)
     }
 }
 
@@ -29,19 +31,14 @@ extension MutablyLentPlace: WaitingValue {
 
     var lendsForChange: Bool { true }
 
-    /// Reports the `mutable`, since a position that expects at most a type takes no reference.
-    func settled(toward type: RayoType?, by expressions: ExpressionChecker) -> CheckedExpr? {
-        expressions.file.errors.report(.unsupportedMutableReference, at: range)
-        return nil
+    /// The place, where `position` takes a mutable reference, as a position that expects the place's type does, since
+    /// the place's type is its own wherever it stands.
+    func settled(toward type: RayoType?, at position: Position, by expressions: ExpressionChecker) -> CheckedExpr? {
+        expressions.mutablyLent(self, to: Expectation(placeType, at: position))
     }
 
     func settled(expecting expected: Expectation, by expressions: ExpressionChecker) -> CheckedExpr? {
         expressions.mutablyLent(self, to: expected)
-    }
-
-    /// The place, where `recipient` takes a mutable reference, as a position that expects the place's type does.
-    func settled(takenBy recipient: Recipient, by expressions: ExpressionChecker) -> CheckedExpr? {
-        expressions.mutablyLent(self, to: Expectation(placeType, recipient: recipient))
     }
 
     /// Reports nothing: the place was checked as the source wrote it, and what the `mutable` gives it to failed for

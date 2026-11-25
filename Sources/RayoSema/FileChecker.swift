@@ -83,8 +83,8 @@ final class FileChecker {
             // The initializer takes each field's value, owned and labeled by its name, and makes the struct.
             let initializer = FunctionID(index: functions.count)
             let parameters = types[id].fields.map { field in
-                Parameter(FunctionParameter(label: field.name, convention: .owned, type: field.type),
-                          borrowsTemporaries: false, barePlaceUse: .moves)
+                Parameter(FunctionParameter(label: field.name, convention: .owned, type: field.type), of: .field,
+                          borrowsTemporaries: false)
             }
             let signature = Signature(name: id.name, target: .callee(.function(initializer)), parameters: parameters,
                                       result: .type(.named(.structure(id))))
@@ -162,10 +162,9 @@ final class FileChecker {
         if let resolved = type, !declarations.fitsOnStack(resolved, at: parameter.type.range, reporting: errors) {
             type = nil
         }
-        // Only a built-in is lent a temporary. A parameter that owns its argument takes a place only marked with
-        // `consume` or `copy`.
+        // Only a built-in is lent a temporary.
         return Parameter(label: parameter.label, convention: convention, type: type,
-                         spelledType: parameter.spelledType, borrowsTemporaries: false, barePlaceUse: .needsMark)
+                         spelledType: parameter.spelledType, borrowsTemporaries: false, kind: .function)
     }
 
     /// The result type that `function`, which is `id`, declares, or `.givenByBody` where its body gives it.

@@ -14,7 +14,7 @@ struct IfChecker {
     /// Checks `ifExpr`, which the source gives at `range`, on its own: its condition, and each branch's statements,
     /// with the value each branch ends in left to wait for the `if`'s position.
     func value(of ifExpr: IfExpr, in range: SourceRange) -> IfValue? {
-        let condition = expressions.check(ifExpr.condition, expecting: Expectation(.bool))
+        let condition = expressions.check(ifExpr.condition, expecting: Expectation(.bool, at: .operand))
         let then = branch(ifExpr.then)
 
         // An `if` without an `else` has no value to give where its condition fails, which is reported after the
@@ -61,23 +61,23 @@ struct IfChecker {
 
     /// Settles `value` toward `type`: to `type` where every branch can settle to it, and otherwise to the type the
     /// one rule for values side by side picks for its branches, reporting each branch of another type. Each branch's
-    /// value is taken by `recipient`, where the `if`'s position has one. Reports an `if` whose branches give no type.
-    func settled(_ value: IfValue, toward type: RayoType?, takenBy recipient: Recipient?) -> CheckedExpr? {
+    /// value stands in `position`, the `if`'s. Reports an `if` whose branches give no type.
+    func settled(_ value: IfValue, toward type: RayoType?, at position: Position) -> CheckedExpr? {
         if let type, value.canSettle(to: type, in: expressions.file.declarations) {
-            return settled(value, expecting: Expectation(type, recipient: recipient))
+            return settled(value, expecting: Expectation(type, at: position))
         }
         guard let ruled = value.ruledType else { return reportNoType(of: value) }
-        let expected = Expectation(ruled, recipient: recipient, mismatch: ErrorCode.branchTypesDiffer)
+        let expected = Expectation(ruled, at: position, mismatch: ErrorCode.branchTypesDiffer)
         return settled(value, expecting: expected)
     }
 
     /// Settles each branch of `value` to the type `expected` names, reporting each branch of another type there.
     func settled(_ value: IfValue, expecting expected: Expectation) -> CheckedExpr? {
         // A parameter that borrows its argument for change takes a place, which an `if` is not: its branches settle
-        // as a value's do, and the value it gives is a temporary.
-        if let parameter = expected.recipient?.mutableParameter {
-            let valueExpected = Expectation(expected.type, mismatch: expected.mismatch)
-            return settled(value, expecting: valueExpected).flatMap { expressions.unmarkedLend(of: $0, to: parameter) }
+        // as values that are only read, and the value it gives is a temporary, which the parameter refuses.
+        if case .argument(let parameter) = expected.position, parameter.convention == .mutable {
+            let valueExpected = Expectation(expected.type, at: .operand, mismatch: expected.mismatch)
+            return settled(value, expecting: valueExpected).flatMap { expressions.taken($0, by: expected.position) }
         }
 
         // Both branches settle, so each one's errors are reported, before either failure fails the `if`.
@@ -119,7 +119,7 @@ struct IfChecker {
     private func reportNoType(of value: IfValue) -> CheckedExpr? {
         let values = value.ends.compactMap(\.value)
         if values.isEmpty { errors.report(.valueIfLeavesEveryBranch, at: value.range) }
-        for branchValue in values { _ = expressions.settled(branchValue, toward: nil) }
+        for branchValue in values { _ = expressions.settled(branchValue, toward: nil, at: .operand) }
         return nil
     }
 }

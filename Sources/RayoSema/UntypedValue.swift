@@ -110,7 +110,7 @@ indirect enum UntypedValue {
     }
 }
 
-extension UntypedValue: WaitingValue {
+extension UntypedValue: TypeWaitingValue {
     /// None: the value has no type until its position gives one.
     var type: RayoType? { nil }
 

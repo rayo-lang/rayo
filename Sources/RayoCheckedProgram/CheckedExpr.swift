@@ -17,9 +17,9 @@ public indirect enum CheckedExprKind: Sendable {
     /// as a scalar, which its constant in the IR needs, where the expression's type could be any type.
     case integerLiteral(Int128, ScalarType)
     case boolLiteral(Bool)
-    /// The value of a place that the source writes on its own. Lowering decides whether its position reads the
-    /// value, or moves it out of the place.
-    case place(CheckedPlace)
+    /// The value of a place that the source writes on its own, and what its position does with the place, which
+    /// checking decides: copies its value, moves it out, lends the place or borrows it.
+    case place(CheckedPlace, PlaceUse)
     /// A copy of the value of a place, which the place keeps wherever the copy is used.
     case copy(CheckedPlace)
     /// The value moved out of a place, which then holds no value until it is assigned again, wherever the value is

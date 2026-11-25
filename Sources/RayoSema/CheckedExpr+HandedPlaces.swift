@@ -7,7 +7,7 @@ extension CheckedExpr {
     /// with its statement, and so whatever receives the value owns it.
     var handedPlaces: [HandedPlace] {
         switch kind {
-        case .place(let place):
+        case .place(let place, _):
             place.local.map { [HandedPlace(local: $0, place: place)] } ?? []
         case .if(_, let then, let otherwise):
             [then, otherwise].flatMap { $0.value?.handedPlaces ?? [] }

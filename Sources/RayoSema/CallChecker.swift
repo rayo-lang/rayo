@@ -106,7 +106,7 @@ struct CallChecker {
     private func memberCall(named name: String, at nameRange: SourceRange, of base: Expr,
                             calledAt calleeRange: SourceRange, passing arguments: [Argument]) -> CheckedValue? {
         // A base that failed was reported, and gives no type to find the member in.
-        let member = expressions.check(base).flatMap { declarations.member(named: name, of: $0.type) }
+        let member = expressions.check(base, at: .operand).flatMap { declarations.member(named: name, of: $0.type) }
 
         let (code, range): (ErrorCode, SourceRange) = switch member {
         // A property gives a value, which can't be called.
@@ -174,7 +174,7 @@ struct CallChecker {
     /// Checks `literal` as a value of `type`, which the call at `range` makes it.
     private func literal(_ literal: Expr, as type: RayoType, in range: SourceRange) -> CheckedExpr? {
         // A literal that the type can't hold was reported.
-        guard let value = expressions.check(literal, expecting: Expectation(type)) else { return nil }
+        guard let value = expressions.check(literal, expecting: Expectation(type, at: .operand)) else { return nil }
         return CheckedExpr(kind: value.kind, type: type, range: range)
     }
 
@@ -356,15 +356,15 @@ struct CallChecker {
     /// Whether `value` is a local that holds a shared reference, or an `if` of them.
     private func holdsSharedReference(_ value: CheckedValue) -> Bool {
         switch value {
-        case .typed(let typed): namesSharedReference(typed)
+        case .waiting(let bare as BarePlace): namesSharedReference(bare.place)
         case .waiting(let ifValue as IfValue): endsInSharedReferences(ifValue)
-        case .waiting: false
+        case .typed, .waiting: false
         }
     }
 
-    /// Whether `value` is a bare local that holds a shared reference.
-    private func namesSharedReference(_ value: CheckedExpr) -> Bool {
-        guard case .place(let place) = value.kind, place.steps.isEmpty, let local = place.local else { return false }
+    /// Whether `place` is a whole local that holds a shared reference.
+    private func namesSharedReference(_ place: CheckedPlace) -> Bool {
+        guard place.steps.isEmpty, let local = place.local else { return false }
         return expressions.names[local].kind.holdsSharedReference
     }
 
@@ -417,7 +417,7 @@ struct CallChecker {
     /// reported. A `&` or a `mutable` takes its place's type, since no parameter settles it.
     private func spelledType(of value: CheckedValue) -> RayoType? {
         if value.lendsPlace || value.lendsForChange, let type = value.type { return type }
-        return expressions.settled(value, toward: nil)?.type
+        return expressions.settled(value, toward: nil, at: .operand)?.type
     }
 
     /// The convention of a parameter that takes `value` as the source writes it: one that borrows for change for a

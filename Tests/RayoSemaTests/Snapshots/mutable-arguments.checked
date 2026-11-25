@@ -18,7 +18,7 @@ func "main()"() -> Void {
   expression
     call "heal(_: &Enemy)": Void @4:5-4:12
       &
-        value: Enemy @4:10-4:11
+        value lent: Enemy @4:10-4:11
           place %0 @4:10-4:11
   expression
     call "bump(_: mutable &Int)": Void @5:5-5:23
@@ -39,7 +39,7 @@ func "heal(_: &Enemy)"(_: &Enemy) -> Void {
   return
     call builtin "print(_: &Int)": Void @8:26-8:37
       &
-        value: Int @8:32-8:36
+        value lent: Int @8:32-8:36
           place %0 @8:32-8:33 .0 @8:32-8:36
 }
 

@@ -91,17 +91,16 @@ extension Signature {
     /// The signature of a built-in function, under the name a call writes to reach it. A borrowing built-in is lent
     /// bare temporaries.
     init(of builtin: Builtin) {
-        let parameters = builtin.parameters.map { Parameter($0, borrowsTemporaries: true, barePlaceUse: .needsMark) }
+        let parameters = builtin.parameters.map { Parameter($0, of: .function, borrowsTemporaries: true) }
         self.init(name: builtin.name.spelling, target: .callee(.builtin(builtin)), parameters: parameters,
                   result: .type(builtin.result))
     }
 
     /// The signature of `init(repeating:)` of the array of `count` values of `element`, which makes the array with
-    /// each element a copy of its one argument. Its parameter owns the argument, and a place given to it with nothing
-    /// written is read and keeps its value.
+    /// each element a copy of its one argument, which its parameter owns.
     init(fillingArrayOf count: Int, _ element: RayoType) {
         let parameter = Parameter(FunctionParameter(label: "repeating", convention: .owned, type: element),
-                                  borrowsTemporaries: false, barePlaceUse: .reads)
+                                  of: .repeatedElement, borrowsTemporaries: false)
         self.init(name: Member.initializerName, target: .filledArray, parameters: [parameter],
                   result: .type(.array(count: count, element: element)))
     }

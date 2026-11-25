@@ -27,17 +27,18 @@ enum UnusedValueChecker {
                 guard case .source(let name, .parameter(let convention), let type, let range) = body.locals[index],
                       convention.isStoredAtEntry, !state.values.reads(Place(root: LocalID(index: index)))
                 else { return nil }
-                let drop = DropStatement(dropMark(of: type), dropping: name)
+                let drop = DropStatement(parameter(name, of: type, convention).dropMark, dropping: name)
                 return Diagnostic(.unreadParameter(drop: drop), at: range)
             }
         }
         return unread
     }
 
-    /// What a statement writes before a parameter of `type` that no code reads, to drop its value. `_ =` drops a copy
-    /// of an implicitly copyable value as it stands, and the function owns any other, so `consume` moves it out.
-    private static func dropMark(of type: RayoType) -> DropMark {
-        type.isImplicitlyCopyable ? .bare : .consume
+    /// The whole of the parameter called `name`, of `type` and `convention`, as the statement that drops it gives it
+    /// to `_ =`.
+    private static func parameter(_ name: String, of type: RayoType, _ convention: ParameterConvention) -> GivenPlace {
+        GivenPlace(type: type, source: MoveSource(local: .parameter(convention), liesInElement: false),
+                   spelling: { name }, typeName: { .named("\(type)") })
     }
 
     /// The stores in `block` of a value that no code reads, where `uses` says what code reads after each of them. A

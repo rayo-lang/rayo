@@ -135,14 +135,10 @@ extension IfValue: WaitingValue {
         return !reached.isEmpty && reached.allSatisfy { $0.value?.lendsForChange ?? false }
     }
 
-    func settled(toward type: RayoType?, by expressions: ExpressionChecker) -> CheckedExpr? {
-        IfChecker(expressions: expressions).settled(self, toward: type, takenBy: nil)
-    }
-
-    /// Settles the branches as a position that gives no type would, with each branch's value taken by `recipient`,
-    /// since the `if` hands its position to the branch that runs.
-    func settled(takenBy recipient: Recipient, by expressions: ExpressionChecker) -> CheckedExpr? {
-        IfChecker(expressions: expressions).settled(self, toward: nil, takenBy: recipient)
+    /// Settles the branches toward `type`, with each branch's value standing in `position`, since the `if` hands its
+    /// position to the branch that runs.
+    func settled(toward type: RayoType?, at position: Position, by expressions: ExpressionChecker) -> CheckedExpr? {
+        IfChecker(expressions: expressions).settled(self, toward: type, at: position)
     }
 
     func settled(expecting expected: Expectation, by expressions: ExpressionChecker) -> CheckedExpr? {

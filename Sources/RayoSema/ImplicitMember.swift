@@ -45,7 +45,7 @@ struct ImplicitMember {
     }
 }
 
-extension ImplicitMember: WaitingValue {
+extension ImplicitMember: TypeWaitingValue {
     /// None: the member names a member of no type until its position gives one.
     var type: RayoType? { nil }
 

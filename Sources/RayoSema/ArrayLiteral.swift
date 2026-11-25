@@ -17,7 +17,7 @@ struct ArrayLiteral {
     }
 }
 
-extension ArrayLiteral: WaitingValue {
+extension ArrayLiteral: TypeWaitingValue {
     /// The array of the type an element fixes, where one does.
     var type: RayoType? {
         array(of: elements.lazy.compactMap(\.type).first)

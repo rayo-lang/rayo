@@ -113,15 +113,15 @@ struct InitializerChecker {
     ) -> [CheckedExpr]? {
         // Check every argument, so each one's errors are reported, before any failure fails the call.
         var values: [CheckedExpr] = []
-        let owner = ArgumentParameter(callee: id.name, convention: .owned, borrowsTemporaries: false,
-                                      barePlaceUse: .moves, isBorrowedByOverload: false)
+        let owner = ArgumentParameter(callee: id.name, convention: .owned, kind: .field, borrowsTemporaries: false,
+                                      isBorrowedByOverload: false)
         for (argument, given) in zip(arguments, given) {
             // An argument that gives no field was reported, and its value is checked on its own for its own errors.
             guard let field = given.field else {
                 argument.reportErrors(by: expressions)
                 continue
             }
-            let expected = Expectation(fields[field].type, recipient: .parameter(owner)) {
+            let expected = Expectation(fields[field].type, at: .argument(owner)) {
                 .fieldTypeMismatch(field: fields[field].name, expected: $0, found: $1)
             }
             // A value that failed, or that has another type than its field's, was reported.
