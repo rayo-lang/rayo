@@ -11,8 +11,23 @@ final class NameScopes {
     private let selfParameter: LocalID? = nil
     /// The body's locals, indexed by `LocalID`.
     private(set) var locals: [CheckedLocal] = []
-    /// The names each enclosing block declares, innermost last, inside the scope of the function's parameters.
-    private var blocks: [[String: ScopeEntry]] = [[:]]
+    /// Whether the block that declares each local, or the parameters' scope for a parameter, hasn't ended yet,
+    /// indexed by `LocalID`.
+    private var localsInScope: [Bool] = []
+    /// What each name in scope stands for in the innermost block that declares it.
+    private var entries: [String: ScopeEntry] = [:]
+    /// The declarations of each enclosing block, innermost last, inside the scope of the function's parameters, each
+    /// block's in the order it makes them. A block undoes them when it ends, so a lookup reads one table however deep
+    /// blocks nest.
+    private var blocks: [[BlockDeclaration]] = [[]]
+
+    /// A name that a block declares, what the block declares it as, and what the name stood for before, which it
+    /// stands for again once the block ends.
+    private struct BlockDeclaration {
+        let name: String
+        let declared: ScopeEntry
+        let hidden: ScopeEntry?
+    }
 
     init(file: FileChecker) {
         self.file = file
@@ -24,21 +39,22 @@ final class NameScopes {
 
     /// Starts a block, whose names go out of scope when it ends.
     func enterBlock() {
-        blocks.append([:])
+        blocks.append([])
     }
 
+    /// Ends the innermost block, undoing its declarations, the last first, so each name stands again for what it
+    /// stood for before the block.
     func leaveBlock() {
-        blocks.removeLast()
+        for declaration in blocks.removeLast().reversed() {
+            if case .local(let local) = declaration.declared { localsInScope[local.index] = false }
+            entries[declaration.name] = declaration.hidden
+        }
     }
 
     /// Whether `local` is in scope here: the block that declares it, the parameters' scope for a parameter, hasn't
     /// ended yet.
     func isInScope(_ local: LocalID) -> Bool {
-        blocks.contains { block in
-            block.values.contains { entry in
-                if case .local(let declared) = entry { declared == local } else { false }
-            }
-        }
+        localsInScope[local.index]
     }
 
     /// Looks `name` up among the body's locals and parameters, innermost block first, among the fields of its
@@ -47,7 +63,7 @@ final class NameScopes {
     /// that failed taints the body.
     func lookUp(_ name: String, for use: NameUse) -> NameMatch? {
         // Find the name at each level; the use picks among them.
-        let inScope = scopeEntry(for: name).map { NameMatch.inScope($0) }
+        let inScope = entries[name].map { NameMatch.inScope($0) }
         let instance = instanceField(named: name)
         let module = moduleMatch(for: name, use: use)
         let match = switch use {
@@ -79,12 +95,15 @@ final class NameScopes {
         // Add the local to the body's, under its name in the innermost block.
         let local = LocalID(index: locals.count)
         locals.append(CheckedLocal(name: name, type: type, kind: kind, range: range))
-        blocks[blocks.count - 1][name] = .local(local)
+        localsInScope.append(true)
+        declareInInnermostBlock(name, as: .local(local))
         return local
     }
 
-    private func scopeEntry(for name: String) -> ScopeEntry? {
-        blocks.reversed().lazy.compactMap { $0[name] }.first
+    /// Declares `name` in the innermost block as `entry`, hiding what it stood for until the block ends.
+    private func declareInInnermostBlock(_ name: String, as entry: ScopeEntry) {
+        blocks[blocks.count - 1].append(BlockDeclaration(name: name, declared: entry, hidden: entries[name]))
+        entries[name] = entry
     }
 
     /// The field of `self` called `name`, or nil where the body has no `self` or its type has no such field. A field
@@ -123,14 +142,14 @@ final class NameScopes {
 
     /// Declares `name` in the innermost block as a failed declaration, whose uses report nothing more.
     func declareFailed(_ name: String) {
-        blocks[blocks.count - 1][name] = .failed
+        declareInInnermostBlock(name, as: .failed)
     }
 
     /// Whether `name` already names a local or a parameter, even one whose declaration failed, reporting it when it
     /// does.
     private func isDeclared(_ name: String, reportingRedeclarationAt range: SourceRange) -> Bool {
         // A name in no enclosing block is free, even where a function has it.
-        guard scopeEntry(for: name) != nil else { return false }
+        guard entries[name] != nil else { return false }
         file.errors.report(.alreadyDeclared(name: name), at: range)
         return true
     }
