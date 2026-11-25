@@ -10,4 +10,7 @@ public enum PlaceUse: Hashable, Sendable {
     /// Refers to the place, as a `ref let` does: the local reads it through an access, so the place keeps its value,
     /// and can't change or move while the local is used.
     case borrow
+    /// Lends the place for change, as `mutable` lends it to a parameter that borrows for change: the position may
+    /// change the value where the place holds it, and the place keeps what it leaves there.
+    case lendForChange
 }

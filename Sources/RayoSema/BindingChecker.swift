@@ -81,10 +81,19 @@ struct BindingChecker {
         // A `ref let` refers to a place, which each branch of its value gives, as its position reported, and one that
         // lasts as long as the `ref let` does.
         case .refLet:
-            expressions.reportEndedPlaces(of: value, referredToBy: binding.name)
+            reportEndedPlaces(of: value, referredToBy: binding.name)
 
         case .refVar:
             errors.report(.unsupportedReferenceVar, at: binding.nameRange)
+        }
+    }
+
+    /// Reports each place that `value` hands the `ref let` called `binding` in a local out of scope here: one that a
+    /// branch of an `if` declares, which ends with the branch while the `ref let` lives on.
+    private func reportEndedPlaces(of value: CheckedExpr, referredToBy binding: String) {
+        for handed in value.handedPlaces where !names.isInScope(handed.local) {
+            let place = expressions.file.spelling(of: handed.place.range)
+            errors.report(.referenceOutlivesPlace(binding: binding, place: place), at: handed.place.range)
         }
     }
 

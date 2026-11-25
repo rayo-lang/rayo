@@ -160,6 +160,7 @@ public struct CheckedPrinter: ~Copyable {
         case .move: "moved"
         case .lend: "lent"
         case .borrow: "borrowed"
+        case .lendForChange: "lent for change"
         }
     }
 

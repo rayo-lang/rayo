@@ -1,6 +1,6 @@
 /// How a function takes the argument of one of its parameters, which decides what the function may do with it and
 /// what its caller passes.
-public enum ParameterConvention: Hashable, Sendable {
+public enum ParameterConvention: Hashable, Sendable, CaseIterable {
     /// The function reads the argument, which the caller keeps, and can't move it out or change it.
     case borrowed
     /// The function takes the argument, which the caller gives up, and the function must read it or move it on.

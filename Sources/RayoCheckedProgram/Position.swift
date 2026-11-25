@@ -30,10 +30,25 @@ package enum Position: Sendable {
     /// a mark before the place.
     package func taking(_ place: GivenPlace) -> PlaceTaking {
         let taking = takingFromLocal(place)
-        // A part of a temporary, such as `makeEnemy().pos`, is a value that dies with its statement, so the position
-        // takes it as it takes any other value, and no mark is written before it.
+        // A part of a temporary, such as `makeEnemy().pos`, is a value that dies with its statement, so no mark is
+        // written before it, and the position reports what `takingValue` says of a value no local holds.
         guard place.source.local != nil else { return PlaceTaking(use: taking.use) }
         return taking
+    }
+
+    /// What the position does with a value that no local holds, such as a call's result or a part of one, which lies
+    /// in the temporary that `temporary` spells as the source writes it.
+    package func takingValue(heldBy temporary: () -> String) -> ValueTaking {
+        switch self {
+        case .argument(let parameter):
+            parameter.takingValue(heldBy: temporary)
+        // A `ref let` refers to a place, and the value has none to refer to.
+        case .referenceDeclaration:
+            .takes(reporting: .referenceToValue)
+        case .ownerDeclaration, .mutableReferenceDeclaration, .unnamedDeclaration, .assignment, .drop, .returned,
+             .arrayElement, .statement, .operand:
+            .takes(reporting: nil)
+        }
     }
 
     /// What the position does with `place`, and the error it reports, as it does where a local holds the place.
@@ -52,7 +67,8 @@ package enum Position: Sendable {
             place.owned { .assignmentBorrowsPlace(marks: $0) }
         case .returned, .arrayElement:
             place.copied(or: .move)
-        // A declaration of `_` is reported, so the value it is given reports nothing more than its own errors.
+        // These only read the value: a declaration of `_` is reported, and declares no local to take it, so it reports
+        // nothing of the place.
         case .unnamedDeclaration, .statement, .operand:
             place.copied(or: .lend)
         }
@@ -101,6 +117,17 @@ package struct ArgumentParameter: Sendable {
         // `.init(repeating:)` reads the value, and copies it into each element.
         case (.owned, .repeatedElement):
             place.copied(or: .lend)
+        }
+    }
+
+    /// What the parameter does with a value that no local holds, which lies in the temporary `temporary` spells.
+    fileprivate func takingValue(heldBy temporary: () -> String) -> ValueTaking {
+        switch convention {
+        // Changing a temporary would do nothing, since it dies with its statement.
+        case .mutable: .refused(.assignToTemporary(temporary: temporary()))
+        // A temporary is lent only to a parameter that borrows temporaries, as a built-in's does.
+        case .borrowed: .takes(reporting: borrowsTemporaries ? nil : .unsupportedLentValue)
+        case .owned: .takes(reporting: nil)
         }
     }
 

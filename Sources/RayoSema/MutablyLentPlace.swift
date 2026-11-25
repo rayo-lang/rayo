@@ -11,10 +11,11 @@ struct MutablyLentPlace {
     /// Where the source writes the `mutable` and the place.
     var range: SourceRange
 
-    /// The place itself, as the value of a position that takes it, where the source writes the `mutable`: a `ref
-    /// var`'s value, which borrows it, or a call's argument, which passes the parameter the place itself.
+    /// The place itself, lent for change, as the value of a position that takes it, where the source writes the
+    /// `mutable`: a call's argument, which passes the parameter the place itself, or the value of a `ref var` or of a
+    /// declaration of `_`, which are reported.
     var placeExpression: CheckedExpr {
-        CheckedExpr(kind: .place(place, .borrow), type: placeType, range: range)
+        CheckedExpr(kind: .place(place, .lendForChange), type: placeType, range: range)
     }
 }
 

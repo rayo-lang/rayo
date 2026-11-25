@@ -129,6 +129,22 @@ struct ExpressionChecker {
         }
     }
 
+    /// Reports `mutable &operand` at `range`, naming the `mutable` of its place to write, and gives nil. A `&`, at
+    /// `referenceRange`, of a value that no local holds is reported as unsupported.
+    private func mutableOfReference(_ operand: Expr, referenceRange: SourceRange,
+                                    in range: SourceRange) -> CheckedValue? {
+        // A place that failed was reported.
+        guard let lentPlace = place(operand, under: self) else { return nil }
+        guard lentPlace.place.local != nil else {
+            file.errors.report(.unsupportedLentValue, at: referenceRange)
+            return nil
+        }
+
+        let placeName = file.spelling(of: lentPlace.place.range)
+        file.errors.report(.mutableOfReference(place: placeName), at: range)
+        return nil
+    }
+
     /// Settles `value` toward `type`, where it waits for one, as `position` takes it, reporting what the position can't
     /// take of it as the source writes it.
     func settled(_ value: CheckedValue, toward type: RayoType?, at position: Position) -> CheckedExpr? {

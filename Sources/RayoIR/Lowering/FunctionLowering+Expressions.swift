@@ -10,12 +10,14 @@ extension FunctionLowering {
         switch expr.kind {
         // A borrow makes the value of the local it declares depend on what it borrows, so it needs the local.
         case .place(let place, .borrow):
+            // Checking gives only a `ref let` a place it borrows.
+            guard let destination else { preconditionFailure("only a 'ref let' borrows a place") }
             borrow(place, at: expr.range, into: destination)
 
         // An `if` whose value is dropped runs the branch its condition picks, and computes that branch's value for
-        // what it does, so a Void `if` needs no temporary. An `if` that a `ref let` takes has the branch that runs
-        // compute its value into the local itself, so the local depends on the access of whichever branch ran.
-        case .if(let condition, let then, let otherwise) where computesBranches(into: destination):
+        // what it does, so a Void `if` needs no temporary. An `if` whose branches borrow places has the branch that
+        // runs compute its value into the `ref let` itself, so the local depends on the access of whichever branch ran.
+        case .if(let condition, let then, let otherwise) where destination == nil || expr.borrowsPlaces:
             lowerIf(condition, then, otherwise, into: destination)
 
         // Any other value is one operation, whose operands are computed first.
@@ -24,22 +26,12 @@ extension FunctionLowering {
         }
     }
 
-    /// Whether an `if` has its branches compute its value into `destination` itself: where it drops the value, and
-    /// where the destination is the whole of a `ref let`, which borrows it.
-    private func computesBranches(into destination: Destination?) -> Bool {
-        guard let destination else { return true }
-        return destination.place.steps.isEmpty && builder.isBorrowing(destination.place.root)
-    }
-
     /// Lowers the borrow of `place`, which the source names at `range`, into `destination`, the local of the `ref let`
     /// that borrows it. The place is read through a read access, which the local's value then depends on, so the
     /// access lasts for as long as the local is used.
-    private mutating func borrow(_ place: CheckedPlace, at range: SourceRange, into destination: Destination?) {
-        // Checking gives only a `ref let` a place it borrows, and reports one that no local holds, which has no place
-        // to refer to.
-        guard let destination, place.local != nil else {
-            preconditionFailure("only a 'ref let' borrows a place, and only one that a local holds")
-        }
+    private mutating func borrow(_ place: CheckedPlace, at range: SourceRange, into destination: Destination) {
+        // Checking reports a place that no local holds given to a `ref let`, which has no place to refer to.
+        guard place.local != nil else { preconditionFailure("only a place that a local holds is borrowed") }
 
         let borrowed = self.place(of: place)
         let access = builder.begin(Access(.read, to: borrowed, at: range))
@@ -62,6 +54,7 @@ extension FunctionLowering {
             case .copy, .lend: .read(self.place(of: place), at: expr.range)
             case .move: .move(self.place(of: place), at: expr.range)
             case .borrow: preconditionFailure("a borrow is lowered into the local it declares, as no operand")
+            case .lendForChange: preconditionFailure("a place lent for change is passed as its argument, as no operand")
             }
         // An array's count is a constant, which the type of the array it counts fixes.
         case .arrayCount(let place, let count): arrayCount(of: place, fixedAt: count, at: expr.range)
@@ -271,6 +264,18 @@ extension FunctionLowering {
         builder.emit(.operand(rightValue), into: result, range: range)
         builder.end(with: .goto(join), continuingIn: join)
         return resultValue
+    }
+}
+
+private extension CheckedExpr {
+    /// Whether the value is a place that its position borrows, or an `if` whose branches give such places, as the
+    /// branches of a `ref let`'s value do.
+    var borrowsPlaces: Bool {
+        switch kind {
+        case .place(_, .borrow): true
+        case .if(_, let then, let otherwise): [then.value, otherwise.value].contains { $0?.borrowsPlaces == true }
+        default: false
+        }
     }
 }
 

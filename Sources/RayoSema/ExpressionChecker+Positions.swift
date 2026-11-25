@@ -1,7 +1,6 @@
 import RayoCheckedProgram
 import RayoDiagnostics
 import RayoSource
-import RayoSyntax
 
 extension ExpressionChecker {
     /// `bare` as `position` takes it, with the error the position gives it reported, or nil where the position refuses
@@ -29,28 +28,13 @@ extension ExpressionChecker {
     /// temporary the source writes at `temporary`, reporting what the position can't take of it.
     private func takesValue(at range: SourceRange, inTemporaryAt temporary: SourceRange,
                             by position: Position) -> Bool {
-        // Changing a temporary would do nothing, since it dies with its statement, so a parameter that borrows for
-        // change refuses it.
-        if case .argument(let parameter) = position, parameter.convention == .mutable {
-            file.errors.report(.assignToTemporary(temporary: file.spelling(of: temporary)), at: temporary)
+        switch position.takingValue(heldBy: { file.spelling(of: temporary) }) {
+        case .takes(let error):
+            if let error { file.errors.report(error, at: range) }
+            return true
+        case .refused(let error):
+            file.errors.report(error, at: temporary)
             return false
-        }
-
-        if let error = valueError(at: position) { file.errors.report(error, at: range) }
-        return true
-    }
-
-    /// The error at a value that no local holds, given to `position`, or nil where the position takes it.
-    private func valueError(at position: Position) -> ErrorCode? {
-        switch position {
-        // A temporary is lent only to a parameter that borrows temporaries, as a built-in's does.
-        case .argument(let parameter) where parameter.convention == .borrowed && !parameter.borrowsTemporaries:
-            .unsupportedLentValue
-        // A `ref let` refers to a place, and the value has none to refer to.
-        case .referenceDeclaration:
-            .referenceToValue
-        default:
-            nil
         }
     }
 
@@ -146,7 +130,9 @@ extension ExpressionChecker {
         case .argument(let parameter):
             refused(.mutableToNonMutableParameter(name: parameter.callee, type: spelling(of: parameter, expected.type)),
                     at: lent.range)
-        default:
+        // No other position takes a mutable reference.
+        case .ownerDeclaration, .referenceDeclaration, .assignment, .drop, .returned, .arrayElement, .statement,
+             .operand:
             refused(.unsupportedMutableReference, at: lent.range)
         }
     }
@@ -162,30 +148,6 @@ extension ExpressionChecker {
     /// place.
     private func refused(_ code: ErrorCode, at range: SourceRange) -> CheckedExpr? {
         file.errors.report(code, at: range)
-        return nil
-    }
-
-    /// Reports each place that `value` hands the `ref let` called `binding` in a local out of scope here: one that a
-    /// branch of an `if` declares, which ends with the branch while the `ref let` lives on.
-    func reportEndedPlaces(of value: CheckedExpr, referredToBy binding: String) {
-        for handed in value.handedPlaces where !names.isInScope(handed.local) {
-            let place = file.spelling(of: handed.place.range)
-            file.errors.report(.referenceOutlivesPlace(binding: binding, place: place), at: handed.place.range)
-        }
-    }
-
-    /// Reports `mutable &operand` at `range`, naming the `mutable` of its place to write, and gives nil. A `&`, at
-    /// `referenceRange`, of a value that no local holds is reported as unsupported.
-    func mutableOfReference(_ operand: Expr, referenceRange: SourceRange, in range: SourceRange) -> CheckedValue? {
-        // A place that failed was reported.
-        guard let lentPlace = place(operand, under: self) else { return nil }
-        guard lentPlace.place.local != nil else {
-            file.errors.report(.unsupportedLentValue, at: referenceRange)
-            return nil
-        }
-
-        let placeName = file.spelling(of: lentPlace.place.range)
-        file.errors.report(.mutableOfReference(place: placeName), at: range)
         return nil
     }
 }
