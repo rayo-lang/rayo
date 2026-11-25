@@ -44,31 +44,31 @@ struct DataflowTests {
         #expect(states(of: results, in: 1)?[statement] == expected)
     }
 
-    // The outer loop's header is bb1, the inner loop's bb2, and bb4 goes back from the inner loop to the outer one.
     @Test func `going forward, nested loops hand on what every pass of each body brings`() throws {
-        let blocks = """
-            bb0:
-              \(reading(1))
-              goto bb1
-            bb1:
-              \(reading(2))
-              branch true, bb2, bb5
-            bb2:
-              \(reading(3))
-              branch true, bb3, bb4
-            bb3:
-              \(reading(4))
-              goto bb2
-            bb4:
-              \(reading(5))
-              goto bb1
-            bb5:
-              \(reading(6))
-              return
-            """
-        let results = try solve(EvaluatedOperands(direction: .forward), blocks)
+        let results = try solve(EvaluatedOperands(direction: .forward), nestedLoops)
         #expect(states(of: results, in: 2)?.first == Set(1...5))
         #expect(states(of: results, in: 5)?.first == Set(1...5))
+    }
+
+    @Test(arguments: [DataflowDirection.forward, .backward])
+    func `the last crossing of each block starts from the state it settles on, in either direction`(
+        direction: DataflowDirection,
+    ) throws {
+        let body = try body(of: nestedLoops)
+        let start = EvaluatedOperands(direction: direction)
+        let settled = DataflowSolver.solve(from: start, through: body, knowing: ())
+
+        var lastStarts = [Set<Int>?](repeating: nil, count: body.blocks.count)
+        var crossings = 0
+        DataflowSolver.solve(from: start, through: body, knowing: ()) { block, state, effects in
+            lastStarts[block.index] = state.columns
+            crossings += 1
+            state.apply(across: effects, in: ())
+        }
+
+        #expect(lastStarts == body.blocks.indices.map { settled.boundaryState(of: BlockID(index: $0))?.columns })
+        // A pass of each loop's body adds to its header's state, so the solver crosses some block more than once.
+        #expect(crossings > body.blocks.count)
     }
 
     // bb1 and bb2 make a loop that a path enters at either, whichever the walk from the entry reaches first.
@@ -238,6 +238,29 @@ private let diamond = """
     bb3:
       \(reading(4))
       return read %0 @2:5-2:5
+    """
+
+/// Two nested loops. The outer loop's header is bb1, the inner loop's bb2, and bb4 goes back from the inner loop to
+/// the outer one.
+private let nestedLoops = """
+    bb0:
+      \(reading(1))
+      goto bb1
+    bb1:
+      \(reading(2))
+      branch true, bb2, bb5
+    bb2:
+      \(reading(3))
+      branch true, bb3, bb4
+    bb3:
+      \(reading(4))
+      goto bb2
+    bb4:
+      \(reading(5))
+      goto bb1
+    bb5:
+      \(reading(6))
+      return
     """
 
 /// Reads `x` at `column` of line 2, and drops its value.
