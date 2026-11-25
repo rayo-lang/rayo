@@ -61,6 +61,13 @@ struct LocalTests {
         #expect(errors("func main() {\n\(body)\n}") == [expected])
     }
 
+    @Test func `a local that a failed declaration hides in a block is the local again once the block ends`() {
+        let body = "let x = 1\nif true {\nlet x = true\n}\nlet b: Bool = x"
+        #expect(errors("func main() {\n\(body)\n}") == [
+            .alreadyDeclared(name: "x"), .typeMismatch(expected: "Bool", found: "Int"),
+        ])
+    }
+
     @Test("a call skips a local or a parameter whose declaration failed, and reaches the functions of its name",
           arguments: [
         ("func main() {\n    let sum = nope\n    let y: Bool = sum(3)\n    sum(true)\n}\n"
