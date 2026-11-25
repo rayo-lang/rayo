@@ -139,10 +139,14 @@ public enum Compiler {
             return CompilerResult(exitCode: 2, errors: usage)
         }
 
-        // Compile the file as the arguments ask.
-        return result(compiling: invocation.path) { errors throws(CompilationError) in
-            try compile(invocation, readFile: readFile, writeFile: writeFile, errors: &errors)
+        // Compile the file as the arguments ask, on a thread whose stack lets every stage recurse through the deepest
+        // expression the parser accepts.
+        let compiled = StageThread.run {
+            result(compiling: invocation.path) { errors throws(CompilationError) in
+                try compile(invocation, readFile: readFile, writeFile: writeFile, errors: &errors)
+            }
         }
+        return compiled ?? result(of: .failed("can't start a thread to compile on"), in: invocation.path, warnings: [])
     }
 
     /// Returns what `rayoc` gives when `compile` compiles the source file at `path`, adding the program's errors and

@@ -4,4 +4,7 @@ public struct IfExpr: Sendable {
     public var condition: Expr
     public var then: Block
     public var otherwise: Block?
+    /// How many levels deep the `if` nests as an expression: one more than the deepest part of its condition or of
+    /// the expressions in its blocks.
+    let levels: Int
 }

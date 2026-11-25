@@ -1,10 +1,38 @@
 internal import RayoDiagnostics
 internal import RayoSource
 
-/// Parses expressions, grouping operators by how tightly they bind.
+/// Parses expressions, grouping operators by how tightly they bind, and reports one that nests past the limit.
 extension Parser {
     mutating func parseExpression() throws(ParseFailure) -> Expr {
         try parseBinary(minimumLevel: 1)
+    }
+
+    /// Parses, with `parse`, a part one level deeper than the expression being parsed, such as an operand.
+    private mutating func parseNested<Part>(
+        _ parse: (inout Parser) throws(ParseFailure) -> Part,
+    ) throws(ParseFailure) -> Part {
+        // A part that would start past the limit is reported before the parser recurses into it, which bounds the
+        // parser's own stack.
+        guard depth < Self.expressionLevelLimit else { throw failTooDeep(at: current.range) }
+        depth += 1
+        defer { depth -= 1 }
+        deepestLevel = max(deepestLevel, depth)
+        return try parse(&self)
+    }
+
+    /// `expression`, which the parser has just built, once it is known to nest no deeper than the limit, counted
+    /// from the outermost expression around it.
+    private mutating func checkedDepth(_ expression: Expr) throws(ParseFailure) -> Expr {
+        let level = depth + expression.levels
+        guard level <= Self.expressionLevelLimit else { throw failTooDeep(at: expression.range) }
+        deepestLevel = max(deepestLevel, level)
+        return expression
+    }
+
+    /// Reports an expression at `range` that nests past the limit, and returns the failure to throw.
+    private mutating func failTooDeep(at range: SourceRange) -> ParseFailure {
+        report(.expressionTooDeep(limit: Self.expressionLevelLimit), at: range)
+        return ParseFailure()
     }
 
     /// Parses an expression whose binary operators outside parentheses all bind at `minimumLevel` or tighter.
@@ -13,8 +41,10 @@ extension Parser {
         // An operator takes the tighter ones after it as its right operand, so one level groups from the left.
         while case .punct(let punct) = current.kind, let op = punct.binaryOperator, op.level >= minimumLevel {
             advance()
-            let right = try parseBinary(minimumLevel: op.level + 1)
-            left = Expr(kind: .binary(op, left, right), range: left.range.to(right.range))
+            let right = try parseNested { parser throws(ParseFailure) in
+                try parser.parseBinary(minimumLevel: op.level + 1)
+            }
+            left = try checkedDepth(Expr(kind: .binary(op, left, right), range: left.range.to(right.range)))
         }
         return left
     }
@@ -33,28 +63,32 @@ extension Parser {
 
         // A `copy` takes the local it copies, or a part of it at any depth.
         if consume(.copy) {
-            let place = try parseNamedPlace(else: ErrorCode.missingCopiedName)
-            return Expr(kind: .copy(place), range: range(from: start))
+            let place = try parseNested { parser throws(ParseFailure) in
+                try parser.parseNamedPlace(else: ErrorCode.missingCopiedName)
+            }
+            return try checkedDepth(Expr(kind: .copy(place), range: range(from: start)))
         }
 
         // A `consume` takes the local it moves, or a part of it at any depth.
         if consume(.consume) {
-            let place = try parseNamedPlace(else: ErrorCode.missingConsumedName)
-            return Expr(kind: .consume(place), range: range(from: start))
+            let place = try parseNested { parser throws(ParseFailure) in
+                try parser.parseNamedPlace(else: ErrorCode.missingConsumedName)
+            }
+            return try checkedDepth(Expr(kind: .consume(place), range: range(from: start)))
         }
 
         // A `&` takes what it lends: a place that starts from a name, such as a local, a part of one at any depth, or
         // a call's result.
         if consume(.ampersand) {
-            let place = try parseLent()
-            return Expr(kind: .reference(place), range: range(from: start))
+            let place = try parseNested { parser throws(ParseFailure) in try parser.parseLent() }
+            return try checkedDepth(Expr(kind: .reference(place), range: range(from: start)))
         }
 
         // A `mutable` takes the unary expression after it, as a `-` does. Checking reports an operand that names no
         // place that can change, such as a temporary.
         if consume(.mutable) {
-            let operand = try parseUnary()
-            return Expr(kind: .mutableReference(operand), range: range(from: start))
+            let operand = try parseNested { parser throws(ParseFailure) in try parser.parseUnary() }
+            return try checkedDepth(Expr(kind: .mutableReference(operand), range: range(from: start)))
         }
 
         // An expression without a `-` or `!` in front is a postfix one.
@@ -64,8 +98,8 @@ extension Parser {
 
         // A `-` or `!` applies to the unary expression after it.
         advance()
-        let operand = try parseUnary()
-        return Expr(kind: .unary(op, operand), range: range(from: start))
+        let operand = try parseNested { parser throws(ParseFailure) in try parser.parseUnary() }
+        return try checkedDepth(Expr(kind: .unary(op, operand), range: range(from: start)))
     }
 
     /// `primary postfix*`, where a postfix is `'.' member`, `'[' expression ']'`, or `'(' arguments ')'` after a name,
@@ -130,9 +164,9 @@ extension Parser {
     /// At the `[` that follows `base`: the `[`, the index and the `]`.
     private mutating func parseElement(of base: Expr) throws(ParseFailure) -> Expr {
         advance()
-        let index = try parseExpression()
+        let index = try parseNested { parser throws(ParseFailure) in try parser.parseExpression() }
         try expect(.rbracket, else: ErrorCode.unclosedIndex)
-        return Expr(kind: .element(base, index: index), range: range(from: base.range))
+        return try checkedDepth(Expr(kind: .element(base, index: index), range: range(from: base.range)))
     }
 
     /// After `base`: the members taken of it, each after a `.`.
@@ -142,7 +176,8 @@ extension Parser {
         // Each `.` takes a member of the value before it, so `a.b.c` is the `c` of `a.b`.
         while consume(.dot) {
             let (name, nameRange) = try parseMemberName()
-            value = Expr(kind: .member(value, name: name, nameRange: nameRange), range: value.range.to(nameRange))
+            let member = Expr(kind: .member(value, name: name, nameRange: nameRange), range: value.range.to(nameRange))
+            value = try checkedDepth(member)
         }
         return value
     }
@@ -212,14 +247,15 @@ extension Parser {
             parser throws(ParseFailure) in
             try parser.parseArgument()
         }
-        return Expr(kind: .call(callee: callee, arguments: arguments), range: range(from: callee.range))
+        let call = Expr(kind: .call(callee: callee, arguments: arguments), range: range(from: callee.range))
+        return try checkedDepth(call)
     }
 
     /// `(label ':')? expression`, where a label may be a keyword.
     private mutating func parseArgument() throws(ParseFailure) -> Argument {
         let start = current.range
         let label = parseArgumentLabel()
-        let value = try parseExpression()
+        let value = try parseNested { parser throws(ParseFailure) in try parser.parseExpression() }
         return Argument(label: label, value: value, range: range(from: start))
     }
 
@@ -236,23 +272,29 @@ extension Parser {
     private mutating func parseArrayLiteral(from start: SourceRange) throws(ParseFailure) -> Expr {
         let elements = try parseList(upTo: .rbracket, ifUnclosed: ErrorCode.unclosedArrayLiteral) {
             parser throws(ParseFailure) in
-            try parser.parseExpression()
+            try parser.parseNested { element throws(ParseFailure) in try element.parseExpression() }
         }
-        return Expr(kind: .arrayLiteral(elements), range: range(from: start))
+        return try checkedDepth(Expr(kind: .arrayLiteral(elements), range: range(from: start)))
     }
 
     /// After the `if` at `start`: the `if` as an expression.
     private mutating func parseIfExpression(from start: SourceRange) throws(ParseFailure) -> Expr {
-        let ifExpr = try parseIf()
-        return Expr(kind: .if(ifExpr), range: range(from: start))
+        let ifExpr = try parseNested { parser throws(ParseFailure) in try parser.parseIf() }
+        return try checkedDepth(Expr(kind: .if(ifExpr), range: range(from: start)))
     }
 
     /// After the `if`: the condition, the block, and the `else` part, when there is one.
     mutating func parseIf() throws(ParseFailure) -> IfExpr {
+        // The `if` nests a level deeper than the deepest part in it, its blocks' expressions included, which an `if`
+        // around this one counts in turn.
+        let enclosingDeepest = deepestLevel
+        deepestLevel = depth
+        defer { deepestLevel = max(enclosingDeepest, deepestLevel) }
+
         let condition = try parseExpression()
         let then = try parseBlock()
         let otherwise = consume(.else) ? try parseElse() : nil
-        return IfExpr(condition: condition, then: then, otherwise: otherwise)
+        return IfExpr(condition: condition, then: then, otherwise: otherwise, levels: deepestLevel - depth + 1)
     }
 
     /// After the `else`: a block, or an `if` that is the one statement of the block it stands for.
@@ -267,9 +309,9 @@ extension Parser {
 
     /// After the `(`: an expression in parentheses and the `)`.
     private mutating func parseParenthesized(from start: SourceRange) throws(ParseFailure) -> Expr {
-        let inner = try parseExpression()
+        let inner = try parseNested { parser throws(ParseFailure) in try parser.parseExpression() }
         try expect(.rparen, else: ErrorCode.unclosedParenthesizedExpression)
-        return Expr(kind: inner.kind, range: range(from: start))
+        return try checkedDepth(Expr(kind: inner.kind, range: range(from: start), levels: inner.levels + 1))
     }
 }
 
