@@ -17,9 +17,10 @@ func builtProduct(_ name: String) -> URL {
     return products.appendingPathComponent(Executable.fileName(name))
 }
 
-/// Runs the built `rayo` with `arguments` in `directory`, as a user would there, and gives what it exits with and
-/// what it writes. A run that can't start is recorded as an issue, and gives exit code -1.
-func rayo(_ arguments: [String], in directory: URL) -> CommandResult {
+/// Runs the `rayo` at `executable`, the built one unless another is named, with `arguments` in `directory`, as a user
+/// would there, and gives what it exits with and what it writes. A run that can't start is recorded as an issue, and
+/// gives exit code -1.
+func rayo(_ arguments: [String], in directory: URL, running executable: URL = builtProduct("rayo")) -> CommandResult {
     do {
         // Give each output stream a file, so that neither fills up and stalls the run while the other is read.
         let runID = UUID().uuidString
@@ -34,7 +35,7 @@ func rayo(_ arguments: [String], in directory: URL) -> CommandResult {
 
         // Run `rayo` there, and give what it wrote.
         let process = Process()
-        process.executableURL = builtProduct("rayo")
+        process.executableURL = executable
         process.arguments = arguments
         process.currentDirectoryURL = directory
         let output = try FileHandle(forWritingTo: outputFile)

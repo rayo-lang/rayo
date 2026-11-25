@@ -103,7 +103,9 @@ CI's benchmark job compares each pull request that changes the compiler with its
 
 ## How rayo and rayoc work together
 
-`rayo check`, `rayo build` and `rayo run` have `rayoc` check or compile the program, in a process of its own, and `rayo build` and `rayo run` link the object code `rayoc` writes with the clang and LLD of the LLVM they were built against. `rayo` runs the `rayoc` beside it, or the one the `RAYOC` environment variable names.
+`rayo check`, `rayo build` and `rayo run` have `rayoc` check or compile the program, in a process of its own, and `rayo build` and `rayo run` link the object code `rayoc` writes with clang and LLD. `rayo` runs the `rayoc` beside it, or the one the `RAYOC` environment variable names.
+
+`rayo` runs the `clang` and the host's LLD (`ld64.lld`, `ld.lld` or `lld-link`, with `.exe` on Windows) that are beside it, so a toolchain that bundles them runs its own. Each tool that isn't beside it, as with a `rayo` run from its build directory, runs from the LLVM `rayo` was built against ([LLVM](#llvm)). A tool the link needs that is in neither place stops it, and the error names each place it looked. On macOS and Linux, a `rayo` reached through a symbolic link looks beside the file the link names, so a link to a toolchain's `rayo` runs that toolchain's `rayoc`, clang and LLD.
 
 `rayoc` takes one source file, and writes no file but its object code. It prints to its standard output only what `--emit` asks for:
 
@@ -168,7 +170,7 @@ These commands, like the ones for your own search path, write it back with each 
 
 On macOS and Linux, `Package.swift` looks for LLVM 23 where apt and Homebrew install it: under `/usr/lib/llvm-23`, and under `opt/llvm@23` and `opt/llvm` in Homebrew's prefix, `/opt/homebrew` or `/usr/local`. It takes the first of them whose `llvm/Config/llvm-config.h` names major version 23, and builds against its headers and libraries. Where LLVM 23 is installed anywhere else, set `LLVM_PREFIX` to the directory that holds its `include` and `lib`.
 
-`rayo` runs the `clang` in that LLVM's `bin`. It looks for LLD 23 in that LLVM's prefix, then in `/usr/lib/llvm-23`, where apt installs it, and then in `opt/lld@23` and `opt/lld` in Homebrew's prefix. On Windows it looks only in LLVM's prefix, whose archive holds LLD. Where LLD 23 is installed anywhere else, set `LLD_PREFIX` to the directory that holds its `bin`. Both paths are fixed when `rayo` is built, so the clang and LLD on the search path don't matter. A missing clang or LLD is an error when a program is linked, not when `rayo` is built.
+Where no clang or LLD is beside it, `rayo` runs the `clang` in that LLVM's `bin`, and the LLD 23 that its build found. The build looks for LLD 23 in that LLVM's prefix, then in `/usr/lib/llvm-23`, where apt installs it, and then in `opt/lld@23` and `opt/lld` in Homebrew's prefix. On Windows it looks only in LLVM's prefix, whose archive holds LLD. Where LLD 23 is installed anywhere else, set `LLD_PREFIX` to the directory that holds its `bin`. Both paths are fixed when `rayo` is built, so the clang and LLD on the search path don't matter. A missing clang or LLD is an error when a program is linked, not when `rayo` is built.
 
 SwiftPM caches what `Package.swift` found, so it doesn't look again when the LLVM install changes. After installing, moving or upgrading LLVM, run `swift package purge-cache`, which clears that cache, and build again.
 
@@ -220,7 +222,7 @@ Each row says what a module or test target holds, and changes only when one is a
 | `Sources/RayoCompiler` | What `rayoc` does: the pipeline from a source file to what it writes or prints |
 | `Sources/rayoc` | The compiler's executable |
 | `Sources/CLLVMInstall` | The LLVM install that `Package.swift` found, as C constants |
-| `Sources/RayoLLVMInstall` | That install, as Swift, whose clang and LLD link programs |
+| `Sources/RayoLLVMInstall` | That install, as Swift, whose clang and LLD link programs where none are beside `rayo` |
 | `Sources/RayoDriver` | What each `rayo` command does |
 | `Sources/rayo` | The driver's executable |
 | `Tests/RayoSourceTests` | Tests of source positions |

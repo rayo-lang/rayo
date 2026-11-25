@@ -14,7 +14,8 @@ import RayoLLVMInstall
 struct Toolchain {
     /// The `rayoc` that compiles.
     var compiler: URL
-    var tools: LinkTools
+    /// Where a link looks for each tool it runs, in order: it runs the tool from the first that holds it.
+    var linkTools: [LinkTools]
     var linker: Linker
     /// Where what `rayoc` and a program write goes.
     var output: ProcessOutput
@@ -52,14 +53,15 @@ struct Toolchain {
     func link(_ objectFile: URL, to executable: URL) throws(CommandError) {
         // A link needs clang, which drives it, so a missing clang stops it; then the arguments that have clang run
         // the linker asked for.
-        guard Self.isExecutableFile(tools.clang) else {
-            throw .failed("can't find clang at '\(tools.clang.path)'")
+        let clangs = linkTools.map(\.clang)
+        guard let clang = clangs.first(where: Self.isExecutableFile) else {
+            throw .failed("can't find clang at \(Self.listing(clangs))")
         }
         let linkerArguments = try linkerArguments()
 
         // Have clang link the object file into the executable.
         let arguments = linkerArguments + Self.stackArguments + [objectFile.path, "-o", executable.path]
-        let run = try runCapturingOutput(tools.clang, arguments: arguments)
+        let run = try runCapturingOutput(clang, arguments: arguments)
         // A link that clang fails reports what clang wrote, without its last newline.
         if run.termination.exitCode != 0 {
             let errors = run.errors.hasSuffix("\n") ? String(run.errors.dropLast()) : run.errors
@@ -105,22 +107,23 @@ struct Toolchain {
     /// Finds `linker`, and returns the arguments that have clang link with it.
     private func linkerArguments() throws(CommandError) -> [String] {
         switch linker {
-        // LLD is the one from the LLVM that rayo was built with.
+        // LLD runs from the first of the link tools that holds it.
         case .lld:
             // A missing LLD is reported with the ways to install it or to link without it.
-            guard Self.isExecutableFile(tools.lld) else {
+            let llds = linkTools.map(\.lld)
+            guard let lld = llds.first(where: Self.isExecutableFile) else {
                 throw .failed("""
-                    can't find LLD at '\(tools.lld.path)': install LLD \(LLVMInstall.majorVersion), run \
+                    can't find LLD at \(Self.listing(llds)): install LLD \(LLVMInstall.majorVersion), run \
                     'swift package purge-cache' and build rayo again, or link with --linker=platform
                     """)
             }
             #if os(Windows)
             // clang's driver for MSVC takes no --ld-path, and finds a linker that -fuse-ld names by its path under
             // a name with the target's triple before it. It looks for `lld-link` first in the directories -B names.
-            return ["-fuse-ld=lld", "-B\(tools.lld.deletingLastPathComponent().path)"]
+            return ["-fuse-ld=lld", "-B\(lld.deletingLastPathComponent().path)"]
             #else
             // clang chooses the arguments it gives the linker by -fuse-ld, and runs the linker --ld-path names.
-            return ["-fuse-ld=lld", "--ld-path=\(tools.lld.path)"]
+            return ["-fuse-ld=lld", "--ld-path=\(lld.path)"]
             #endif
         // The platform's linker is found where the platform keeps it.
         case .platform:
@@ -165,6 +168,14 @@ struct Toolchain {
     #else
     private static let stackArguments: [String] = []
     #endif
+
+    /// The path of each of `places`, quoted and named once, in a list such as `'a' or 'b'`.
+    private static func listing(_ places: [URL]) -> String {
+        // Sets of link tools can share a place, which is still only one place that was looked in.
+        var paths: [String] = []
+        for place in places where !paths.contains(place.path) { paths.append(place.path) }
+        return paths.map { "'\($0)'" }.joined(separator: " or ")
+    }
 
     /// Whether `url` names a file, not a directory, that can be run.
     private static func isExecutableFile(_ url: URL) -> Bool {

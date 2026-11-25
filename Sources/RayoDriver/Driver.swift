@@ -18,7 +18,8 @@ public enum Driver {
                      release build
 
         linkers:
-          --linker=lld       LLD, from the LLVM that rayo was built with; the linker when none is named
+          --linker=lld       LLD, from beside rayo or the LLVM that rayo was built with; the linker when none
+                             is named
           --linker=platform  the platform's own linker
 
         """
@@ -93,10 +94,11 @@ public enum Driver {
     }
 
     /// Runs `rayo` with `arguments`, which exclude the program's name. It compiles with the `rayoc` at `compiler`,
-    /// and `build` and `run` link with `linkTools`; `environment` is the environment those tools and a program run in.
+    /// and `build` and `run` run each link tool from the first of `linkTools` that holds it; `environment` is the
+    /// environment those tools and a program run in.
     public static func run(
         _ arguments: [String], compiler: URL, processOutput: ProcessOutput = .captured,
-        environment: [String: String] = ProcessInfo.processInfo.environment, linkTools: LinkTools = .installed,
+        environment: [String: String] = ProcessInfo.processInfo.environment, linkTools: [LinkTools] = [.installed],
     ) -> CommandResult {
         // Read what the arguments ask for.
         let invocation: Invocation
@@ -108,7 +110,7 @@ public enum Driver {
         }
 
         // Run the command the arguments ask for, with the host's tools.
-        let toolchain = Toolchain(compiler: compiler, tools: linkTools, linker: invocation.linker,
+        let toolchain = Toolchain(compiler: compiler, linkTools: linkTools, linker: invocation.linker,
                                   output: processOutput, environment: environment)
         let command = CommandRun(invocation: invocation, toolchain: toolchain)
         do {
@@ -125,6 +127,12 @@ public enum Driver {
         // `RAYOC` names the compiler to use.
         if let path = environment["RAYOC"], !path.isEmpty { return URL(fileURLWithPath: path) }
         return executable.deletingLastPathComponent().appendingPathComponent(Executable.fileName("rayoc"))
+    }
+
+    /// Returns where `rayo` looks for the tools a link runs, in order: beside `executable`, the `rayo` that runs, where
+    /// a toolchain that bundles them keeps them, then in the LLVM install that `rayo` was built against.
+    public static func linkTools(beside executable: URL) -> [LinkTools] {
+        [LinkTools(in: executable.deletingLastPathComponent()), .installed]
     }
 
     /// The command an invocation asks for, run on the file it names, with the host's tools.
