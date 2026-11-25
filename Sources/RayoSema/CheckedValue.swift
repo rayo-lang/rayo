@@ -23,8 +23,7 @@ enum CheckedValue {
         }
     }
 
-    /// How many levels of array types, each the element of the one around it, any type the value settles to nests at
-    /// the least.
+    /// The fewest levels of nested array types that any type the value settles to has.
     var arrayLevels: Int {
         switch self {
         case .typed(let value): value.type.arrayLevels

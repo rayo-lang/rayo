@@ -302,8 +302,19 @@ struct ArrayLiteralNestingTests {
 
     @Test(arguments: everyOutputButTheCheckedProgram)
     private func `a literal takes a parameter's type as deep as the limit`(arguments: [String]) {
-        let parameterType = nestedArrayType(levels: arrayTypeLimit)
-        let source = "func f(xs: \(parameterType)) { _ = consume xs }\nfunc main() {\n    f(xs: \(literalAtTheLimit))\n}\n"
+        let function = "func f(xs: \(nestedArrayType(levels: arrayTypeLimit))) { _ = consume xs }\n"
+        let source = function + "func main() {\n    f(xs: \(literalAtTheLimit))\n}\n"
+        let result = run(arguments, on: source)
+        #expect(result.exitCode == 0, "\(result.errors)")
+    }
+
+    @Test(arguments: everyOutputButTheCheckedProgram)
+    private func `a literal no element gives a type takes an annotation's type as deep as the limit`(
+        arguments: [String],
+    ) {
+        let type = String(repeating: arrayTypeOpening, count: arrayTypeLimit - 1) + "[0 of Int]"
+            + String(repeating: "]", count: arrayTypeLimit - 1)
+        let source = programUpToArrayType + type + " = " + emptyLiteralAtTheLimit + "\n    _ = consume xs\n}\n"
         let result = run(arguments, on: source)
         #expect(result.exitCode == 0, "\(result.errors)")
     }

@@ -5,8 +5,8 @@ import RayoSource
 struct ArrayLiteral {
     let elements: [CheckedValue]
     let range: SourceRange
-    /// How many levels of array types any type the literal settles to nests at the least: one more than its deepest
-    /// element does, whether or not an element gives the literal a type.
+    /// The fewest levels of nested array types that any type the literal settles to has: one more than its deepest
+    /// element has, whether or not an element gives the literal a type.
     let arrayLevels: Int
 
     init(elements: [CheckedValue], range: SourceRange) {

@@ -44,7 +44,7 @@ struct IfValue {
             if case .value(let value) = self { value.typeOrDefault } else { type }
         }
 
-        /// How many levels of array types the end's value nests at the least: none where it gives Void or no value.
+        /// The fewest levels of nested array types that the end's value has: none where it gives Void or no value.
         var arrayLevels: Int { value?.arrayLevels ?? 0 }
 
         /// Whether the end fits `type`, as a call asks when it picks among overloads. One that no run reaches fits
@@ -79,7 +79,7 @@ struct IfValue {
     let agreedType: RayoType?
     /// Whether a branch fixes a type, whatever position the `if` stands in.
     private let fixesType: Bool
-    /// How many levels of array types any type the `if` settles to nests at the least: as many as its deepest branch.
+    /// The fewest levels of nested array types that any type the `if` settles to has: as many as its deepest branch.
     let arrayLevels: Int
 
     /// The `if` of `condition`, `then` and `otherwise` that the source gives at `range`, whose branches agree on a

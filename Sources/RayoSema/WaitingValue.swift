@@ -12,8 +12,7 @@ protocol WaitingValue {
     /// `[]` can't.
     var defaultType: RayoType? { get }
 
-    /// How many levels of array types, each the element of the one around it, any type the value settles to nests at
-    /// the least.
+    /// The fewest levels of nested array types that any type the value settles to has.
     var arrayLevels: Int { get }
 
     /// Whether the value fits `type`, as a call asks when it picks among overloads: it can settle to `type`, and
@@ -50,8 +49,8 @@ protocol WaitingValue {
 }
 
 extension WaitingValue {
-    /// A value nests the array types of the type it fixes, or else of the one it settles to where its position gives
-    /// none, unless it says otherwise, as one that holds array literals does.
+    /// A value has the levels of the type it fixes, or else of the one it settles to where its position gives none,
+    /// unless it says otherwise, as one that holds array literals does.
     var arrayLevels: Int { (type ?? defaultType)?.arrayLevels ?? 0 }
 
     /// A value can settle to just the types it fits, unless it says otherwise, as one a literal's value keeps from
