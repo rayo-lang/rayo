@@ -176,6 +176,8 @@ SwiftPM caches what `Package.swift` found, so it doesn't look again when the LLV
 
 Homebrew's `libLLVM` names `opt/llvm` as the place it's loaded from, even when it was installed as `llvm@23`. So once `brew upgrade` takes Homebrew's `llvm` past release 23, a `rayoc` built against it stops loading. Install `llvm@23`, run `swift package purge-cache`, and build again. Where `Package.swift` finds only another release, it stops and says which.
 
+`rayoc` looks for LLVM's shared library first in a folder beside its own: on Linux and macOS in the `lib` beside the `bin` that holds it, and on Windows in the folder that holds `rayoc.exe`. So a toolchain's folder that carries its own copy of the library runs on a machine whose LLVM is elsewhere, or missing. Failing that, Linux and macOS look in the `lib` of the LLVM `rayoc` was built against, and Windows along the search path. On macOS the `lib` beside `rayoc` serves only a library that names `@rpath` as the place it's loaded from, as those in LLVM's release archives do, so a `rayoc` built against Homebrew's loads it from Homebrew's prefix alone.
+
 On macOS the linker warns that `libLLVM` was built for a newer macOS than `rayoc` is. Homebrew builds its bottles per macOS release, and installs the one for the machine's own, so the warning is harmless on that machine.
 
 The release lives in two places: `llvmMajorVersion` in `Package.swift`, and `LLVM_MAJOR_VERSION` in `.github/workflows/ci.yml`. A move to a new release changes both, with any changes the C API and the program runtime's LLVM IR need.
