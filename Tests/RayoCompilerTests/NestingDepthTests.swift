@@ -107,7 +107,7 @@ private let pastTheLimit = Parser.nestingLevelLimit + 1
 /// shape that nests blocks, the `{` of the block that passes it.
 private let codeBeforeTooDeep = [
     (Shape.sum, valueBinding),
-    (.parentheses, valueBinding + String(repeating: "(", count: Parser.nestingLevelLimit + 1)),
+    (.parentheses, valueBinding + String(repeating: "(", count: pastTheLimit)),
     (
         .callsInIf,
         valueBinding + String(repeating: "f(x: ", count: pastTheLimit / 2) + "if b { "
@@ -135,7 +135,7 @@ struct NestingDepthTests {
     private func `code a level past the limit is reported once, at the part that passes it`(
         shape: Shape, codeBefore: String,
     ) {
-        let source = program(shape.code(levels: Parser.nestingLevelLimit + 1))
+        let source = program(shape.code(levels: pastTheLimit))
         let diagnostics = run(["--check"], on: source).diagnostics
         #expect(diagnostics.map(\.code) == [.nestingTooDeep(limit: Parser.nestingLevelLimit)])
         #expect(diagnostics.first?.range.start.offset == (programUpToCode + codeBefore).utf8.count)
@@ -146,7 +146,7 @@ struct NestingDepthTests {
         #expect(diagnostics.map(\.code.message) == ["the code nests more than 10000 levels deep"])
     }
 
-    @Test(arguments: Shape.allCases, [Parser.nestingLevelLimit + 1, 200_000])
+    @Test(arguments: Shape.allCases, [pastTheLimit, 200_000])
     private func `code past the limit fails alone, and the compile goes on after it`(shape: Shape, levels: Int) {
         let source = program(shape.code(levels: levels), then: "func g() { copy }\n")
         let diagnostics = run(["--check"], on: source).diagnostics
