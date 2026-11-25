@@ -71,6 +71,7 @@ PROGRAM_DESCRIPTIONS = [
     'out from the result through a let of its own: 2 N + 6 lines',
     'if-sum-T: a main of one statement that sums T if expressions, the temporary of each + in use across the blocks '
     'of every if: 5 lines',
+    'if-nest-D: a main that binds the value of D ifs, each the value of the first branch of the if around it: 5 lines',
 ]
 
 
@@ -129,6 +130,12 @@ def if_sum(terms):
     return f'func main() {{\n    let seed = 3\n    let total = {total}\n    print(total)\n}}\n'
 
 
+def if_nest(depth):
+    """A `main` that binds the value of `depth` `if`s, each the value of the first branch of the `if` around it."""
+    nest = 'if seed > 0 { ' * depth + '0' + ' } else { 1 }' * depth
+    return f'func main() {{\n    let seed = 3\n    let value = {nest}\n    print(value)\n}}\n'
+
+
 def programs(sizes):
     """Each program a benchmark compiles at each of `sizes`, by name, in order of size within each kind. A straight
     line has five turns for each copy of a loop, since a turn is far smaller than a copy, and a sum of `if`s two terms
@@ -137,6 +144,7 @@ def programs(sizes):
     made += [(f'ref-let-loops-{size}', ref_let_loops(size)) for size in sizes]
     made += [(f'straight-line-{5 * size}', straight_line(5 * size)) for size in sizes]
     made += [(f'if-sum-{2 * size}', if_sum(2 * size)) for size in sizes]
+    made += [(f'if-nest-{size}', if_nest(size)) for size in sizes]
     return made
 
 

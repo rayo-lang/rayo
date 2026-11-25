@@ -78,13 +78,15 @@ struct IfValue {
     private let fixesType: Bool
 
     /// The `if` of `condition`, `then` and `otherwise` that the source gives at `range`, whose branches agree on a
-    /// type only where each can take it, as `declarations` gives the members an implicit member names. An `if` in a
-    /// branch has worked out its own types already, so building each `if` of a nest costs the same at any depth.
+    /// type only where each can take it, as `declarations` gives the members an implicit member names.
     init(condition: CheckedExpr, then: Branch, otherwise: Branch, range: SourceRange, in declarations: Declarations) {
         self.condition = condition
         self.then = then
         self.otherwise = otherwise
         self.range = range
+
+        // Work out the types once, from the branches' own, which an `if` in a branch worked out when it was made, so
+        // making each `if` of a nest costs the same at any depth.
         let ends = [then.end, otherwise.end]
         let ruledType = CheckedValue.agreedType(of: ends.map { ($0.type, $0.typeOrDefault) })
         self.ruledType = ruledType
@@ -120,8 +122,7 @@ extension IfValue: WaitingValue {
     func canSettle(to type: RayoType, in declarations: Declarations) -> Bool {
         let reached = ends.filter(\.isReached)
         guard !reached.isEmpty else { return false }
-        // The branches were asked about the ruled type when the `if` was built, so an `if` around this one, which
-        // asks about the type this one gives, doesn't ask every `if` nested in it again.
+        // The agreed type already answers for the ruled type. Asking the branches again would visit every nested `if`.
         if type == ruledType { return agreedType != nil }
         return reached.allSatisfy { $0.canSettle(to: type, in: declarations) }
     }

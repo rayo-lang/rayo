@@ -2,12 +2,12 @@ import RayoSource
 import RayoSyntax
 
 /// Where a run of a function body can go, worked out from its syntax alone, so a statement that fails to check still
-/// counts for what it does, and what it has worked out of the body's `if`s. Only the forms that change where a run
-/// goes are told apart; every other form completes, and leaves a loop, as its parts do.
+/// counts for what it does. Only the forms that change where a run goes are told apart; every other form completes,
+/// and leaves a loop, as its parts do. It keeps whether a run gets past each `if` it has worked out.
 final class Reachability {
     /// Whether a run can go on past each `if` worked out so far, by its condition's range, which no two `if`s share.
     /// Each `if` whose branch is checked for its value asks about the `if`s nested in it, so each is worked out once.
-    private var completingIfs: [SourceRange: Bool] = [:]
+    private var completesPastIf: [SourceRange: Bool] = [:]
 
     /// Whether a run can reach the end of `block`.
     func canComplete(_ block: Block) -> Bool {
@@ -50,14 +50,14 @@ final class Reachability {
 
     /// Whether a run can go on past `ifExpr`.
     private func canComplete(_ ifExpr: IfExpr) -> Bool {
-        if let completes = completingIfs[ifExpr.condition.range] { return completes }
-        let completes = workOutCanComplete(ifExpr)
-        completingIfs[ifExpr.condition.range] = completes
+        if let completes = completesPastIf[ifExpr.condition.range] { return completes }
+        let completes = canCompleteFromParts(ifExpr)
+        completesPastIf[ifExpr.condition.range] = completes
         return completes
     }
 
     /// Whether a run can go on past `ifExpr`, worked out from its parts.
-    private func workOutCanComplete(_ ifExpr: IfExpr) -> Bool {
+    private func canCompleteFromParts(_ ifExpr: IfExpr) -> Bool {
         // A condition that can't complete leaves before either branch runs.
         guard canComplete(ifExpr.condition) else { return false }
         // Without an `else`, a run goes on where the condition fails.
