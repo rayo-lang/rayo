@@ -105,7 +105,7 @@ CI's benchmark job compares each pull request that changes the compiler with its
 
 `rayo check`, `rayo build` and `rayo run` have `rayoc` check or compile the program, in a process of its own, and `rayo build` and `rayo run` link the object code `rayoc` writes with clang and LLD. `rayo` runs the `rayoc` beside it, or the one the `RAYOC` environment variable names.
 
-`rayo` runs the `clang` beside it, and the host's LLD beside it, `ld64.lld`, `ld.lld` or `lld-link`, so a toolchain that bundles them runs its own. It decides for each tool: one that isn't there, as beside a `rayo` run from its build directory, runs from the LLVM `rayo` was built against ([LLVM](#llvm)). A tool that is in neither place stops the link, naming both paths. On macOS and Linux, a `rayo` reached through a symbolic link looks beside the file the link names, so a link to a toolchain's `rayo` runs that toolchain's `rayoc`, clang and LLD.
+`rayo` runs the `clang` and the host's LLD (`ld64.lld`, `ld.lld` or `lld-link`, with `.exe` on Windows) that are beside it, so a toolchain that bundles them runs its own. Each tool that isn't beside it, as with a `rayo` run from its build directory, runs from the LLVM `rayo` was built against ([LLVM](#llvm)). A tool the link needs that is in neither place stops it, and the error names each place it looked. On macOS and Linux, a `rayo` reached through a symbolic link looks beside the file the link names, so a link to a toolchain's `rayo` runs that toolchain's `rayoc`, clang and LLD.
 
 `rayoc` takes one source file, and writes no file but its object code. It prints to its standard output only what `--emit` asks for:
 

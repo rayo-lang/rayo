@@ -54,7 +54,7 @@ struct Toolchain {
         // A link needs clang, which drives it, so a missing clang stops it; then the arguments that have clang run
         // the linker asked for.
         let clangs = linkTools.map(\.clang)
-        guard let clang = Self.firstExecutableFile(among: clangs) else {
+        guard let clang = clangs.first(where: Self.isExecutableFile) else {
             throw .failed("can't find clang at \(Self.listing(clangs))")
         }
         let linkerArguments = try linkerArguments()
@@ -111,7 +111,7 @@ struct Toolchain {
         case .lld:
             // A missing LLD is reported with the ways to install it or to link without it.
             let llds = linkTools.map(\.lld)
-            guard let lld = Self.firstExecutableFile(among: llds) else {
+            guard let lld = llds.first(where: Self.isExecutableFile) else {
                 throw .failed("""
                     can't find LLD at \(Self.listing(llds)): install LLD \(LLVMInstall.majorVersion), run \
                     'swift package purge-cache' and build rayo again, or link with --linker=platform
@@ -169,21 +169,12 @@ struct Toolchain {
     private static let stackArguments: [String] = []
     #endif
 
-    /// The first of `places` that names a file that can be run, or nil where none does.
-    private static func firstExecutableFile(among places: [URL]) -> URL? {
-        places.first(where: isExecutableFile)
-    }
-
-    /// The path of each of `places`, quoted and named once, in a list such as `'a', 'b' or 'c'`.
+    /// The path of each of `places`, quoted and named once, in a list such as `'a' or 'b'`.
     private static func listing(_ places: [URL]) -> String {
         // Sets of link tools can share a place, which is still only one place that was looked in.
         var paths: [String] = []
         for place in places where !paths.contains(place.path) { paths.append(place.path) }
-
-        // The last two places are joined by "or", and any before them by commas.
-        let quoted = paths.map { "'\($0)'" }
-        guard let last = quoted.last, quoted.count > 1 else { return quoted.joined() }
-        return quoted.dropLast().joined(separator: ", ") + " or " + last
+        return paths.map { "'\($0)'" }.joined(separator: " or ")
     }
 
     /// Whether `url` names a file, not a directory, that can be run.

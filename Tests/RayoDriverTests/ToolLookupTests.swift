@@ -4,7 +4,8 @@ import RayoDriver
 import RayoLLVMInstall
 import ToolStandIn
 
-/// The name of the host's LLD, which `rayo` runs from beside itself where it is there.
+/// The name of the host's LLD, which `rayo` runs from beside itself where it is there. It is written out here rather
+/// than taken from `LinkTools`, so a wrong name there fails these tests.
 #if canImport(Darwin)
 private let hostLLD = "ld64.lld"
 #elseif os(Linux)
@@ -16,20 +17,19 @@ private let hostLLD = "lld-link"
 /// What a build that compiles and links gives.
 private let built = CommandResult(exitCode: 0, output: "", errors: "")
 
+/// Installs the tool `name` in `directory`, which makes the file at `ran`, then hands what it is given to `tool`.
+private func installRecording(_ tool: URL, as name: String, in directory: URL, ran: URL) throws {
+    _ = try install(ToolStandIn([.touch(ran)], then: .handOff(toToolAt: tool)), as: name, in: directory)
+}
+
 /// Makes `directory` a toolchain that holds a copy of the built `rayo`, and a `rayoc` that makes the file at `ran`,
 /// then compiles as the built `rayoc` does. Returns the copy of `rayo`.
 private func toolchain(in directory: URL, rayocRan ran: URL) throws -> URL {
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     let rayo = directory.appendingPathComponent(Executable.fileName("rayo"))
     try FileManager.default.copyItem(at: builtProduct("rayo"), to: rayo)
-    _ = try install(ToolStandIn([.touch(ran)], then: .handOff(toToolAt: builtProduct("rayoc"))),
-                    as: "rayoc", in: directory)
+    try installRecording(builtProduct("rayoc"), as: "rayoc", in: directory, ran: ran)
     return rayo
-}
-
-/// Installs the tool `name` in `directory`, which makes the file at `ran`, then hands what it is given to `tool`.
-private func installRecording(_ tool: URL, as name: String, in directory: URL, ran: URL) throws {
-    _ = try install(ToolStandIn([.touch(ran)], then: .handOff(toToolAt: tool)), as: name, in: directory)
 }
 
 struct ToolLookupTests {

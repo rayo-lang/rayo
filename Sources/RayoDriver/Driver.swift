@@ -130,7 +130,7 @@ public enum Driver {
     }
 
     /// Returns where `rayo` looks for the tools a link runs, in order: beside `executable`, the `rayo` that runs, where
-    /// a toolchain bundles them, then in the LLVM install that `rayo` was built against.
+    /// a toolchain that bundles them keeps them, then in the LLVM install that `rayo` was built against.
     public static func linkTools(beside executable: URL) -> [LinkTools] {
         [LinkTools(in: executable.deletingLastPathComponent()), .installed]
     }
