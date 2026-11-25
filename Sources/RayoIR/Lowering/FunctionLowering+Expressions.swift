@@ -7,6 +7,12 @@ extension FunctionLowering {
     /// Lowers `expr` as the computation of its value into `destination`, or, where `destination` is nil, of a value
     /// that is dropped.
     mutating func compute(_ expr: CheckedExpr, into destination: Destination?) {
+        compute(expr, into: destination, borrowsPlaces: expr.borrowsPlaces)
+    }
+
+    /// Lowers `expr` as `compute(_:into:)` does, where `borrowsPlaces` says whether it borrows places. An `if` hands
+    /// that on to its branches, which borrow places just where it does, so no nested `if` is asked again.
+    private mutating func compute(_ expr: CheckedExpr, into destination: Destination?, borrowsPlaces: Bool) {
         switch expr.kind {
         // A borrow makes the value of the local it declares depend on what it borrows, so it needs the local.
         case .place(let place, .borrow):
@@ -17,8 +23,8 @@ extension FunctionLowering {
         // An `if` whose value is dropped runs the branch its condition picks, and computes that branch's value for
         // what it does, so a Void `if` needs no temporary. An `if` whose branches borrow places has the branch that
         // runs compute its value into the `ref let` itself, so the local depends on the access of whichever branch ran.
-        case .if(let condition, let then, let otherwise) where destination == nil || expr.borrowsPlaces:
-            lowerIf(condition, then, otherwise, into: destination)
+        case .if(let condition, let then, let otherwise) where destination == nil || borrowsPlaces:
+            lowerIf(condition, then, otherwise, into: destination, borrowsPlaces: borrowsPlaces)
 
         // Any other value is one operation, whose operands are computed first.
         default:
@@ -200,15 +206,17 @@ extension FunctionLowering {
     /// new temporary of `type` at `range`, and returns the temporary's place.
     private mutating func lowerIf(_ condition: CheckedExpr, _ then: CheckedBranch, _ otherwise: CheckedBranch,
                                   intoTemporaryOf type: RayoType, at range: SourceRange) -> Place {
+        // Only a `ref let` borrows places, into its own local, so no branch whose value a temporary holds borrows one.
         let temporary = builder.newTemporary(type)
-        lowerIf(condition, then, otherwise, into: Destination(temporary, at: range))
+        lowerIf(condition, then, otherwise, into: Destination(temporary, at: range), borrowsPlaces: false)
         return temporary
     }
 
     /// Lowers `condition` and the branches it chooses between, computing the value of the branch that runs into
-    /// `destination`, or dropping it where `destination` is nil.
+    /// `destination`, or dropping it where `destination` is nil. `borrowsPlaces` says whether the branches' values
+    /// borrow places.
     private mutating func lowerIf(_ condition: CheckedExpr, _ then: CheckedBranch, _ otherwise: CheckedBranch,
-                                  into destination: Destination?) {
+                                  into destination: Destination?, borrowsPlaces: Bool) {
         // Compute the condition, and make the blocks of the two branches and of the join after them.
         let conditionValue = operand(of: condition)
         let thenBlock = builder.newBlock()
@@ -217,19 +225,20 @@ extension FunctionLowering {
 
         // Each branch runs its statements and computes its value, then goes on to the join.
         builder.end(with: .branch(conditionValue, then: thenBlock, otherwise: elseBlock), continuingIn: thenBlock)
-        lower(then, into: destination)
+        lower(then, into: destination, borrowsPlaces: borrowsPlaces)
         builder.end(with: .goto(join), continuingIn: elseBlock)
-        lower(otherwise, into: destination)
+        lower(otherwise, into: destination, borrowsPlaces: borrowsPlaces)
         builder.end(with: .goto(join), continuingIn: join)
     }
 
     /// Lowers `branch`'s statements, then computes its value, where it gives one, into `destination`.
-    private mutating func lower(_ branch: CheckedBranch, into destination: Destination?) {
+    /// `borrowsPlaces` says whether the value borrows places.
+    private mutating func lower(_ branch: CheckedBranch, into destination: Destination?, borrowsPlaces: Bool) {
         lower(branch.statements)
 
         // A branch that gives no value computes none.
         guard let value = branch.value else { return }
-        compute(value, into: destination)
+        compute(value, into: destination, borrowsPlaces: borrowsPlaces)
     }
 
     /// Computes `expr`, an operation that is neither a place nor an `if`, into a new temporary that an operand reads,
