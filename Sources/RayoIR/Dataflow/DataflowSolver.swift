@@ -40,7 +40,7 @@ package struct DataflowSolver<State: DataflowState> {
         switch direction {
         case .forward:
             boundaryStates[0] = start
-            let forwardOrder = LoopNestOrder(body, reached: order.postorder.reversed())
+            let forwardOrder = LoopNestOrder(order, blockCount: body.blocks.count)
             pending = WorkQueue(forwardOrder.blocks, blockCount: body.blocks.count)
         case .backward:
             for block in order.postorder {
@@ -164,20 +164,31 @@ private struct BlockOrder {
     /// The reached blocks, each after the blocks it leads to, except along an edge back to a block whose walk is
     /// still under way, such as a loop's header.
     private(set) var postorder: [BlockID] = []
+    /// The reached blocks in the order the walk reaches them.
+    private(set) var preorder: [BlockID] = []
     /// The reached blocks that lead to each block, indexed by `BlockID`.
     private(set) var predecessors: [[BlockID]]
+    /// The position of each block in `preorder`, indexed by `BlockID`; `unreached` for a block no path reaches.
+    private var reachedAt: [Int]
+    /// The position in `preorder` of the last block the walk reached from each block, indexed by `BlockID`. The
+    /// blocks it reached from a block are those after it in `preorder`, up to and including that one.
+    private var lastReachedFrom: [Int]
+
+    private static var unreached: Int { -1 }
 
     init(_ body: IRBody) {
         predecessors = Array(repeating: [], count: body.blocks.count)
-        var isReached = Array(repeating: false, count: body.blocks.count)
+        reachedAt = Array(repeating: Self.unreached, count: body.blocks.count)
+        lastReachedFrom = Array(repeating: Self.unreached, count: body.blocks.count)
 
         // Walk depth first from the entry, holding the path walked so far and how many of each block's successors
         // it has followed. A block joins the postorder once all its successors are followed.
-        var path: [(block: BlockID, followed: Int)] = [(BlockID(index: 0), 0)]
-        isReached[0] = true
+        var path: [(block: BlockID, followed: Int)] = []
+        reach(BlockID(index: 0), from: &path)
         while let (block, followed) = path.last {
             let successors = body.blocks[block.index].terminator.successors
             guard followed < successors.count else {
+                lastReachedFrom[block.index] = preorder.count - 1
                 postorder.append(block)
                 path.removeLast()
                 continue
@@ -187,129 +198,141 @@ private struct BlockOrder {
             path[path.count - 1].followed += 1
             let successor = successors[followed]
             predecessors[successor.index].append(block)
-            guard !isReached[successor.index] else { continue }
-            isReached[successor.index] = true
-            path.append((successor, 0))
+            guard reachedAt[successor.index] == Self.unreached else { continue }
+            reach(successor, from: &path)
         }
+    }
+
+    /// Whether the walk reached `block` from `ancestor`, while it walked on from `ancestor`: so every path from the
+    /// entry to `block` that the walk could take passes `ancestor`. A block is its own ancestor.
+    func isAncestor(_ ancestor: BlockID, of block: BlockID) -> Bool {
+        let position = reachedAt[block.index]
+        return reachedAt[ancestor.index] <= position && position <= lastReachedFrom[ancestor.index]
+    }
+
+    /// Reaches `block`, and walks on from it at the end of `path`.
+    private mutating func reach(_ block: BlockID, from path: inout [(block: BlockID, followed: Int)]) {
+        reachedAt[block.index] = preorder.count
+        preorder.append(block)
+        path.append((block, 0))
     }
 }
 
 /// The reached blocks in the order a forward walk visits them: each after the blocks that lead to it, and each loop's
-/// blocks together, header first, so the solver settles a loop before it carries the loop's state on.
+/// blocks together, header first, so the solver settles a loop before it carries the loop's state on. It finds the
+/// loops with one pass over the walk the block order made, so it takes time about linear in the function, however
+/// deep its loops nest.
 private struct LoopNestOrder {
     private(set) var blocks: [BlockID] = []
-    /// Indexed by `BlockID`.
-    private let successors: [[BlockID]]
-    /// The part being ordered that each block lies in, indexed by `BlockID`; a search keeps to one part. An unreached
-    /// block lies in `unreached`, which no search orders.
-    private var part: [Int]
-    private var partCount = 1
-    /// When the search of its part reached each block, indexed by `BlockID`; `unreached` where it hasn't yet.
-    private var reachedAt: [Int]
-    /// The earliest `reachedAt` that each block leads back to through `stack`, indexed by `BlockID`.
-    private var earliestReachable: [Int]
-    /// The reached blocks not yet in a component, in the order the search reached them.
-    private var stack: [BlockID] = []
-    private var isOnStack: [Bool]
-    private var clock = 0
 
-    private static var unreached: Int { -1 }
+    /// The order of the blocks of a function of `blockCount` blocks that `order` reached.
+    init(_ order: BlockOrder, blockCount: Int) {
+        let loops = InnermostLoops(order, blockCount: blockCount)
 
-    /// The order of `reached`, the blocks of `body` that some path from its entry reaches, the entry first.
-    init(_ body: IRBody, reached: [BlockID]) {
-        successors = body.blocks.map(\.terminator.successors)
-        part = Array(repeating: Self.unreached, count: body.blocks.count)
-        reachedAt = Array(repeating: Self.unreached, count: body.blocks.count)
-        earliestReachable = Array(repeating: 0, count: body.blocks.count)
-        isOnStack = Array(repeating: false, count: body.blocks.count)
-        for block in reached {
-            part[block.index] = 0
+        // Each loop's blocks, and at `blockCount` the blocks in no loop, in reverse postorder, which puts each block
+        // after those that lead to it, leaving out the edges back to a loop's header.
+        var members = Array(repeating: [BlockID](), count: blockCount + 1)
+        for block in order.postorder.reversed() {
+            members[loops.header[block.index]?.index ?? blockCount].append(block)
         }
-        order(reached, inPart: 0)
-    }
 
-    /// Adds `members`, the blocks of part `id`, to the order: each strongly connected component in turn, its header
-    /// first, then the rest of it ordered the same way.
-    private mutating func order(_ members: [BlockID], inPart id: Int) {
-        for component in components(of: members, inPart: id) {
-            let header = component[0]
-            blocks.append(header)
-            guard component.count > 1 else { continue }
-
-            // The rest of the loop is a part of its own, which leaves out the edges back to the header.
-            let inner = Array(component.dropFirst())
-            let innerID = partCount
-            partCount += 1
-            for block in inner {
-                part[block.index] = innerID
-                reachedAt[block.index] = Self.unreached
-            }
-            order(inner, inPart: innerID)
-        }
-    }
-
-    /// The strongly connected components of part `id`, in the order their edges run, each in the order it was reached.
-    private mutating func components(of members: [BlockID], inPart id: Int) -> [[BlockID]] {
-        var found: [[BlockID]] = []
-        for root in members where reachedAt[root.index] == Self.unreached {
-            search(from: root, inPart: id, into: &found)
-        }
-        // A search finds each component after every component its edges lead to.
-        return found.reversed()
-    }
-
-    /// Adds the strongly connected components that a depth-first search of part `id` from `root` finds to `found`, by
-    /// Tarjan's algorithm.
-    private mutating func search(from root: BlockID, inPart id: Int, into found: inout [[BlockID]]) {
-        reach(root)
-        var path: [(block: BlockID, followed: Int)] = [(root, 0)]
-        while let (block, followed) = path.last {
-            let next = successors[block.index]
-            if followed < next.count {
-                path[path.count - 1].followed += 1
-                let successor = next[followed]
-                // An edge out of the part, such as one back to the loop's header, is left out.
-                guard part[successor.index] == id else { continue }
-                if reachedAt[successor.index] == Self.unreached {
-                    reach(successor)
-                    path.append((successor, 0))
-                } else if isOnStack[successor.index] {
-                    // An edge to a block on the stack leads back to it.
-                    lowerEarliest(of: block, to: reachedAt[successor.index])
-                }
+        // Add the members of each loop in turn, from the blocks in no loop out, putting each loop's members in place
+        // of its header, right after it.
+        var pending: [(loop: Int, next: Int)] = [(blockCount, 0)]
+        while let (loop, next) = pending.last {
+            guard next < members[loop].count else {
+                pending.removeLast()
                 continue
             }
+            pending[pending.count - 1].next += 1
+            let block = members[loop][next]
+            blocks.append(block)
+            if loops.isHeader[block.index] { pending.append((block.index, 0)) }
+        }
+    }
+}
 
-            // With every successor followed, the block before it on the path leads back as far as it does.
-            path.removeLast()
-            if let (parent, _) = path.last { lowerEarliest(of: parent, to: earliestReachable[block.index]) }
-            // A block that leads back to nothing reached before it begins a component.
-            if earliestReachable[block.index] == reachedAt[block.index] { found.append(popComponent(from: block)) }
+/// The innermost loop that each reached block of a function lies in, as Havlak's algorithm finds them: from the last
+/// block the walk reached back to the first, each block that an edge from a block reached from it leads back to heads
+/// a loop, which takes in each block that leads to that edge without passing the header. A loop found already is
+/// taken in whole, by its outermost header, which keeps the cost about linear in the function.
+private struct InnermostLoops {
+    /// The header of the innermost loop around each block, indexed by `BlockID`, or nil for a block in no loop. A
+    /// header's is the header of the loop around its own.
+    private(set) var header: [BlockID?]
+    /// Whether each block heads a loop, indexed by `BlockID`.
+    private(set) var isHeader: [Bool]
+    /// The block that stands for each block's outermost loop found so far, indexed by `BlockID`: itself until a loop
+    /// takes it in, and otherwise the next block on the way to that loop's header.
+    private var outermost: [BlockID]
+    /// The edges into each block from blocks the walk didn't reach from it, indexed by `BlockID`. A loop that a path
+    /// enters past its header has each such edge taken as one into the header.
+    private var entries: [[BlockID]]
+
+    init(_ order: BlockOrder, blockCount: Int) {
+        header = Array(repeating: nil, count: blockCount)
+        isHeader = Array(repeating: false, count: blockCount)
+        outermost = (0..<blockCount).map { BlockID(index: $0) }
+        entries = Array(repeating: [], count: blockCount)
+        for block in order.preorder {
+            entries[block.index] = order.predecessors[block.index].filter { !order.isAncestor(block, of: $0) }
+        }
+
+        for block in order.preorder.reversed() {
+            let members = loopMembers(headedBy: block, in: order)
+            for member in members {
+                header[member.index] = block
+                outermost[member.index] = block
+            }
         }
     }
 
-    private mutating func reach(_ block: BlockID) {
-        reachedAt[block.index] = clock
-        earliestReachable[block.index] = clock
-        clock += 1
-        stack.append(block)
-        isOnStack[block.index] = true
+    /// The blocks, each standing for the outermost loop found so far that it heads, that the loop `candidate` heads
+    /// takes in, or none where no edge leads back to it. Marks `candidate` as a header where one does.
+    private mutating func loopMembers(headedBy candidate: BlockID, in order: BlockOrder) -> [BlockID] {
+        var members: [BlockID] = []
+        var isMember: Set<Int> = []
+
+        // The blocks that edges back to the candidate come from begin the loop.
+        for source in order.predecessors[candidate.index] where order.isAncestor(candidate, of: source) {
+            isHeader[candidate.index] = true
+            let member = outermostLoop(of: source)
+            if member != candidate, isMember.insert(member.index).inserted { members.append(member) }
+        }
+
+        // The loop takes in each block that leads into a block of it, up to the header.
+        var next = 0
+        while next < members.count {
+            let member = members[next]
+            next += 1
+            for entry in entries[member.index] {
+                let outside = outermostLoop(of: entry)
+                // A block the walk didn't reach from the header enters the loop past it, so the edge is taken as one
+                // into the header, and the block stays outside the loop.
+                guard order.isAncestor(candidate, of: outside) else {
+                    entries[candidate.index].append(outside)
+                    continue
+                }
+                if outside != candidate, isMember.insert(outside.index).inserted { members.append(outside) }
+            }
+        }
+        return members
     }
 
-    private mutating func lowerEarliest(of block: BlockID, to time: Int) {
-        earliestReachable[block.index] = min(earliestReachable[block.index], time)
-    }
+    /// The header of the outermost loop found so far that `block` lies in, or `block` itself where it lies in none.
+    /// Each block on the way is set to point straight at it, so the next search for any of them is short.
+    private mutating func outermostLoop(of block: BlockID) -> BlockID {
+        var root = block
+        while outermost[root.index] != root {
+            root = outermost[root.index]
+        }
 
-    /// Takes the component that `first` begins off the stack.
-    private mutating func popComponent(from first: BlockID) -> [BlockID] {
-        guard let start = stack.lastIndex(of: first) else {
-            preconditionFailure("a search puts each block it reaches on the stack")
+        var current = block
+        while outermost[current.index] != root {
+            let next = outermost[current.index]
+            outermost[current.index] = root
+            current = next
         }
-        let component = Array(stack[start...])
-        stack.removeSubrange(start...)
-        for block in component {
-            isOnStack[block.index] = false
-        }
-        return component
+        return root
     }
 }
