@@ -262,6 +262,26 @@ struct InitializationCheckerTests {
         ])
     }
 
+    // The first pass of the body finds that nothing has assigned `x`, and a later pass that the previous one did, so
+    // the error is the one the later pass gives.
+    @Test func `a loop's body that uses a local before it assigns it reports that it may hold no value`() throws {
+        let blocks = """
+            bb0:
+              declare %0
+              goto bb1
+            bb1:
+              branch true, bb2, bb3
+            bb2:
+              begin a0 read %0 @2:1-2:1
+              _ = call builtin "print(_: &Int)"(a0) @1:1-1:1
+              %0 @1:1-1:1 = operand 1 @1:1-1:1
+              goto bb1
+            bb3:
+              return
+            """
+        #expect(try checked(function(blocks)).errors == [Diagnostic(.usedMaybeUninitialized(name: "x"), at: at(1))])
+    }
+
     @Test
     func `a declaration in a loop's body leaves the local without a value, whatever the last pass assigned`() throws {
         let blocks = """
