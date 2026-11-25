@@ -8,8 +8,8 @@ package struct Parser: ~Copyable {
     /// else.
     typealias ErrorCase = (FoundToken) -> ErrorCode
 
-    /// How many levels deep expressions and blocks may nest, counted together, each block a level. The stages after
-    /// parsing walk them by recursing into their parts, so this bounds the stack they need.
+    /// How many levels deep expressions and blocks may nest, counted together, each block inside a function body a
+    /// level. The stages after parsing walk them by recursing into their parts, so this bounds the stack they need.
     package static let nestingLevelLimit = 10_000
 
     /// The source, as UTF-8.

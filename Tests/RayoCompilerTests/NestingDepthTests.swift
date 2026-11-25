@@ -68,7 +68,7 @@ private enum Shape: CaseIterable {
 private let valueBinding = "let value = "
 
 /// The file up to the code that nests, which lies in `main`'s body, so it nests only as deep as it is written.
-private let prefix = """
+private let programUpToCode = """
     func f(x: Int) -> Int { x }
     func main() {
         let xs: [1 of UInt] = [0]
@@ -78,7 +78,7 @@ private let prefix = """
 
 /// A program whose `main` runs `code`, followed by the declarations in `after`.
 private func program(_ code: String, then after: String = "") -> String {
-    prefix + code + "\n    if b { print(xs[0]) }\n}\n" + after
+    programUpToCode + code + "\n    if b { print(xs[0]) }\n}\n" + after
 }
 
 /// Runs `rayoc` with `arguments` before the path of the file that holds `source`, writing nothing.
@@ -99,11 +99,25 @@ private let everyOutputButTheCheckedProgram = [
 private let compilesAtTheLimit = Shape.allCases.flatMap { shape in everyOutputButTheCheckedProgram.map { (shape, $0) } }
     + [(Shape.sum, ["--emit=checked"]), (Shape.parentheses, ["--emit=checked"])]
 
-/// Each shape, and the code before the part that passes the limit, one level past it: for a sum, the sum itself; for
-/// parentheses, what the innermost pair holds; and for a shape that nests blocks, the `{` of the block that passes it.
+/// One level more than the limit.
+private let pastTheLimit = Parser.nestingLevelLimit + 1
+
+/// Each shape, written a level past the limit, and its code up to the part that passes the limit. That part is, for a
+/// sum, the sum itself; for parentheses, what the innermost pair holds; for calls, the innermost argument; and for a
+/// shape that nests blocks, the `{` of the block that passes it.
 private let codeBeforeTooDeep = [
     (Shape.sum, valueBinding),
     (.parentheses, valueBinding + String(repeating: "(", count: Parser.nestingLevelLimit + 1)),
+    (
+        .callsInIf,
+        valueBinding + String(repeating: "f(x: ", count: pastTheLimit / 2) + "if b { "
+            + String(repeating: "f(x: ", count: pastTheLimit - pastTheLimit / 2 - 2),
+    ),
+    (
+        .callsInLoops,
+        String(repeating: "while b { ", count: pastTheLimit / 2) + "_ = "
+            + String(repeating: "f(x: ", count: pastTheLimit - pastTheLimit / 2),
+    ),
     (.ifValues, valueBinding + String(repeating: "if b { ", count: Parser.nestingLevelLimit - 1) + "if b "),
     (.elseIfChain, "if b {}" + String(repeating: " else if b {}", count: Parser.nestingLevelLimit - 1) + " else if b "),
     (.ifStatements, String(repeating: "if b { ", count: Parser.nestingLevelLimit) + "if b "),
@@ -124,7 +138,7 @@ struct NestingDepthTests {
         let source = program(shape.code(levels: Parser.nestingLevelLimit + 1))
         let diagnostics = run(["--check"], on: source).diagnostics
         #expect(diagnostics.map(\.code) == [.nestingTooDeep(limit: Parser.nestingLevelLimit)])
-        #expect(diagnostics.first?.range.start.offset == (prefix + codeBefore).utf8.count)
+        #expect(diagnostics.first?.range.start.offset == (programUpToCode + codeBefore).utf8.count)
     }
 
     @Test func `the error names the limit, which is 10,000 levels`() {

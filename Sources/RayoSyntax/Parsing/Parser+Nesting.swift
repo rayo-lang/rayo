@@ -24,7 +24,7 @@ extension Parser {
     }
 
     /// `expression`, which the parser has just built, once it is known to nest no deeper than the limit, counted
-    /// from the body or the declaration around it.
+    /// from the function body or the declaration around it.
     mutating func checkedDepth(_ expression: Expr) throws(ParseFailure) -> Expr {
         let level = depth + expression.levels
         guard level <= Self.nestingLevelLimit else { throw failTooDeep(at: expression.range) }

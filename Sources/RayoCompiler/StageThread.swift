@@ -13,7 +13,7 @@ import RayoSyntax
 /// deep as the parser lets it nest.
 enum StageThread {
     /// The bytes of stack the thread reserves. A release build's stages take up to about 40 KiB of it for a level of
-    /// nested calls, and less for a block, so it reserves 64 KiB a level.
+    /// nested calls, and a debug build's about 16 KiB, and less for a block in either, so it reserves 64 KiB a level.
     static let stackSize = Parser.nestingLevelLimit * (64 << 10)
 
     /// Runs `body` on a new stage thread, and gives its result once the thread ends; or nil where no thread starts.
