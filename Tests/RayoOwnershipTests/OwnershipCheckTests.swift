@@ -31,7 +31,7 @@ struct OwnershipCheckTests {
         #expect(try checked(function(blocks)).errors == [Diagnostic(.letAssignedTwice(name: "k"), at: at(2))])
     }
 
-    @Test func `a use of a local that holds no value isn't checked for conflicting accesses`() throws {
+    @Test func `a use of a local that holds no value isn't reported again for conflicting accesses`() throws {
         // As `change(&x, x)` lowers, where nothing has assigned `x`.
         let blocks = """
             bb0:

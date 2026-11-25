@@ -9,27 +9,44 @@ enum InitializationChecker {
     /// Reports the uses of places that may hold no value, and the assignments to `let`s that may already have been
     /// assigned, in `places.body`.
     static func errors(in places: PlaceTypes) -> [Diagnostic] {
+        // Each crossing of a block replaces what an earlier one found there. The last starts from the state the block
+        // settles on, so what it finds is what the settled states give, with no second walk of the blocks. A block
+        // that no path reaches is never crossed, and nothing in it is checked.
         let start = InitializationState(entering: places.body)
-        let results = DataflowSolver.solve(from: start, through: places.body, knowing: ())
+        var findings = Array(repeating: [Finding](), count: places.body.blocks.count)
+        DataflowSolver.solve(from: start, through: places.body, knowing: ()) { block, state, effects in
+            findings[block.index] = crossing(effects, with: &state)
+        }
+
+        // The findings go to the errors block by block, as a walk of the blocks in order hands them on.
         var errors = FunctionErrors(places: places)
-        for (index, block) in places.body.blocks.enumerated() {
-            // A block that no path reaches has no state, and nothing in it is checked.
-            guard let entry = results.boundaryState(of: BlockID(index: index)) else { continue }
-            check(block, from: entry, into: &errors)
+        for finding in findings.joined() {
+            errors.record(finding)
         }
         return errors.diagnostics
     }
 
-    /// Hands `errors` what each statement of `block`, and its terminator, may find missing, where the locals hold
-    /// `state` on entry to the block. It carries that one state through the block, so no statement copies it.
-    private static func check(_ block: BasicBlock, from state: InitializationState, into errors: inout FunctionErrors) {
-        var state = state
-        block.forEachEffect { effect in
+    /// Takes `state` forward across `effects`, a block's, and gives what its uses and stores may find, in order.
+    private static func crossing(_ effects: [[Effect]], with state: inout InitializationState) -> [Finding] {
+        var findings: [Finding] = []
+        for effect in effects.joined() {
             state.apply(
-                effect, use: { errors.use($0, at: $1, missing: $2) }, store: { errors.store(to: $0, holding: $1) },
+                effect, use: { findings.append(.use($0, at: $1, missing: $2)) },
+                store: { destination, held in
+                    // Most stores are to a local that holds no value yet, which no error reports, so they are left out.
+                    if held.isAssignedOnSomePath { findings.append(.store(destination, holding: held)) }
+                },
             )
         }
+        return findings
     }
+}
+
+/// What a use or a store in a block finds that may be an error: a use of a place that may hold no value, or a store
+/// to a local that may hold one already.
+private enum Finding {
+    case use(Place, at: SourceRange, missing: MissingValue)
+    case store(Destination, holding: PlaceState)
 }
 
 /// The errors in one function. Of the uses that the same moves of a place reach, or that no assignment since the
@@ -53,6 +70,13 @@ private struct FunctionErrors {
     /// The errors at uses, then those at stores.
     var diagnostics: [Diagnostic] {
         Array(firstUses.values) + stores
+    }
+
+    mutating func record(_ finding: Finding) {
+        switch finding {
+        case .use(let place, let range, let missing): use(place, at: range, missing: missing)
+        case .store(let destination, let state): store(to: destination, holding: state)
+        }
     }
 
     mutating func use(_ place: Place, at range: SourceRange, missing: MissingValue) {
