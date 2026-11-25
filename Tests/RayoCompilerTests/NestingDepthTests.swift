@@ -155,3 +155,80 @@ struct NestingDepthTests {
         ])
     }
 }
+
+/// What a struct whose body holds the next struct writes before that struct.
+private let structOpening = "struct S { "
+
+/// A file of structs whose bodies nest `levels` levels deep, each the only member of the one around it, then `main`
+/// and the declarations in `after`.
+private func nestedStructs(levels: Int, then after: String = "") -> String {
+    let structs = String(repeating: structOpening, count: levels) + String(repeating: "}", count: levels)
+    return structs + "\nfunc main() {}\n" + after
+}
+
+struct StructBodyNestingTests {
+    @Test func `struct bodies as deep as the limit report only that a struct's body can't hold declarations`() {
+        let diagnostics = run(["--check"], on: nestedStructs(levels: Parser.structBodyLevelLimit)).diagnostics
+        #expect(diagnostics.map(\.code) == [.unsupportedMember])
+    }
+
+    @Test func `a struct body a level past the limit is reported once, at its brace`() {
+        let diagnostics = run(["--check"], on: nestedStructs(levels: Parser.structBodyLevelLimit + 1)).diagnostics
+        let codeBefore = String(repeating: structOpening, count: Parser.structBodyLevelLimit) + "struct S "
+        #expect(diagnostics.map(\.code) == [.unsupportedMember, .nestingTooDeep(limit: Parser.structBodyLevelLimit)])
+        #expect(diagnostics.last?.range.start.offset == codeBefore.utf8.count)
+    }
+
+    @Test func `the error names the limit, which is 64 levels`() {
+        let diagnostics = run(["--check"], on: nestedStructs(levels: 65)).diagnostics
+        #expect(diagnostics.last?.code.message == "the code nests more than 64 levels deep")
+    }
+
+    @Test(arguments: [Parser.structBodyLevelLimit + 1, 1_000_000])
+    private func `struct bodies past the limit fail alone, and the compile goes on after them`(levels: Int) {
+        let diagnostics = run(["--check"], on: nestedStructs(levels: levels, then: "func g() { copy }\n")).diagnostics
+        #expect(diagnostics.map(\.code) == [
+            .unsupportedMember, .nestingTooDeep(limit: Parser.structBodyLevelLimit),
+            .missingCopiedName(found: .token("}")),
+        ])
+    }
+}
+
+/// The file up to the type of `main`'s local, an array.
+private let programUpToArrayType = "func main() {\n    let xs: "
+
+/// A program whose `main` binds an array of arrays, each holding one, nested `levels` levels deep down to an Int,
+/// followed by the declarations in `after`. The local is moved out whole, so no other part nests as deep as its type.
+private func nestedArray(levels: Int, then after: String = "") -> String {
+    let type = String(repeating: "[1 of ", count: levels) + "Int" + String(repeating: "]", count: levels)
+    let value = String(repeating: "[", count: levels) + "0" + String(repeating: "]", count: levels)
+    return programUpToArrayType + type + " = " + value + "\n    _ = consume xs\n}\n" + after
+}
+
+struct ArrayTypeNestingTests {
+    @Test(arguments: everyOutputButTheCheckedProgram + [["--emit=checked"]])
+    private func `every stage takes an array type as deep as the limit`(arguments: [String]) {
+        let result = run(arguments, on: nestedArray(levels: Parser.arrayTypeLevelLimit))
+        #expect(result.exitCode == 0, "\(result.errors)")
+    }
+
+    @Test func `an array type a level past the limit is reported once, at its bracket`() {
+        let diagnostics = run(["--check"], on: nestedArray(levels: Parser.arrayTypeLevelLimit + 1)).diagnostics
+        let codeBefore = programUpToArrayType + String(repeating: "[1 of ", count: Parser.arrayTypeLevelLimit)
+        #expect(diagnostics.map(\.code) == [.nestingTooDeep(limit: Parser.arrayTypeLevelLimit)])
+        #expect(diagnostics.first?.range.start.offset == codeBefore.utf8.count)
+    }
+
+    @Test func `the error names the limit, which is 64 levels`() {
+        let diagnostics = run(["--check"], on: nestedArray(levels: 65)).diagnostics
+        #expect(diagnostics.map(\.code.message) == ["the code nests more than 64 levels deep"])
+    }
+
+    @Test(arguments: [Parser.arrayTypeLevelLimit + 1, 1_000_000])
+    private func `an array type past the limit fails alone, and the compile goes on after it`(levels: Int) {
+        let diagnostics = run(["--check"], on: nestedArray(levels: levels, then: "func g() { copy }\n")).diagnostics
+        #expect(diagnostics.map(\.code) == [
+            .nestingTooDeep(limit: Parser.arrayTypeLevelLimit), .missingCopiedName(found: .token("}")),
+        ])
+    }
+}

@@ -124,7 +124,7 @@ extension Parser {
         let header = parseStructHeader()
 
         // A struct may leave its body out. A body that fails is reported, and kept as none.
-        let members: [Declaration]? = if consume(.lbrace) { try? parseMembers() } else { [] }
+        let members: [Declaration]? = if current.isPunct(.lbrace) { try? parseMembers() } else { [] }
 
         guard let structure = header.declaration(members: members) else { throw header.failure(members: members) }
         return structure
@@ -150,11 +150,15 @@ extension Parser {
         return header
     }
 
-    /// After the `{` of a struct's body: its members, which are declarations, and the `}` that closes it.
+    /// At the `{` of a struct's body: `'{' declarations '}'`, the body's members, a level deeper than the struct body
+    /// around it, if any.
     private mutating func parseMembers() throws(ParseFailure) -> [Declaration] {
-        let members = parseDeclarations()
-        try expect(.rbrace, else: ErrorCode.unclosedStructBody)
-        return members
+        try parseNestedStructBody { parser throws(ParseFailure) in
+            parser.advance()
+            let members = parser.parseDeclarations()
+            try parser.expect(.rbrace, else: ErrorCode.unclosedStructBody)
+            return members
+        }
     }
 
     /// `('var' | 'let') identifier (':' type)? ('=' expression)?`.

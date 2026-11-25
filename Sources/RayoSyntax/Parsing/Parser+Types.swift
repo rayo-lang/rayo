@@ -13,8 +13,8 @@ extension Parser {
             return .void(range: range(from: start))
         }
         // `[` starts an array type.
-        if consume(.lbracket) {
-            return try parseArrayType(from: start)
+        if current.isPunct(.lbracket) {
+            return try parseNestedArrayType { parser throws(ParseFailure) in try parser.parseArrayType(from: start) }
         }
 
         // Any other type is named.
@@ -22,8 +22,10 @@ extension Parser {
         return .named(name, range: range(from: start))
     }
 
-    /// After the `[` at `start`: the count, `of`, the element's type and the `]`.
+    /// At the `[` at `start`: the `[`, the count, `of`, the element's type and the `]`.
     private mutating func parseArrayType(from start: SourceRange) throws(ParseFailure) -> TypeExpr {
+        advance()
+
         // The count is an integer literal.
         guard case .intLiteral(let count) = current.kind else { throw fail(ErrorCode.missingArrayCount) }
         advance()
