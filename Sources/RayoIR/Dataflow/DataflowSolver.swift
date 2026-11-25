@@ -2,8 +2,7 @@
 /// at its entry going forward, and at its exit going backward.
 package struct DataflowSolver<State: DataflowState> {
     private let body: IRBody
-    /// The effects of each block's statements and terminator, indexed by `BlockID`, as `BasicBlock.effects` gives them.
-    private let effects: [[[Effect]]]
+    private let effects: BodyEffects
     /// What the state needs to know of the function.
     private let function: State.Function
     private let direction: DataflowDirection
@@ -21,25 +20,35 @@ package struct DataflowSolver<State: DataflowState> {
     package static func solve(
         from start: State, through body: IRBody, knowing function: State.Function,
     ) -> DataflowResults<State> {
-        var solver = DataflowSolver(from: start, through: body, knowing: function)
-        solver.settle { _, state, effects in state.apply(across: effects, in: function) }
-        return DataflowResults(effects: solver.effects, function: function, boundaryStates: solver.boundaryStates)
+        solve(from: start, through: body, effects: BodyEffects(body), knowing: function)
+    }
+
+    /// Carries the state through `body` as `solve(from:through:knowing:)` does, reading the effects of `body` from
+    /// `effects`, so that the analyses of one body can share one build of them.
+    package static func solve(
+        from start: State, through body: IRBody, effects: BodyEffects, knowing function: State.Function,
+    ) -> DataflowResults<State> {
+        var solver = DataflowSolver(from: start, through: body, effects: effects, knowing: function)
+        solver.settle { _, state, effects in state.apply(effects.all, in: function) }
+        return DataflowResults(effects: effects, function: function, boundaryStates: solver.boundaryStates)
     }
 
     /// Carries the state through `body` as `solve(from:through:knowing:)` does, but has `cross` take it across each
-    /// block, given the block and its effects, as `apply(across:in:)` would. The last time `cross` crosses a block, the
-    /// state is the one the block settles on, since a block whose boundary state changes waits to be crossed again.
+    /// block, given the block and its effects, as applying all of them in the state's direction would. The last time
+    /// `cross` crosses a block, the state is the one the block settles on, since a block whose boundary state changes
+    /// waits to be crossed again.
     package static func solve(
         from start: State, through body: IRBody, knowing function: State.Function,
-        crossingEachBlock cross: (BlockID, inout State, [[Effect]]) -> Void,
+        crossingEachBlock cross: (BlockID, inout State, BlockEffects) -> Void,
     ) {
-        var solver = DataflowSolver(from: start, through: body, knowing: function)
+        var solver = DataflowSolver(from: start, through: body, effects: BodyEffects(body), knowing: function)
         solver.settle(crossingEachBlock: cross)
     }
 
-    private init(from start: State, through body: IRBody, knowing function: State.Function) {
+    private init(from start: State, through body: IRBody, effects: BodyEffects, knowing function: State.Function) {
+        assert(effects.fits(body), "a solve reads effects with one crossing for each statement and terminator it walks")
         self.body = body
-        effects = body.blocks.map(\.effects)
+        self.effects = effects
         self.function = function
         direction = start.direction
         order = BlockOrder(body)
@@ -63,11 +72,11 @@ package struct DataflowSolver<State: DataflowState> {
 
     /// Carries each pending block's state through it with `cross` to the blocks it flows into, until no boundary state
     /// changes.
-    private mutating func settle(crossingEachBlock cross: (BlockID, inout State, [[Effect]]) -> Void) {
+    private mutating func settle(crossingEachBlock cross: (BlockID, inout State, BlockEffects) -> Void) {
         while let block = pending.pop() {
             // A block that no state has reached yet has nothing to hand on.
             guard var state = boundaryStates[block.index] else { continue }
-            cross(block, &state, effects[block.index])
+            cross(block, &state, effects[block])
 
             // Each block the state flows into is pending again where the state adds to its own.
             for next in blocks(after: block) where merge(state, intoBoundaryOf: next) {

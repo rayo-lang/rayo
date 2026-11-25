@@ -2,15 +2,14 @@
 /// block: point `i` lies just before the statement at `i`, the point at the number of statements just before the
 /// terminator, and the point one past that just after it.
 package struct DataflowResults<State: DataflowState> {
-    /// The effects of each block's statements and terminator, indexed by `BlockID`, as `BasicBlock.effects` gives them.
-    private let effects: [[[Effect]]]
+    private let effects: BodyEffects
     /// What the state needs to know of the function.
     private let function: State.Function
     /// The settled state at each block's boundary, indexed by `BlockID`: at its entry going forward, and at its exit
     /// going backward. It is nil for a block that no path from the entry reaches.
     private let boundaryStates: [State?]
 
-    init(effects: [[[Effect]]], function: State.Function, boundaryStates: [State?]) {
+    init(effects: BodyEffects, function: State.Function, boundaryStates: [State?]) {
         self.effects = effects
         self.function = function
         self.boundaryStates = boundaryStates
@@ -31,20 +30,20 @@ package struct DataflowResults<State: DataflowState> {
     package func walk(_ block: BlockID, visit: (_ point: Int, _ state: State) -> Void) -> Bool {
         guard var state = boundaryStates[block.index] else { return false }
         // The statements, then the terminator, each crossed from the point before it to the point after it.
-        let crossings = effects[block.index]
+        let crossings = effects[block]
 
         switch state.direction {
         case .forward:
-            for (index, crossing) in crossings.enumerated() {
+            for index in crossings.indices {
                 visit(index, state)
-                state.apply(crossing, in: function)
+                state.apply(crossings[index], in: function)
             }
             visit(crossings.count, state)
 
         case .backward:
-            for (index, crossing) in crossings.enumerated().reversed() {
+            for index in crossings.indices.reversed() {
                 visit(index + 1, state)
-                state.apply(crossing, in: function)
+                state.apply(crossings[index], in: function)
             }
             visit(0, state)
         }
@@ -58,7 +57,7 @@ package struct DataflowResults<State: DataflowState> {
         of block: BlockID, visit: (_ effect: Effect, _ state: State) throws(Failure) -> Void,
     ) throws(Failure) -> Bool {
         guard var state = boundaryStates[block.index] else { return false }
-        let crossings = effects[block.index].joined()
+        let crossings = effects[block].all
 
         switch state.direction {
         case .forward:
@@ -83,7 +82,7 @@ package struct DataflowResults<State: DataflowState> {
         of block: BlockID, visit: (_ effectsBefore: Int, _ state: State) -> Void,
     ) -> Bool {
         guard var state = boundaryStates[block.index] else { return false }
-        let crossings = effects[block.index].joined()
+        let crossings = effects[block].all
 
         switch state.direction {
         case .forward:

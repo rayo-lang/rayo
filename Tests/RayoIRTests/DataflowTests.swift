@@ -19,6 +19,19 @@ struct DataflowTests {
         #expect(states(of: results, in: 3)?[0] == [4, 5])
     }
 
+    @Test func `solves in either direction can share one build of a body's effects`() throws {
+        let body = try body(of: diamond, result: "Int")
+        let effects = BodyEffects(body)
+        let forward = DataflowSolver.solve(
+            from: EvaluatedOperands(direction: .forward), through: body, effects: effects, knowing: (),
+        )
+        let backward = DataflowSolver.solve(
+            from: EvaluatedOperands(direction: .backward), through: body, effects: effects, knowing: (),
+        )
+        #expect(states(of: forward, in: 3)?[2] == [1, 2, 3, 4, 5])
+        #expect(states(of: backward, in: 0)?[0] == [1, 2, 3, 4, 5])
+    }
+
     @Test(arguments: [
         (DataflowDirection.forward, 0, Set([1, 2, 3])),
         (DataflowDirection.backward, 1, Set([2, 3, 4])),
@@ -63,7 +76,7 @@ struct DataflowTests {
         DataflowSolver.solve(from: start, through: body, knowing: ()) { block, state, effects in
             lastStarts[block.index] = state.columns
             crossings += 1
-            state.apply(across: effects, in: ())
+            state.apply(effects.all, in: ())
         }
 
         #expect(lastStarts == body.blocks.indices.map { settled.boundaryState(of: BlockID(index: $0))?.columns })

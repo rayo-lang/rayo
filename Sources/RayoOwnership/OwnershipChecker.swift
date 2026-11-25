@@ -34,10 +34,11 @@ public enum OwnershipChecker {
         let moves = MoveChecker.errors(in: places)
         guard moves.isEmpty else { return (nil, moves) }
 
-        // What code after each point uses is solved once, and serves both where accesses end and which values no
-        // code reads.
-        let uses = DataflowSolver.solve(from: AccessUseState(), through: places.body, knowing: places)
-        let (ended, conflicts) = ExclusivityChecker.check(places, uses: uses)
+        // The body's effects are built once, and serve every solve on the body. What code after each point uses is
+        // solved once, and serves both where accesses end and which values no code reads.
+        let effects = BodyEffects(places.body)
+        let uses = DataflowSolver.solve(from: AccessUseState(), through: places.body, effects: effects, knowing: places)
+        let (ended, conflicts) = ExclusivityChecker.check(places, effects: effects, uses: uses)
 
         // The retirements are written into the body that already has the ends of its accesses, because an access's end
         // uses the local it reaches. If they were written in before the ends, a local could retire while an access
