@@ -239,7 +239,7 @@ class ProgramTests(unittest.TestCase):
         self.assertEqual(if_sum(10).count('if '), 10)
         self.assertEqual(len(if_nest(10).splitlines()), 5)
         self.assertEqual(if_nest(10).count('if '), 10)
-        self.assertEqual(len(loop_nest(10).splitlines()), 4)
+        self.assertEqual(len(loop_nest(10).splitlines()), 5)
         self.assertEqual(loop_nest(10).count('while '), 10)
 
     def test_each_size_makes_each_program_with_five_turns_and_two_ifs_for_each_copy_of_a_loop(self):

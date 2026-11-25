@@ -40,7 +40,7 @@ package struct DataflowSolver<State: DataflowState> {
         switch direction {
         case .forward:
             boundaryStates[0] = start
-            let forwardOrder = LoopNestOrder(order, blockCount: body.blocks.count)
+            let forwardOrder = LoopNestOrder(order)
             pending = WorkQueue(forwardOrder.blocks, blockCount: body.blocks.count)
         case .backward:
             for block in order.postorder {
@@ -159,7 +159,9 @@ private struct WorkQueue {
     }
 }
 
-/// The blocks of a function that some path from its entry reaches, in the orders a dataflow solver visits them.
+/// The blocks of a function that some path from its entry reaches, in the orders a depth-first walk from the entry
+/// reaches and leaves them. It records where the walk reached each block, so whether one block lies below another in
+/// the walk is a lookup.
 private struct BlockOrder {
     /// The reached blocks, each after the blocks it leads to, except along an edge back to a block whose walk is
     /// still under way, such as a loop's header.
@@ -203,8 +205,11 @@ private struct BlockOrder {
         }
     }
 
-    /// Whether the walk reached `block` from `ancestor`, while it walked on from `ancestor`: so every path from the
-    /// entry to `block` that the walk could take passes `ancestor`. A block is its own ancestor.
+    /// How many blocks the function has, reached or not.
+    var blockCount: Int { predecessors.count }
+
+    /// Whether the walk reached `block` while it walked on from `ancestor`, so `ancestor` lies on the walk's path to
+    /// `block`. A block is its own ancestor.
     func isAncestor(_ ancestor: BlockID, of block: BlockID) -> Bool {
         let position = reachedAt[block.index]
         return reachedAt[ancestor.index] <= position && position <= lastReachedFrom[ancestor.index]
@@ -219,15 +224,15 @@ private struct BlockOrder {
 }
 
 /// The reached blocks in the order a forward walk visits them: each after the blocks that lead to it, and each loop's
-/// blocks together, header first, so the solver settles a loop before it carries the loop's state on. It finds the
-/// loops with one pass over the walk the block order made, so it takes time about linear in the function, however
-/// deep its loops nest.
+/// blocks together, header first, so the solver settles a loop before it carries the loop's state on. It takes time
+/// about linear in the function, however deep its loops nest.
 private struct LoopNestOrder {
     private(set) var blocks: [BlockID] = []
 
-    /// The order of the blocks of a function of `blockCount` blocks that `order` reached.
-    init(_ order: BlockOrder, blockCount: Int) {
-        let loops = InnermostLoops(order, blockCount: blockCount)
+    /// The order of the blocks that `order` reached.
+    init(_ order: BlockOrder) {
+        let loops = InnermostLoops(order)
+        let blockCount = order.blockCount
 
         // Each loop's blocks, and at `blockCount` the blocks in no loop, in reverse postorder, which puts each block
         // after those that lead to it, leaving out the edges back to a loop's header.
@@ -252,10 +257,9 @@ private struct LoopNestOrder {
     }
 }
 
-/// The innermost loop that each reached block of a function lies in, as Havlak's algorithm finds them: from the last
-/// block the walk reached back to the first, each block that an edge from a block reached from it leads back to heads
-/// a loop, which takes in each block that leads to that edge without passing the header. A loop found already is
-/// taken in whole, by its outermost header, which keeps the cost about linear in the function.
+/// The innermost loop around each reached block, found by Havlak's algorithm. It visits blocks from the last reached to
+/// the first: one that an edge from below it leads back to heads a loop, which takes in every block that reaches that
+/// edge without passing the header. A loop found already is taken in whole, which keeps the cost about linear.
 private struct InnermostLoops {
     /// The header of the innermost loop around each block, indexed by `BlockID`, or nil for a block in no loop. A
     /// header's is the header of the loop around its own.
@@ -269,7 +273,8 @@ private struct InnermostLoops {
     /// enters past its header has each such edge taken as one into the header.
     private var entries: [[BlockID]]
 
-    init(_ order: BlockOrder, blockCount: Int) {
+    init(_ order: BlockOrder) {
+        let blockCount = order.blockCount
         header = Array(repeating: nil, count: blockCount)
         isHeader = Array(repeating: false, count: blockCount)
         outermost = (0..<blockCount).map { BlockID(index: $0) }
@@ -279,17 +284,13 @@ private struct InnermostLoops {
         }
 
         for block in order.preorder.reversed() {
-            let members = loopMembers(headedBy: block, in: order)
-            for member in members {
-                header[member.index] = block
-                outermost[member.index] = block
-            }
+            takeInLoop(headedBy: block, in: order)
         }
     }
 
-    /// The blocks, each standing for the outermost loop found so far that it heads, that the loop `candidate` heads
-    /// takes in, or none where no edge leads back to it. Marks `candidate` as a header where one does.
-    private mutating func loopMembers(headedBy candidate: BlockID, in order: BlockOrder) -> [BlockID] {
+    /// Takes the blocks of the loop that `candidate` heads into it, where an edge leads back to `candidate`, and marks
+    /// `candidate` as a header. Each loop found already joins whole, through its outermost header.
+    private mutating func takeInLoop(headedBy candidate: BlockID, in order: BlockOrder) {
         var members: [BlockID] = []
         var isMember: Set<Int> = []
 
@@ -316,7 +317,12 @@ private struct InnermostLoops {
                 if outside != candidate, isMember.insert(outside.index).inserted { members.append(outside) }
             }
         }
-        return members
+
+        // Each member's innermost loop is this one, and the loop stands for the member from now on.
+        for member in members {
+            header[member.index] = candidate
+            outermost[member.index] = candidate
+        }
     }
 
     /// The header of the outermost loop found so far that `block` lies in, or `block` itself where it lies in none.

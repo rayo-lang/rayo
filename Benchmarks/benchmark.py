@@ -72,7 +72,7 @@ PROGRAM_DESCRIPTIONS = [
     'if-sum-T: a main of one statement that sums T if expressions, the temporary of each + in use across the blocks '
     'of every if: 5 lines',
     'if-nest-D: a main that binds the value of D ifs, each the value of the first branch of the if around it: 5 lines',
-    'loop-nest-D: a main of D loops, each in the body of the loop around it: 4 lines',
+    'loop-nest-D: a main of D loops, each in the body of the loop around it, and each testing a let: 5 lines',
 ]
 
 
@@ -138,9 +138,10 @@ def if_nest(depth):
 
 
 def loop_nest(depth):
-    """A `main` of `depth` loops, each in the body of the loop around it, the innermost printing."""
-    nest = 'while seed > 0 { ' * depth + 'print(seed)' + ' }' * depth
-    return f'func main() {{\n    let seed = 3\n    {nest}\n}}\n'
+    """A `main` of `depth` loops, each in the body of the loop around it and each testing a `let`, the innermost
+    printing."""
+    nest = 'while go { ' * depth + 'print(seed)' + ' }' * depth
+    return f'func main() {{\n    let seed = 3\n    let go = seed > 0\n    {nest}\n}}\n'
 
 
 def programs(sizes):
