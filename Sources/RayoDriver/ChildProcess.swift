@@ -1,5 +1,5 @@
 #if os(Windows)
-import ucrt
+import CRT
 import WinSDK
 #elseif canImport(Glibc)
 import Glibc
@@ -9,7 +9,7 @@ import Musl
 import Darwin
 #endif
 import Foundation
-import Subprocess
+internal import Subprocess
 
 /// A process that `rayo` runs to its end: an executable, with its arguments and environment, on the files it reads
 /// and writes.
@@ -24,13 +24,12 @@ struct ChildProcess {
 
     /// Runs the process, waits for it to end, and returns how it ended.
     func run() async throws -> Termination {
-        // Give the process copies of the descriptors for its standard streams, which are closed by the time it ends.
-        var descriptors: [Int32] = []
-        defer { descriptors.forEach(Self.closeCopy) }
-        let files = [(standardInput, StandardStream.input), (standardOutput, .output), (standardError, .error)]
-        for (file, stream) in files {
-            descriptors.append(try Self.descriptor(for: file, stream: stream))
-        }
+        // Give the process copies of the descriptors for its standard streams.
+        let copies = try StreamCopies(input: Self.copy(for: standardInput, stream: .input),
+                                      output: Self.copy(for: standardOutput, stream: .output),
+                                      error: Self.copy(for: standardError, stream: .error))
+        let (input, output, error) = (copies.input.descriptor, copies.output.descriptor, copies.error.descriptor)
+        var openCopies = Optional(copies)
 
         // Run the process on them, in exactly its environment.
         let status: TerminationStatus
@@ -38,14 +37,14 @@ struct ChildProcess {
             status = try await Subprocess.run(
                 .path(.init(executable.path)), arguments: .init(arguments),
                 environment: .custom(Self.variables(environment)),
-                input: .fileDescriptor(.init(rawValue: descriptors[0]), closeAfterSpawningProcess: false),
-                output: .fileDescriptor(.init(rawValue: descriptors[1]), closeAfterSpawningProcess: false),
-                error: .fileDescriptor(.init(rawValue: descriptors[2]), closeAfterSpawningProcess: false),
+                input: .fileDescriptor(.init(rawValue: input), closeAfterSpawningProcess: false),
+                output: .fileDescriptor(.init(rawValue: output), closeAfterSpawningProcess: false),
+                error: .fileDescriptor(.init(rawValue: error), closeAfterSpawningProcess: false),
             ) { _ in
-                // A started process has descriptors of its own. Windows lets another process inherit a copy while it
-                // is open, so the copies close as soon as this one starts, and not when it ends.
-                descriptors.forEach(Self.closeCopy)
-                descriptors = []
+                // A started process has descriptors of its own, and Windows lets another process inherit a copy while
+                // it is open, so the copies close as soon as this one starts. swift-subprocess would close only the
+                // handle a Windows descriptor holds, so the copies close themselves.
+                _ = openCopies.take()
             }.terminationStatus
         } catch {
             // swift-subprocess says what went wrong in its description, and not in its localized one.
@@ -54,8 +53,8 @@ struct ChildProcess {
         return Self.termination(status)
     }
 
-    /// A copy of the descriptor that the process gets for `stream` from `file`, which the caller closes.
-    private static func descriptor(for file: FileHandle?, stream: StandardStream) throws -> Int32 {
+    /// A copy of the descriptor that the process gets for `stream` from `file`.
+    private static func copy(for file: FileHandle?, stream: StandardStream) throws -> DescriptorCopy {
         switch file {
         // No file gives the process `rayo`'s own stream, or the null device where `rayo` lacks it.
         case nil: try copyOfOwn(stream) ?? copyOfNullDevice()
@@ -65,8 +64,8 @@ struct ChildProcess {
         }
     }
 
-    /// A copy of a descriptor for the null device, which the caller closes.
-    private static func copyOfNullDevice() throws -> Int32 {
+    /// A copy of a descriptor for the null device.
+    private static func copyOfNullDevice() throws -> DescriptorCopy {
         #if os(Windows)
         let path = "NUL"
         #else
@@ -76,9 +75,9 @@ struct ChildProcess {
     }
 
     /// `environment` keyed as swift-subprocess takes it. Windows names a variable in any case, so of two names that
-    /// differ only in case, one is kept.
+    /// differ only in case, the first in sorted order is kept.
     private static func variables(_ environment: [String: String]) -> [Environment.Key: String] {
-        let pairs = environment.map { (Environment.Key(stringLiteral: $0.key), $0.value) }
+        let pairs = environment.sorted { $0.key < $1.key }.map { (Environment.Key(stringLiteral: $0.key), $0.value) }
         return Dictionary(pairs) { first, _ in first }
     }
 
@@ -86,8 +85,8 @@ struct ChildProcess {
     private static func termination(_ status: TerminationStatus) -> Termination {
         switch status {
         #if os(Windows)
-        // Windows ends a process with a code alone, which may be an exception's; it has no signals.
-        case .exited(let code), .signaled(let code): Termination(windowsExitCode: code)
+        // Windows ends a process with a code alone, which may be an exception's.
+        case .exited(let code): Termination(windowsExitCode: code)
         #else
         case .exited(let exitCode): .exited(exitCode)
         case .signaled(let signal): .signaled(signal)
@@ -101,12 +100,26 @@ extension ChildProcess {
     private enum StandardStream: Int32 {
         case input, output, error
     }
+
+    /// A copy of a file descriptor, which closes when the copy goes.
+    private struct DescriptorCopy: ~Copyable {
+        let descriptor: Int32
+
+        deinit { ChildProcess.closeDescriptor(descriptor) }
+    }
+
+    /// The copies of the descriptors that a process gets for its standard input, output and error.
+    private struct StreamCopies: ~Copyable {
+        let input: DescriptorCopy
+        let output: DescriptorCopy
+        let error: DescriptorCopy
+    }
 }
 
 #if os(Windows)
 extension ChildProcess {
-    /// A copy of the descriptor for `rayo`'s own `stream`, which the caller closes, or nil where `rayo` lacks it.
-    private static func copyOfOwn(_ stream: StandardStream) throws -> Int32? {
+    /// A copy of the descriptor for `rayo`'s own `stream`, or nil where `rayo` lacks it.
+    private static func copyOfOwn(_ stream: StandardStream) throws -> DescriptorCopy? {
         // The C library gives a stream `rayo` lacks a descriptor that holds no handle, so Windows is asked for it.
         let handle = switch stream {
         case .input: GetStdHandle(STD_INPUT_HANDLE)
@@ -117,14 +130,14 @@ extension ChildProcess {
         return try copy(of: handle)
     }
 
-    /// A copy of the descriptor for `file`, which the caller closes.
-    private static func copy(of file: FileHandle) throws -> Int32 {
+    /// A copy of the descriptor for `file`.
+    private static func copy(of file: FileHandle) throws -> DescriptorCopy {
         try copy(of: file._handle)
     }
 
-    /// A C library descriptor for a copy of `handle`, which the caller closes. The descriptor owns the handle it
-    /// holds, so it holds a copy, and `handle` stays open for whoever owns it.
-    private static func copy(of handle: HANDLE) throws -> Int32 {
+    /// A C library descriptor for a copy of `handle`. The descriptor owns the handle it holds, so it holds a copy,
+    /// and `handle` stays open for whoever owns it.
+    private static func copy(of handle: HANDLE) throws -> DescriptorCopy {
         // Copy the handle.
         var copy: HANDLE?
         let process = GetCurrentProcess()
@@ -138,11 +151,11 @@ extension ChildProcess {
             CloseHandle(copy)
             throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EMFILE)
         }
-        return descriptor
+        return DescriptorCopy(descriptor: descriptor)
     }
 
     /// Closes `descriptor`, and the handle it holds.
-    private static func closeCopy(_ descriptor: Int32) {
+    private static func closeDescriptor(_ descriptor: Int32) {
         _ = _close(descriptor)
     }
 
@@ -159,16 +172,16 @@ extension ChildProcess {
 }
 #else
 extension ChildProcess {
-    /// A copy of the descriptor for `rayo`'s own `stream`, which the caller closes, or nil where `rayo` lacks it.
-    private static func copyOfOwn(_ stream: StandardStream) throws -> Int32? {
+    /// A copy of the descriptor for `rayo`'s own `stream`, or nil where `rayo` lacks it.
+    private static func copyOfOwn(_ stream: StandardStream) throws -> DescriptorCopy? {
         let descriptor = copy(of: stream.rawValue)
-        // A stream `rayo` lacks is a descriptor it hasn't open.
+        // A stream `rayo` lacks is a descriptor it doesn't have open.
         if descriptor == -1 && errno == EBADF { return nil }
         return try checked(descriptor)
     }
 
-    /// A copy of the descriptor for `file`, which the caller closes.
-    private static func copy(of file: FileHandle) throws -> Int32 {
+    /// A copy of the descriptor for `file`.
+    private static func copy(of file: FileHandle) throws -> DescriptorCopy {
         try checked(copy(of: file.fileDescriptor))
     }
 
@@ -178,14 +191,14 @@ extension ChildProcess {
         fcntl(descriptor, F_DUPFD_CLOEXEC, 0)
     }
 
-    /// `descriptor`, which a call gave, or the error that call set where it gave none.
-    private static func checked(_ descriptor: Int32) throws -> Int32 {
+    /// The copy `descriptor`, which a call gave, or the error that call set where it gave none.
+    private static func checked(_ descriptor: Int32) throws -> DescriptorCopy {
         guard descriptor != -1 else { throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EBADF) }
-        return descriptor
+        return DescriptorCopy(descriptor: descriptor)
     }
 
     /// Closes `descriptor`.
-    private static func closeCopy(_ descriptor: Int32) {
+    private static func closeDescriptor(_ descriptor: Int32) {
         _ = close(descriptor)
     }
 }

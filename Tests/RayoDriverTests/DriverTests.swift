@@ -171,6 +171,36 @@ struct DriverTests {
     }
     #endif
 
+    @Test func `a rayoc whose output rayo captures reads its standard input from the null device`() async throws {
+        try await withTemporaryDirectory { directory in
+            let source = try save("func main() {}", as: "main.rayo", in: directory)
+            let compiler = try install(ToolStandIn([.requireEmptyStandardInput], then: .exit(0)),
+                                       as: "rayoc", in: directory)
+            #expect(await Driver.run(["check", source], compiler: compiler) ==
+                CommandResult(exitCode: 0, output: "", errors: ""))
+        }
+    }
+
+    @Test func `a rayoc that rayo runs reads the null device in place of a standard input rayo lacks`() throws {
+        try withTemporaryDirectory { directory in
+            _ = try save("func main() {}", as: "main.rayo", in: directory)
+            let compiler = try install(ToolStandIn([.requireEmptyStandardInput], then: .exit(0)),
+                                       as: "rayoc", in: directory)
+
+            // `rayo` compiles with the `rayoc` that RAYOC names, on its own standard streams.
+            #if os(Windows)
+            let environment = ProcessInfo.processInfo.environment.setting("RAYOC", to: compiler.path)
+            let exitCode = try rayoOnConsoleOfItsOwn(["check", "main.rayo"], in: directory, environment: environment,
+                                                     standardHandles: false)
+            #else
+            var environment = ProcessInfo.processInfo.environment
+            environment["RAYOC"] = compiler.path
+            let exitCode = try rayoWithoutStandardInput(["check", "main.rayo"], in: directory, environment: environment)
+            #endif
+            #expect(exitCode == 0)
+        }
+    }
+
     @Test(arguments: ["-o", "--check", "--"])
     func `a file named like one of rayoc's options is the file the command compiles`(name: String) throws {
         try withTemporaryDirectory { directory in
