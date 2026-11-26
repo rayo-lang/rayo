@@ -1,0 +1,90 @@
+name: Install the toolchain and run a program with it
+description: >-
+  Installs the toolchain into a temporary folder with the install script, then hides the LLVM it was built against and
+  has the toolchain alone build and run a proof program, with nothing but the toolchain's bin on the search path.
+
+runs:
+  using: composite
+  steps:
+    # A build is reused only by the same Swift compiler, as the test jobs' are. The LLVM the script unpacks is named
+    # for the packages the pin names, so a cache of it is too.
+    - name: Name the caches
+      id: name
+      shell: bash
+      env:
+        PIN: ${{ hashFiles('llvm-release.json') }}
+        SOURCES: ${{ hashFiles('Package.swift', 'Package.resolved', 'Sources/**', 'llvm-release.json') }}
+      run: |
+        swift=$(swift --version 2>&1 | git hash-object --stdin | cut -c 1-16)
+        echo "llvm=install-llvm-$RUNNER_OS-$RUNNER_ARCH-$PIN" >> "$GITHUB_OUTPUT"
+        prefix="install-build-$RUNNER_OS-$RUNNER_ARCH-$swift-"
+        echo "build-prefix=$prefix" >> "$GITHUB_OUTPUT"
+        echo "build=$prefix$SOURCES" >> "$GITHUB_OUTPUT"
+        # Windows names its Python `python`.
+        if [ "$RUNNER_OS" = Windows ]; then python=python; else python=python3; fi
+        echo "python=$python" >> "$GITHUB_OUTPUT"
+    - name: Restore LLVM
+      id: llvm
+      uses: actions/cache/restore@v6
+      with:
+        path: .build/llvm
+        key: ${{ steps.name.outputs.llvm }}
+    - name: Restore the build
+      id: build
+      uses: actions/cache/restore@v6
+      with:
+        path: .build/install
+        key: ${{ steps.name.outputs.build }}
+        restore-keys: ${{ steps.name.outputs.build-prefix }}
+
+    # The script's own tests run on each platform, since the shims they test are Windows' alone.
+    - name: Test the install script
+      shell: bash
+      run: ${{ steps.name.outputs.python }} -m unittest discover -s scripts -p test_install_toolchain.py -v
+    - name: Install the toolchain
+      shell: bash
+      run: ${{ steps.name.outputs.python }} scripts/install_toolchain.py --prefix "$RUNNER_TEMP/rayo"
+
+    # Only a push to main saves LLVM and the build, as the test jobs' builds are, so pull requests share main's copy.
+    - name: Save LLVM
+      if: github.event_name == 'push' && steps.llvm.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v6
+      with:
+        path: .build/llvm
+        key: ${{ steps.name.outputs.llvm }}
+    - name: Save the build
+      if: github.event_name == 'push' && steps.build.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v6
+      with:
+        path: .build/install
+        key: ${{ steps.name.outputs.build }}
+
+    # The toolchain's rayoc would load the LLVM it was built against where its own were missing, so that LLVM is
+    # moved where nothing looks for it.
+    - name: Hide the LLVM the toolchain was built against
+      shell: bash
+      run: mv .build/llvm "$RUNNER_TEMP/hidden-llvm"
+    - name: Run a program with the toolchain alone
+      if: runner.os != 'Windows'
+      shell: bash
+      env:
+        PROGRAM: examples/v0.1/combat.rayo
+      run: |
+        PATH="$RUNNER_TEMP/rayo/bin" rayo run "$PROGRAM" > "$RUNNER_TEMP/output"
+        diff -u "${PROGRAM%.rayo}.out" "$RUNNER_TEMP/output"
+    # PowerShell finds `rayo.cmd` on the search path as a user's shell does, and runs it with the command interpreter
+    # that ComSpec names, which needs no search path either.
+    - name: Run a program with the toolchain alone
+      if: runner.os == 'Windows'
+      shell: pwsh
+      env:
+        PROGRAM: examples\v0.1\combat.rayo
+      run: |
+        $env:Path = "$env:RUNNER_TEMP\rayo\bin"
+        & $env:ComSpec /c "rayo run $env:PROGRAM > $env:RUNNER_TEMP\output"
+        if ($LASTEXITCODE -ne 0) { Write-Output "::error::rayo run exited with $LASTEXITCODE"; exit 1 }
+    # The C runtime ends each line the program writes to a file with a carriage return and a newline.
+    - name: Compare the program's output with what it should print
+      if: runner.os == 'Windows'
+      shell: bash
+      run: diff -u --strip-trailing-cr examples/v0.1/combat.out "$RUNNER_TEMP/output"

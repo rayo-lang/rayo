@@ -30,6 +30,7 @@ jobs:
       test-paths: ${{ steps.paths.outputs.test-paths }}
       docs: ${{ steps.paths.outputs.docs }}
       benchmarks: ${{ steps.paths.outputs.benchmarks }}
+      install: ${{ steps.paths.outputs.install }}
       swift-release: ${{ env.SWIFT_RELEASE }}
     steps:
       # A pull request needs only its merge commit and the merge's parents; a push to main needs the commit main
@@ -53,6 +54,7 @@ jobs:
             echo "code=true" >> "$GITHUB_OUTPUT"
             echo "docs=true" >> "$GITHUB_OUTPUT"
             echo "benchmarks=true" >> "$GITHUB_OUTPUT"
+            echo "install=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -80,9 +82,16 @@ jobs:
           benchmark_paths='^(Sources|Benchmarks)/|^Package\.swift$|^\.github/'
           benchmark_paths+='(workflows/ci\.yml$|actions/linux-toolchain/)'
           if grep -q -E "$benchmark_paths" <<< "$changed"; then benchmarks=true; else benchmarks=false; fi
+          # The install builds the release rayo and rayoc from the sources and the manifest, against the LLVM the pin
+          # names, with the install script and the version it installs, in a job that the workflow and its own action
+          # set up, and runs a proof program with them.
+          install_paths='^(Sources|examples/v0\.1)/|^Package\.(swift|resolved)$|^scripts/install_toolchain\.py$'
+          install_paths+='|^(llvm-release\.json|VERSION)$|^\.github/(workflows/ci\.yml$|actions/install-toolchain/)'
+          if grep -q -E "$install_paths" <<< "$changed"; then install=true; else install=false; fi
           echo "code=$code" >> "$GITHUB_OUTPUT"
           echo "docs=$docs" >> "$GITHUB_OUTPUT"
           echo "benchmarks=$benchmarks" >> "$GITHUB_OUTPUT"
+          echo "install=$install" >> "$GITHUB_OUTPUT"
 
           # A pull request runs only the tests that its test paths reach, which each test job finds from them, and
           # without any, as when it changes only the code jobs' scripts, the jobs only build. A push to main runs
@@ -225,21 +234,16 @@ jobs:
           - name: x64
             runner: windows-2022
             swift-arch: amd64
-            triple: x86_64-pc-windows-msvc
+            llvm-host: windows-x86_64
           - name: arm64
             runner: windows-11-arm
             swift-arch: arm64
-            triple: aarch64-pc-windows-msvc
+            llvm-host: windows-aarch64
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 45
     env:
       # The exact Swift build to install, of SWIFT_RELEASE; Swift's Windows installer names one.
       SWIFT_BUILD: 6.4.2
-      # The exact LLVM build to install, of LLVM_MAJOR_VERSION. Only the archive LLVM publishes for Windows holds
-      # the headers rayoc builds against: its installer and the package managers that use it hold none.
-      LLVM_BUILD: 23.1.5
-      # The target LLVM's Windows archive is built for, which its name ends in.
-      LLVM_TRIPLE: ${{ matrix.triple }}
     defaults:
       run:
         shell: bash
@@ -252,33 +256,55 @@ jobs:
           swift-build: ${{ env.SWIFT_BUILD }}-RELEASE
           build_arch: ${{ matrix.swift-arch }}
 
+      # The exact LLVM build to install, of LLVM_MAJOR_VERSION, is the archive that `llvm-release.json` pins for the
+      # host, as the install script installs it. Only the archive LLVM publishes for Windows holds the headers rayoc
+      # builds against: its installer and the package managers that use it hold none.
+      - name: Read the pinned LLVM
+        id: llvm
+        env:
+          HOST: ${{ matrix.llvm-host }}
+        run: |
+          python - >> "$GITHUB_OUTPUT" <<'EOF'
+          import json, os
+          with open('llvm-release.json', encoding='utf-8') as f:
+              pin = json.load(f)
+          archive = pin['hosts'][os.environ['HOST']][0]
+          print(f"release={pin['release']}")
+          for key in ['url', 'sha256', 'directory']:
+              print(f'{key}={archive[key]}')
+          EOF
       - name: Restore LLVM
         id: llvm-archive
         uses: actions/cache/restore@v6
         with:
           path: ${{ runner.temp }}/llvm
-          key: llvm-${{ env.LLVM_BUILD }}-windows-${{ runner.arch }}
+          key: llvm-windows-${{ runner.arch }}-${{ steps.llvm.outputs.sha256 }}
+      # A download whose checksum isn't the pinned one stops the job before anything is unpacked.
       - name: Download LLVM
         if: steps.llvm-archive.outputs.cache-hit != 'true'
+        env:
+          URL: ${{ steps.llvm.outputs.url }}
+          SHA256: ${{ steps.llvm.outputs.sha256 }}
         run: |
-          release="https://github.com/llvm/llvm-project/releases/download/llvmorg-$LLVM_BUILD"
           curl -fsSL --retry 3 -w 'Downloaded %{size_download} bytes in %{time_total}s\n' \
-            -o "$RUNNER_TEMP/llvm.tar.xz" "$release/clang+llvm-$LLVM_BUILD-$LLVM_TRIPLE.tar.xz"
+            -o "$RUNNER_TEMP/llvm.tar.xz" "$URL"
+          echo "$SHA256  $RUNNER_TEMP/llvm.tar.xz" | sha256sum -c -
       # The archive holds a whole install, thousands of files of it libraries rayoc doesn't link, so only what rayoc
       # builds against and its tests run is unpacked: LLVM's C API headers and library, the release's version files,
       # and the tools. Windows' own tar takes many minutes to decompress the archive, so the 7-Zip the runner's
       # image installs decompresses it, and a second 7-Zip unpacks those files from the stream, listing each.
       - name: Unpack LLVM
         if: steps.llvm-archive.outputs.cache-hit != 'true'
+        env:
+          DIRECTORY: ${{ steps.llvm.outputs.directory }}
         run: |
-          name="clang+llvm-$LLVM_BUILD-$LLVM_TRIPLE"
           members=(
             include/llvm-c include/llvm/Config lib/LLVM-C.lib bin/LLVM-C.dll lib/cmake/lld
             bin/clang.exe bin/lld.exe bin/lld-link.exe bin/llvm-config.exe bin/llvm-nm.exe bin/llvm-readobj.exe
           )
           7z x -so "$(cygpath -w "$RUNNER_TEMP/llvm.tar.xz")" \
-            | 7z x -si -ttar -bb1 -o"$(cygpath -w "$RUNNER_TEMP")" "${members[@]/#/$name/}"
-          mv "$RUNNER_TEMP/$name" "$RUNNER_TEMP/llvm"
+            | 7z x -si -ttar -bb1 -o"$(cygpath -w "$RUNNER_TEMP")" "${members[@]/#/$DIRECTORY/}"
+          mv "$RUNNER_TEMP/$DIRECTORY" "$RUNNER_TEMP/llvm"
 
           # 7-Zip unpacks nothing for a file the archive lacks, and doesn't fail.
           for member in "${members[@]}"; do
@@ -302,8 +328,80 @@ jobs:
       - uses: ./.github/actions/swift-test
         with:
           platform: windows
-          llvm-version: ${{ env.LLVM_BUILD }}
+          llvm-version: ${{ steps.llvm.outputs.release }}
           changed-paths: ${{ needs.changes.outputs.test-paths }}
+
+  # The install script builds a toolchain and installs it as a user installs one, on each platform, and the toolchain
+  # alone then builds and runs a proof program.
+  install-linux:
+    name: Install the toolchain on Linux
+    needs: changes
+    if: needs.changes.outputs.install == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    container: swift:${{ needs.changes.outputs.swift-release }}-noble
+    steps:
+      - uses: actions/checkout@v7
+      # Swift's container holds no Python, which the script runs with, and no certificates to download over HTTPS.
+      - name: Install Python
+        run: |
+          printf 'Acquire::Retries "3";\nAcquire::http::Timeout "30";\nAcquire::https::Timeout "30";\n' \
+            > /etc/apt/apt.conf.d/80-rayo-ci
+          apt-get update
+          apt-get install -y --no-install-recommends python3 ca-certificates
+      - uses: ./.github/actions/install-toolchain
+
+  install-macos:
+    name: Install the toolchain on macOS
+    needs: changes
+    if: needs.changes.outputs.install == 'true'
+    # The image that holds Swift 6.4, as the macOS test job says.
+    runs-on: xcode-27
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+      - name: Select the Xcode that holds Swift ${{ env.SWIFT_RELEASE }}
+        run: |
+          for xcode in /Applications/Xcode*.app; do
+            developer="$xcode/Contents/Developer"
+            swift=$(DEVELOPER_DIR="$developer" xcrun swift --version 2>/dev/null)
+            release=$(grep -o -E 'Swift version [0-9]+\.[0-9]+' <<< "$swift" | head -n 1)
+            if [ "$release" = "Swift version $SWIFT_RELEASE" ]; then
+              echo "DEVELOPER_DIR=$developer" >> "$GITHUB_ENV"
+              exit 0
+            fi
+          done
+          echo "::error::no Xcode on this runner holds Swift $SWIFT_RELEASE"
+          exit 1
+      - uses: ./.github/actions/install-toolchain
+
+  install-windows:
+    name: Install the toolchain on Windows ${{ matrix.name }}
+    needs: changes
+    if: needs.changes.outputs.install == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: x64
+            runner: windows-2022
+            swift-arch: amd64
+          - name: arm64
+            runner: windows-11-arm
+            swift-arch: arm64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    env:
+      # The Swift build the Windows test job installs.
+      SWIFT_BUILD: 6.4.2
+    steps:
+      - uses: actions/checkout@v7
+      - uses: compnerd/gha-setup-swift@9ff1ee4c44888c5817fc14d1b257ac8cabb4935f # v0.5.1
+        with:
+          swift-version: swift-${{ env.SWIFT_BUILD }}-release
+          swift-build: ${{ env.SWIFT_BUILD }}-RELEASE
+          build_arch: ${{ matrix.swift-arch }}
+      - uses: ./.github/actions/install-toolchain
 
   # Counts both sides' instructions under Valgrind, since GitHub's runners count none, and fails past the threshold.
   # The CI check leaves it out, since a change may cost more on purpose.
@@ -418,7 +516,7 @@ jobs:
   # was cancelled, and fails then, since a skipped required check would pass.
   ci:
     name: CI
-    needs: [changes, linux, macos, windows, docs]
+    needs: [changes, linux, macos, windows, install-linux, install-macos, install-windows, docs]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5

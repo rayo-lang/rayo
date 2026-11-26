@@ -12,13 +12,14 @@ import re
 import sys
 
 # The paths whose change can change what a test does. The build reads only the package's sources, its tests and its
-# manifest, and CI runs the tests through its workflow and its actions. The driver's tests also run each version's
-# proof program, in `examples/v<version>/`, and compare what it prints with its expected output, whose line endings
-# `.gitattributes` keeps.
+# manifest, and CI runs the tests through its workflow and its actions, against the LLVM that `llvm-release.json`
+# pins on Windows. The driver's tests also run each version's proof program, in `examples/v<version>/`, and compare
+# what it prints with its expected output, whose line endings `.gitattributes` keeps.
 TEST_PATHS = re.compile(r'''
     ^(Sources|Tests)/
     | ^Package\.(swift|resolved)$
     | ^\.github/(workflows/ci\.yml$|actions/)
+    | ^llvm-release\.json$
     | ^examples/v[0-9.]+/
     | ^\.gitattributes$
 ''', re.VERBOSE)
