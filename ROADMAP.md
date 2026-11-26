@@ -92,6 +92,23 @@ v0.5 adds:
 
 A panic stays in the runtime's LLVM IR.
 
+## v0.6: methods
+
+A struct declares the functions that act on it in its body. A call reaches them through a value, as `boss.takeHit(5)`, or through the type, as `Enemy.spawn()` ([05](docs/spec/05-protocols-generics-and-closures/functions-and-closures.md#static-and-instance-members)).
+
+v0.6 adds:
+
+- methods in a struct's body, declared `func`, `mutating func` or `consuming func`, which take `self` as a `ref let`, as a `ref var` and owned ([01](docs/spec/01-values-and-ownership/parameters.md#parameters));
+- `self` in a method's body, and the struct's fields and methods named there without `self.`, after the body's locals and parameters and before the struct's static members and the program's own declarations ([05](docs/spec/05-protocols-generics-and-closures/functions-and-closures.md#static-and-instance-members));
+- a receiver given with no mark, which a plain method borrows, a `mutating` one borrows for change under the law of exclusivity, and a `consuming` one moves ([01](docs/spec/01-values-and-ownership/references.md#unmarked-places), [01](docs/spec/01-values-and-ownership/moving-values-out.md#moving-values-out));
+- receivers that are locals, parameters, or fields or elements of either, as `world.boss.takeHit(5)` and `enemies[i].takeHit(5)`;
+- a temporary as the receiver of a plain or a `consuming` method, as `makeEnemy().describe()`;
+- `static func` members, called through the type, as `Enemy.spawn()`, and `Self` in a struct's body;
+- static and instance members as separate namespaces, and methods that share a name, told apart by their labels and parameter types as free functions are ([05](docs/spec/05-protocols-generics-and-closures/functions-and-closures.md#functions-and-closures));
+- the compile error for a `mutating` call on a place that isn't changeable, such as a `let` local, a `&T` parameter or `self` in a plain method ([01](docs/spec/01-values-and-ownership/bindings.md#changeable-places));
+- the compile error for a `mutating` call on a temporary, which names the temporary and says to store it in a `var` ([01](docs/spec/01-values-and-ownership/bindings.md#temporaries-are-read-only));
+- the compile error for two methods that differ only in how they take `self`, and the ones for an instance member reached through the type and a static member reached through a value.
+
 ## Not yet planned
 
 This list maps every feature of the spec that no version has finished, in no decided order. Where a version builds part of a feature, its line names the version and the part of the feature it leaves out.
@@ -100,10 +117,9 @@ Declarations and types:
 
 - struct initializers other than the primary one ([04](docs/spec/04-types/structs.md#initializers)): v0.1 builds the primary initializer alone;
 - `.init(…)` and the other implicit members, such as `.zero` ([05](docs/spec/05-protocols-generics-and-closures/operators.md#operators)): v0.1 makes a struct only by naming its type, and v0.2 builds `.init(repeating:)` of an inline array alone;
-- methods, `self`, static members and computed properties, and subscripts ([05](docs/spec/05-protocols-generics-and-closures/functions-and-closures.md#static-and-instance-members), [02](docs/spec/02-views-and-dependencies/place-and-value-properties.md#place-and-value-properties));
-- `mutating func`, whose `self` names the receiver's place as a `mutable &T` parameter names its argument's, and the compile error for a `mutating` call on a temporary ([01](docs/spec/01-values-and-ownership/bindings.md#temporaries-are-read-only)): v0.3 builds the other errors for changing a temporary;
+- static properties, computed properties and subscripts ([05](docs/spec/05-protocols-generics-and-closures/functions-and-closures.md#static-and-instance-members), [02](docs/spec/02-views-and-dependencies/place-and-value-properties.md#place-and-value-properties)): v0.6 builds methods and static functions alone;
 - default arguments and field defaults ([01](docs/spec/01-values-and-ownership/parameters.md#default-arguments), [04](docs/spec/04-types/structs.md#initializers)): v0.1's calls and initializers take every argument written out;
-- `deinit` and move-only structs ([01](docs/spec/01-values-and-ownership/moves-copies-destruction.md#destruction), [01](docs/spec/01-values-and-ownership/moves-copies-destruction.md#copyable-types));
+- `deinit`, `discard self` and move-only structs ([01](docs/spec/01-values-and-ownership/moves-copies-destruction.md#destruction), [01](docs/spec/01-values-and-ownership/moves-copies-destruction.md#copyable-types));
 - layout attributes, `@align` and packed structs, and the data layouts `Pod`, `TrailingArray` and `SoA` ([04](docs/spec/04-types/structs.md#layout-attributes), [04](docs/spec/04-types/data-layout.md#plain-and-specialized-data-layouts));
 - types and functions declared inside a function ([05](docs/spec/05-protocols-generics-and-closures/functions-and-closures.md#functions-and-closures));
 - nested types, a program's own `typealias` declarations, and extensions ([04](docs/spec/04-types/structs.md#structs), [12](docs/spec/12-grammar/declarations.md#files-and-declarations)): v0.5 builds C's integer aliases alone, which the compiler declares;
@@ -136,12 +152,12 @@ Statements and control flow:
 Ownership and borrowing:
 
 - `ref var` bindings, as `ref var m = mutable p`, and the errors for a `ref var` given `&p` and a `ref let` given `mutable p` ([01](docs/spec/01-values-and-ownership/bindings.md#bindings-that-refer-to-a-place)): v0.2 builds `ref let` alone;
-- `&` of a temporary, as `&makeEnemy()`, and a value lent to a `&T`, as `show(makeEnemy())` ([01](docs/spec/01-values-and-ownership/references.md#making-a-reference)): v0.1 to v0.5 lend only a local, a parameter, a field or an element of one, or a value given to `print`;
+- `&` of a temporary, as `&makeEnemy()`, and a value lent to a `&T`, as `show(makeEnemy())` ([01](docs/spec/01-values-and-ownership/references.md#making-a-reference)): v0.1 to v0.5 lend only a local, a parameter, a field or an element of one, or a value given to `print`. From v0.6, a plain method borrows a temporary receiver too;
 - `consume` of any other place, such as a temporary ([01](docs/spec/01-values-and-ownership/moving-values-out.md#moving-values-out)): v0.2 builds `consume` of a local or a field of one, and v0.3 of an owning parameter or a field of one;
 - `ImplicitlyCopyable`, its conformances declared by a struct or an enum, and the other implicitly copyable types, such as tuples, `Handle` and `T?` ([01](docs/spec/01-values-and-ownership/moves-copies-destruction.md#implicitly-copyable-types)): v0.2 copies `Int`, `UInt` and `Bool` implicitly, and v0.4 the fixed-width integers and `*T`;
 - implicit copies in the positions v0.2 doesn't build, such as a condition's binding, a `for` or `when` name and a tuple literal's element ([01](docs/spec/01-values-and-ownership/moves-copies-destruction.md#implicit-copies));
 - `copy` of a field of a temporary, as `copy makeEnemy().stats`, and a `let` of one, which owns it ([01](docs/spec/01-values-and-ownership/moves-copies-destruction.md#copies)): v0.1 copies a field of a local or a `&T` parameter, and v0.2 borrows one with a `ref let`;
-- references held as values, as `let best = &enemies[0]` holds a `&Enemy`, and the other views, which are [scoped values](docs/spec/02-views-and-dependencies/scoped-values.md), with the dependencies that check them ([01](docs/spec/01-values-and-ownership/references.md#references), [02](docs/spec/02-views-and-dependencies.md#dependencies)): v0.1 to v0.3 build references only as `&T` and `mutable &T` parameters and `ref let` bindings;
+- references held as values, as `let best = &enemies[0]` holds a `&Enemy`, and the other views, which are [scoped values](docs/spec/02-views-and-dependencies/scoped-values.md), with the dependencies that check them ([01](docs/spec/01-values-and-ownership/references.md#references), [02](docs/spec/02-views-and-dependencies.md#dependencies)): v0.1 to v0.3 build references only as `&T` and `mutable &T` parameters and `ref let` bindings. From v0.6, a plain or `mutating` method's `self` is one too;
 - a place lent wherever else a `&T` is expected, as `let top: &Enemy = enemies[0]` lends one, and the conversions of the reference it makes, as to a `&[T]` ([05](docs/spec/05-protocols-generics-and-closures/implicit-conversions.md#places-lent-where-a-reference-is-expected)): v0.2 lends a place given to a `&T` parameter;
 - closures and function values ([05](docs/spec/05-protocols-generics-and-closures/functions-and-closures.md#closure-kinds));
 - handles and objects ([03](docs/spec/03-handles-and-objects.md#03--handles-and-objects)).
