@@ -1,0 +1,78 @@
+{
+  "release": "23.1.4",
+  "hosts": {
+    "linux-x86_64": [
+      {
+        "url": "https://github.com/llvm/llvm-project/releases/download/llvmorg-23.1.4/LLVM-23.1.4-Linux-X64.tar.xz",
+        "sha256": "25d814fda50d5fb0084b42be09605d8b1595d49d5e2e03a3345d7e112ff6f9f3",
+        "directory": "LLVM-23.1.4-Linux-X64",
+        "members": ["bin/clang", "bin/clang-23", "bin/lld", "bin/ld.lld"]
+      },
+      {
+        "url": "https://github.com/JuliaBinaryWrappers/libLLVM_jll.jl/releases/download/libLLVM-v23.1.4%2B1/libLLVM.v23.1.4.x86_64-linux-gnu-cxx11-llvm_version%2B23.tar.gz",
+        "sha256": "8ccd774f6db12bf3ab39345064a02e2507718c979c694e8eac6f0a38b0c90102",
+        "members": [
+          "include/llvm-c", "include/llvm/Config", "lib/libLLVM.so", "lib/libLLVM.so.23.1jl", "lib/libLLVM-23jl.so"
+        ]
+      },
+      {
+        "url": "https://github.com/JuliaBinaryWrappers/Zlib_jll.jl/releases/download/Zlib-v1.3.2%2B0/Zlib.v1.3.2.x86_64-linux-gnu.tar.gz",
+        "sha256": "b9b82fcdbb893ca7470e326b9fa305ece5bf5f462004a622cfdbf54c5d8de4e5",
+        "members": ["lib/libz.so.1.3.2", "lib/libz.so.1"]
+      },
+      {
+        "url": "https://github.com/JuliaBinaryWrappers/Zstd_jll.jl/releases/download/Zstd-v1.5.7%2B2/Zstd.v1.5.7.x86_64-linux-gnu.tar.gz",
+        "sha256": "b01bec98171e4072ff2783cc9800998f827310b6c6dde9114710983f678dfa26",
+        "members": ["lib/libzstd.so.1.5.7", "lib/libzstd.so.1"]
+      }
+    ],
+    "macos-aarch64": [
+      {
+        "url": "https://github.com/llvm/llvm-project/releases/download/llvmorg-23.1.4/LLVM-23.1.4-macOS-ARM64.tar.xz",
+        "sha256": "5d3179db39adeca5b17a34d82708fe976bc60e055b05fe557878fb3fb64d39ef",
+        "directory": "LLVM-23.1.4-macOS-ARM64",
+        "members": ["bin/clang", "bin/clang-23", "bin/lld", "bin/ld64.lld"]
+      },
+      {
+        "url": "https://github.com/JuliaBinaryWrappers/libLLVM_jll.jl/releases/download/libLLVM-v23.1.4%2B1/libLLVM.v23.1.4.aarch64-apple-darwin-llvm_version%2B23.tar.gz",
+        "sha256": "ac4043f3d00326c9d148d7c08227f0f6c01f23847da06f80790830f9bca70edf",
+        "members": [
+          "include/llvm-c", "include/llvm/Config", "lib/libLLVM.dylib", "lib/libLLVM.23.1jl.dylib",
+          "lib/libLLVM-23jl.dylib", "lib/libLLVM-23.1.dylib"
+        ]
+      },
+      {
+        "url": "https://github.com/JuliaBinaryWrappers/Zlib_jll.jl/releases/download/Zlib-v1.3.2%2B0/Zlib.v1.3.2.aarch64-apple-darwin.tar.gz",
+        "sha256": "77ad012152772fd62b2b2e01dc02b0da6c6202af9734d68a7cce7ecd409fb0d8",
+        "members": ["lib/libz.1.3.2.dylib", "lib/libz.1.dylib"]
+      },
+      {
+        "url": "https://github.com/JuliaBinaryWrappers/Zstd_jll.jl/releases/download/Zstd-v1.5.7%2B2/Zstd.v1.5.7.aarch64-apple-darwin.tar.gz",
+        "sha256": "7c01926219416a1e722fb9fd004d50636434a306b837d9d74fc67214970722d8",
+        "members": ["lib/libzstd.1.dylib"]
+      }
+    ],
+    "windows-x86_64": [
+      {
+        "url": "https://github.com/llvm/llvm-project/releases/download/llvmorg-23.1.4/clang+llvm-23.1.4-x86_64-pc-windows-msvc.tar.xz",
+        "sha256": "854bffcfc84528e0ee92490ff5c178920abd358a79c3e98f053e41e3e8e4c6d2",
+        "directory": "clang+llvm-23.1.4-x86_64-pc-windows-msvc",
+        "members": [
+          "include/llvm-c", "include/llvm/Config", "lib/LLVM-C.lib", "bin/LLVM-C.dll", "bin/clang.exe", "bin/lld.exe",
+          "bin/lld-link.exe"
+        ]
+      }
+    ],
+    "windows-aarch64": [
+      {
+        "url": "https://github.com/llvm/llvm-project/releases/download/llvmorg-23.1.4/clang+llvm-23.1.4-aarch64-pc-windows-msvc.tar.xz",
+        "sha256": "f0d2e32424850ffb9b6aef190587a8298353d858a8a7260f490c173fe98d6811",
+        "directory": "clang+llvm-23.1.4-aarch64-pc-windows-msvc",
+        "members": [
+          "include/llvm-c", "include/llvm/Config", "lib/LLVM-C.lib", "bin/LLVM-C.dll", "bin/clang.exe", "bin/lld.exe",
+          "bin/lld-link.exe"
+        ]
+      }
+    ]
+  }
+}

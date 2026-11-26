@@ -166,8 +166,9 @@ let package = Package(
             dependencies: ["CLLVM"],
             linkerSettings: [
                 .unsafeFlags(["-L\(llvmPrefix)/lib"]),
+                // LLVM's shared library is `libLLVM` in every install, whose other names differ from one to another.
                 // MSVC can't build LLVM as one shared library, so Windows links the one that holds LLVM's C API.
-                .linkedLibrary("LLVM-\(llvmMajorVersion)", .when(platforms: [.macOS, .linux])),
+                .linkedLibrary("LLVM", .when(platforms: [.macOS, .linux])),
                 .linkedLibrary("LLVM-C", .when(platforms: [.windows])),
                 // An executable looks for LLVM's library first in the lib beside its bin, so a toolchain's own copy
                 // wins, and then in the install it was built against. Windows' loader looks beside the executable

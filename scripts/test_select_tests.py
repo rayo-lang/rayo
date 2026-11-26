@@ -47,6 +47,7 @@ class SelectionTests(unittest.TestCase):
         paths = [
             'Package.swift', 'Package.resolved', '.github/workflows/ci.yml', '.github/actions/swift-test/action.yml',
             'examples/v0.1/hello.rayo', '.gitattributes', 'Tests/Shared.swift', 'Sources/SyntaxExtra/A.swift',
+            'llvm-release.json',
         ]
         for path in paths:
             with self.subTest(path=path):
@@ -55,7 +56,7 @@ class SelectionTests(unittest.TestCase):
     def test_a_change_that_no_test_reads_selects_nothing_more(self):
         paths = [
             'README.md', 'docs/spec/types.md', 'scripts/select_tests.py', '.github/workflows/other.yml',
-            'examples/README.md', 'Package.swift.orig', 'SourcesExtra/A.swift',
+            'examples/README.md', 'Package.swift.orig', 'SourcesExtra/A.swift', 'VERSION', 'docs/llvm-release.json',
         ]
         for path in paths:
             with self.subTest(path=path):
