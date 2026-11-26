@@ -181,21 +181,26 @@ struct DriverTests {
         }
     }
 
-    @Test func `a rayoc that rayo runs reads the null device in place of a standard input rayo lacks`() throws {
+    @Test func `each tool that rayo runs reads the null device in place of a standard input rayo lacks`() throws {
         try withTemporaryDirectory { directory in
+            // A copy of `rayo` builds with the `rayoc` and clang beside it, which each read their standard input to
+            // its end before they hand on to the real tool. A build runs `rayoc` first and clang after it.
+            let bin = directory.appendingPathComponent("toolchain", isDirectory: true)
+            try FileManager.default.createDirectory(at: bin, withIntermediateDirectories: true)
+            let copy = bin.appendingPathComponent(Executable.fileName("rayo"))
+            try FileManager.default.copyItem(at: builtProduct("rayo"), to: copy)
+            for (name, tool) in [("rayoc", builtProduct("rayoc")), ("clang", LinkTools.installed.clang)] {
+                let standIn = ToolStandIn([.requireEmptyStandardInput], then: .handOff(toToolAt: tool))
+                _ = try install(standIn, as: name, in: bin)
+            }
             _ = try save("func main() {}", as: "main.rayo", in: directory)
-            let compiler = try install(ToolStandIn([.requireEmptyStandardInput], then: .exit(0)),
-                                       as: "rayoc", in: directory)
 
-            // `rayo` compiles with the `rayoc` that RAYOC names, on its own standard streams.
             #if os(Windows)
-            let environment = ProcessInfo.processInfo.environment.setting("RAYOC", to: compiler.path)
-            let exitCode = try rayoOnConsoleOfItsOwn(["check", "main.rayo"], in: directory, environment: environment,
+            let exitCode = try rayoOnConsoleOfItsOwn(["build", "main.rayo"], in: directory,
+                                                     environment: ProcessInfo.processInfo.environment, running: copy,
                                                      standardHandles: false)
             #else
-            var environment = ProcessInfo.processInfo.environment
-            environment["RAYOC"] = compiler.path
-            let exitCode = try rayoWithoutStandardInput(["check", "main.rayo"], in: directory, environment: environment)
+            let exitCode = try rayoWithoutStandardInput(["build", "main.rayo"], in: directory, running: copy)
             #endif
             #expect(exitCode == 0)
         }

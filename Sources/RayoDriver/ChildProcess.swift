@@ -59,7 +59,7 @@ struct ChildProcess {
     private static func copy(for file: FileHandle?, stream: StandardStream) throws -> DescriptorCopy {
         switch file {
         // No file gives the process `rayo`'s own stream, or the null device where `rayo` lacks it.
-        case nil: try copyOfOwn(stream) ?? copyOfNullDevice()
+        case nil: try copyOfOwn(stream)
         // `FileHandle.nullDevice` holds no descriptor, so the null device is opened for the process.
         case let file? where file === FileHandle.nullDevice: try copyOfNullDevice()
         case let file?: try copy(of: file)
@@ -120,15 +120,15 @@ extension ChildProcess {
 
 #if os(Windows)
 extension ChildProcess {
-    /// A copy of the descriptor for `rayo`'s own `stream`, or nil where `rayo` lacks it.
-    private static func copyOfOwn(_ stream: StandardStream) throws -> DescriptorCopy? {
+    /// A copy of the descriptor for `rayo`'s own `stream`, or of the null device where `rayo` lacks it.
+    private static func copyOfOwn(_ stream: StandardStream) throws -> DescriptorCopy {
         // The C library gives a stream `rayo` lacks a descriptor that holds no handle, so Windows is asked for it.
         let handle = switch stream {
         case .input: GetStdHandle(STD_INPUT_HANDLE)
         case .output: GetStdHandle(STD_OUTPUT_HANDLE)
         case .error: GetStdHandle(STD_ERROR_HANDLE)
         }
-        guard let handle, handle != INVALID_HANDLE_VALUE else { return nil }
+        guard let handle, handle != INVALID_HANDLE_VALUE else { return try copyOfNullDevice() }
         return try copy(of: handle)
     }
 
@@ -174,12 +174,10 @@ extension ChildProcess {
 }
 #else
 extension ChildProcess {
-    /// A copy of the descriptor for `rayo`'s own `stream`, or nil where `rayo` lacks it.
-    private static func copyOfOwn(_ stream: StandardStream) throws -> DescriptorCopy? {
-        let descriptor = copy(of: stream.rawValue)
-        // A stream `rayo` lacks is a descriptor it doesn't have open.
-        if descriptor == -1 && errno == EBADF { return nil }
-        return try checked(descriptor)
+    /// A copy of the descriptor for `rayo`'s own `stream`, which is the null device where `rayo` started without it,
+    /// since `Driver.openMissingStandardStreams` opens the null device in its place.
+    private static func copyOfOwn(_ stream: StandardStream) throws -> DescriptorCopy {
+        try checked(copy(of: stream.rawValue))
     }
 
     /// A copy of the descriptor for `file`.

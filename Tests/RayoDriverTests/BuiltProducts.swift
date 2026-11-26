@@ -58,15 +58,17 @@ func rayo(_ arguments: [String], in directory: URL, running executable: URL = bu
 }
 
 #if os(Windows)
-/// Runs the built `rayo` with `arguments` in `directory` and `environment`, on a console of its own with no window,
-/// so that a console event raised there reaches no process of these tests, and gives the code it exits with.
-/// `arguments` must need no quotes. Without `standardHandles`, `rayo` has no standard input, output or error.
+/// Runs the `rayo` at `executable`, the built one unless another is named, with `arguments` in `directory` and
+/// `environment`, on a console of its own with no window, so that a console event raised there reaches no process of
+/// these tests, and gives the code it exits with. `arguments` must need no quotes. Without `standardHandles`, `rayo`
+/// has no standard input, output or error.
 func rayoOnConsoleOfItsOwn(
-    _ arguments: [String], in directory: URL, environment: [String: String], standardHandles: Bool = true,
+    _ arguments: [String], in directory: URL, environment: [String: String],
+    running executable: URL = builtProduct("rayo"), standardHandles: Bool = true,
 ) throws -> DWORD {
     // Windows takes the command line as one string, and the environment as one block of `name=value` strings, each
     // ended by a 0, then a 0 that ends the block, sorted by name in any case.
-    var commandLine = Array((["\"\(builtProduct("rayo").path)\""] + arguments).joined(separator: " ").utf16) + [0]
+    var commandLine = Array((["\"\(executable.path)\""] + arguments).joined(separator: " ").utf16) + [0]
     let block = environment.sorted { $0.key.uppercased() < $1.key.uppercased() }
         .map { "\($0.key)=\($0.value)\0" }.joined() + "\0"
 
@@ -104,15 +106,14 @@ extension [String: String] {
     }
 }
 #else
-/// Runs the built `rayo` with `arguments` in `directory` and `environment`, with its standard input closed, and
-/// gives the code it exits with.
-func rayoWithoutStandardInput(_ arguments: [String], in directory: URL, environment: [String: String]) throws -> Int32 {
+/// Runs the `rayo` at `executable` with `arguments` in `directory`, with its standard input closed, and gives the code
+/// it exits with.
+func rayoWithoutStandardInput(_ arguments: [String], in directory: URL, running executable: URL) throws -> Int32 {
     // Foundation can't close a standard stream for a process it runs, so a shell closes it and becomes `rayo`.
     let process = Process()
     process.executableURL = URL(fileURLWithPath: "/bin/sh")
-    process.arguments = ["-c", "exec \"$0\" \"$@\" <&-", builtProduct("rayo").path] + arguments
+    process.arguments = ["-c", "exec \"$0\" \"$@\" <&-", executable.path] + arguments
     process.currentDirectoryURL = directory
-    process.environment = environment
     try process.run()
     process.waitUntilExit()
     return process.terminationStatus
