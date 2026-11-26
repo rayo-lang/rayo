@@ -12,7 +12,7 @@ import urllib.parse
 import urllib.request
 
 from install_toolchain import (
-    InstallError, fetch_llvm, install_toolchain, make_default, pinned_packages, toolchain_home,
+    InstallError, fetch_llvm, install_toolchain, make_default, pinned_packages, replace_folder, toolchain_home,
 )
 
 # A pin with a package for each of three hosts.
@@ -237,6 +237,18 @@ class InstallToolchainTests(unittest.TestCase):
         self.assertEqual(os.listdir(os.path.join(self.home, 'toolchains')), ['0.3.0'])
         self.assertEqual(read(self.toolchain('bin', 'rayo')), b'second')
         self.assertFalse(os.path.exists(self.toolchain('bin', 'left-over')))
+
+
+class ReplaceFolderTests(unittest.TestCase):
+    def test_a_replacement_that_cant_move_in_leaves_the_old_folder_where_it_was(self):
+        with tempfile.TemporaryDirectory() as directory:
+            folder = os.path.join(directory, '0.3.0')
+            write(os.path.join(folder, 'bin', 'rayo'), b'old')
+
+            with self.assertRaises(OSError):
+                replace_folder(folder, os.path.join(directory, 'missing'))
+
+            self.assertEqual(read(os.path.join(folder, 'bin', 'rayo')), b'old')
 
 
 @unittest.skipUnless(os.name == 'nt', 'the shims are batch files, which only Windows runs')

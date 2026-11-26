@@ -238,12 +238,22 @@ def replace_folder(folder, replacement):
     # executable's, stops the install with the old folder whole.
     old = os.path.join(os.path.dirname(folder), f'.{os.path.basename(folder)}.old')
     shutil.rmtree(old, ignore_errors=True)
-    if os.path.exists(folder):
+    if os.path.exists(old):
+        raise InstallError(f"can't remove {old}, which an earlier install left, and which may be in use")
+    moved_aside = os.path.exists(folder)
+    if moved_aside:
         try:
             os.rename(folder, old)
         except OSError as error:
             raise InstallError(f"can't replace {folder}, which may be in use: {error}")
-    os.rename(replacement, folder)
+
+    # A replacement that can't move in puts the old folder back, so the version stays installed.
+    try:
+        os.rename(replacement, folder)
+    except OSError:
+        if moved_aside:
+            os.rename(old, folder)
+        raise
     shutil.rmtree(old, ignore_errors=True)
 
 
