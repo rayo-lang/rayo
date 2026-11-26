@@ -98,7 +98,7 @@ struct ArrayLiteralTests {
         "_ = Holder(hits: [Hit(damage: 1), Hit(damage: 2)])",
         "let a: [0 of Bool] = []\nnone(&a)",
         "var a = [[1, 2], [3, 4]]\n_ = consume a\na = [[5, 6], [7, 8]]\n_ = consume a",
-        "let h = Hit(damage: 1)\n_ = [h, Hit(damage: 2)]",
+        "let h = Hit(damage: 1)\n_ = [consume h, Hit(damage: 2)]",
         "let n = 3\n_ = [1, n]",
         "let a: [3 of Int] = [1, 2, 3]\npick(&a)",
         "let a: [2 of UInt] = [1, 2]\n_ = consume a\nlet b: [1 of [2 of UInt]] = [[3, 4]]\n_ = consume b",

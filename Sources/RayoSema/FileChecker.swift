@@ -83,7 +83,7 @@ final class FileChecker {
             // The initializer takes each field's value, owned and labeled by its name, and makes the struct.
             let initializer = FunctionID(index: functions.count)
             let parameters = types[id].fields.map { field in
-                Parameter(FunctionParameter(label: field.name, convention: .owned, type: field.type), of: .field,
+                Parameter(FunctionParameter(label: field.name, convention: .owned, type: field.type), of: .function,
                           borrowsTemporaries: false)
             }
             let signature = Signature(name: id.name, target: .callee(.function(initializer)), parameters: parameters,

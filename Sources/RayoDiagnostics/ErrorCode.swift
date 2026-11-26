@@ -418,6 +418,12 @@ public enum ErrorCode: Sendable, Hashable {
     @Code(296, error: "'{name}' is a 'ref let', so it can't change")
     case mutableOfReferenceLet(name: String)
 
+    @Code(297, error: "the function returns {type.withArticle}; write {marks}")
+    case unmarkedReturnedPlace(type: TypeName, marks: PlaceMarks)
+
+    @Code(298, error: "an array literal's element takes {type.withArticle}; write {marks}")
+    case unmarkedArrayElement(type: TypeName, marks: PlaceMarks)
+
     // MARK: Ownership
 
     @Code(301, error: "can't move the borrowed parameter '{name}'; write 'copy' before it to take a copy")

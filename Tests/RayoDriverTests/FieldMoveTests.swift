@@ -44,7 +44,7 @@ struct FieldMoveTests {
             }
             func statsOf(_ given: &Enemy) -> Stats {
                 let e = copy given
-                return e.stats
+                return consume e.stats
             }
             """ + enemyAndStats
         let output = "100\n3\n5\ntrue\n6\n20\n20\n7\n2\n100\n4\n"

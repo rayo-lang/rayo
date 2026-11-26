@@ -17,10 +17,13 @@ bb0:
   return
 }
 
-func "given(_: &Stats)"(_: &Stats) -> Stats {
-  param %0 s: &Stats @2:14-2:15
+func "given(_: Stats)"(_: Stats) -> Stats {
+  param %0 s: Stats @2:14-2:15
+  temp %1: Stats
 bb0:
-  return move %0 @2:36-2:37
+  declare %1
+  %1 @2:35-2:44 = operand move %0 @2:35-2:44 @2:35-2:44
+  return read %1 @2:35-2:44
 bb1:
   unreachable
 }
@@ -28,10 +31,13 @@ bb1:
 func "stats(_: &Enemy)"(_: &Enemy) -> Stats {
   param %0 e: &Enemy @3:14-3:15
   let %1 f: Enemy @4:9-4:10
+  temp %2: Stats
 bb0:
   declare %1
   %1 @4:9-4:10 = operand read %0 @4:13-4:19 @4:13-4:19
-  return move %1.0 @5:12-5:19
+  declare %2
+  %2 @5:12-5:27 = operand move %1.0 @5:12-5:27 @5:12-5:27
+  return read %2 @5:12-5:27
 bb1:
   unreachable
 }

@@ -139,6 +139,36 @@ struct MoveTests {
         #expect(found.flatMap(\.notes) == ["3:10: note: moved here"])
     }
 
+    @Test func `a place moved into an initializer's argument can't be used after the call`() {
+        let source = """
+            func main() {
+                let grid = [1, 2]
+                let board = Board(grid: consume grid)
+                print(board.grid[0] + grid[1])
+            }
+            struct Board(var grid: [2 of Int])
+            """
+        let found = diagnostics(source)
+        #expect(found.map(\.description) == ["4:27: error[E0302]: 'grid' was moved"])
+        #expect(found.flatMap(\.notes) == ["3:29: note: moved here"])
+    }
+
+    @Test func `an array literal moves the element written with 'consume', and copies the one written with 'copy'`() {
+        let source = """
+            func main() {
+                let e = Enemy(hp: 1)
+                let f = Enemy(hp: 2)
+                let a = [consume e, copy f]
+                print(a[0].hp + f.hp)
+                print(e.hp)
+            }
+            struct Enemy(var hp: Int)
+            """
+        let found = diagnostics(source)
+        #expect(found.map(\.description) == ["6:11: error[E0302]: 'e' was moved"])
+        #expect(found.flatMap(\.notes) == ["4:14: note: moved here"])
+    }
+
     @Test func `a field moved out of a parameter that owns it leaves the parameter unusable as a whole`() {
         let source = """
             func main() {}
