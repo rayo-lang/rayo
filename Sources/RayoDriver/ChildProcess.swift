@@ -28,7 +28,9 @@ struct ChildProcess {
         let copies = try StreamCopies(input: Self.copy(for: standardInput, stream: .input),
                                       output: Self.copy(for: standardOutput, stream: .output),
                                       error: Self.copy(for: standardError, stream: .error))
-        let (input, output, error) = (copies.input.descriptor, copies.output.descriptor, copies.error.descriptor)
+        let inputDescriptor = copies.input.descriptor
+        let outputDescriptor = copies.output.descriptor
+        let errorDescriptor = copies.error.descriptor
         var openCopies = Optional(copies)
 
         // Run the process on them, in exactly its environment.
@@ -37,9 +39,9 @@ struct ChildProcess {
             status = try await Subprocess.run(
                 .path(.init(executable.path)), arguments: .init(arguments),
                 environment: .custom(Self.variables(environment)),
-                input: .fileDescriptor(.init(rawValue: input), closeAfterSpawningProcess: false),
-                output: .fileDescriptor(.init(rawValue: output), closeAfterSpawningProcess: false),
-                error: .fileDescriptor(.init(rawValue: error), closeAfterSpawningProcess: false),
+                input: .fileDescriptor(.init(rawValue: inputDescriptor), closeAfterSpawningProcess: false),
+                output: .fileDescriptor(.init(rawValue: outputDescriptor), closeAfterSpawningProcess: false),
+                error: .fileDescriptor(.init(rawValue: errorDescriptor), closeAfterSpawningProcess: false),
             ) { _ in
                 // A started process has descriptors of its own, and Windows lets another process inherit a copy while
                 // it is open, so the copies close as soon as this one starts. swift-subprocess would close only the
