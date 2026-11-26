@@ -4,25 +4,34 @@ The Rayo toolchain is a Swift package at the root of this repository. It builds 
 
 - **SwiftPM only.** No Xcode project files, and no Apple-only frameworks: the compiler reaches the C library through `Glibc`, `Musl`, `Darwin` or `CRT`.
 - **Swift 6.4, and macOS 27 or later**, whose standard library has the spans and the unique-ownership types the code-style rules call for. Linux and Windows need no particular release.
-- **One package dependency, `swift-syntax`,** which the macros that build the table of diagnostic codes are written with.
-- **CI tests on Linux, macOS and Windows**: on Linux in the `swift:6.4-noble` container, and on macOS with the runner's Xcode that holds Swift 6.4. On Windows it tests x64 and arm64, each built natively, with Swift 6.4 and the build of LLVM that LLVM publishes for it. Code must pass on all four. On Linux, CI also builds `rayo` and `rayoc` in release, as [Build it](#build-it) does, and runs each version's proof program with them, in debug and in release builds. A pull request runs only the test targets that its changes reach through the manifest's dependencies, and a push to `main` runs them all.
+- **Two package dependencies:** `swift-syntax`, which the macros that build the table of diagnostic codes are written with, and `swift-subprocess`, which `rayo` runs `rayoc`, clang and a program through, and which brings in `swift-system` on Linux and Windows.
+- **CI tests on Linux, macOS and Windows**: on Linux in the `swift:6.4-noble` container, and on macOS with the runner's Xcode that holds Swift 6.4. On Windows it tests x64 and arm64, each built natively, with Swift 6.4 and the build of LLVM that LLVM publishes for it. Code must pass on all four. On Linux, CI also builds `rayo` and `rayoc` in release, and runs each version's proof program with them, in debug and in release builds. A pull request runs only the test targets that its changes reach through the manifest's dependencies, and a push to `main` runs them all.
+- **CI installs the toolchain on each platform**, as [Build it](#build-it) says, and has that toolchain alone build and run a proof program, with no other LLVM to find.
 - **LLVM is the backend.** `rayoc` builds each program's module through LLVM's C API and has LLVM write the object code. It never writes LLVM IR as text, and the only such text it reads is the program runtime's.
 
 ## Build it
 
-Install LLVM 23, as [LLVM](#llvm) says. Then build `rayo` and `rayoc`, and put the directory that holds them on your search path:
+The install script builds `rayo` and `rayoc` in release and installs them as one toolchain, which runs on a machine with no LLVM of its own. Run it from the clone with Python 3.9 or later, then put the `bin` it names on your search path:
 
 ```sh
-swift build -c release
-export PATH="$(swift build -c release --show-bin-path):$PATH"
+python3 scripts/install_toolchain.py
+export PATH="$HOME/.rayo/bin:$PATH"
 ```
 
 On Windows, in PowerShell:
 
 ```powershell
-swift build -c release
-$env:Path = "$(swift build -c release --show-bin-path);$env:Path"
+python scripts/install_toolchain.py
+$env:Path = "$env:USERPROFILE\.rayo\bin;$env:Path"
 ```
+
+The script fetches the LLVM that `llvm-release.json` pins, checks each download against its pinned SHA-256, and builds against it. It installs into `toolchains/<version>` of its home, `~/.rayo`, where `<version>` is what `VERSION` says. `$RAYO_HOME` moves the home, and `--prefix <dir>` moves it to `<dir>`, ahead of `$RAYO_HOME`. Installing a version again replaces its folder.
+
+- **The toolchain's `bin`** holds `rayo`, `rayoc`, LLVM's `clang` and the host's LLD. On macOS it also holds a `clang.cfg` that names the SDK `xcrun --show-sdk-path` names, since LLVM's clang links against an SDK only when it's told one.
+- **LLVM's library** is in the `lib` beside that `bin`, with its other names and the libraries it needs. On Windows, `LLVM-C.dll` is in the `bin`.
+- **The home's `bin`** runs that toolchain's `rayo` and `rayoc`: through symbolic links on Linux and macOS, and on Windows through batch files that pass their arguments on and end with the same exit code. The command interpreter that runs a batch file reads `&`, `|`, `<`, `>` and `^` in its arguments again, so quote an argument that holds one.
+
+The script builds in a scratch path of its own, `.build/install`, and keeps the LLVM it fetched in `.build/llvm` for the next install. To build from the clone without installing, as the tests do, install LLVM 23 as [LLVM](#llvm) says, and run `swift build`.
 
 ## Use it
 
@@ -122,7 +131,11 @@ CI's benchmark job compares each pull request that changes the compiler with its
 
 ## LLVM
 
-`rayoc` builds against one major release of LLVM, 23, and links its shared library. On Windows it links `LLVM-C`, which holds the C API, since MSVC can't build LLVM as one library. `rayo` links programs with that release's clang and LLD, and links no LLVM library itself. Install all three before you build:
+`rayoc` builds against one major release of LLVM, 23, and links its shared library. On Windows it links `LLVM-C`, which holds the C API, since MSVC can't build LLVM as one library. `rayo` links programs with that release's clang and LLD, and links no LLVM library itself.
+
+The install script fetches all three itself, from the places `llvm-release.json` pins. clang and LLD come from LLVM's release archive. On Windows the archive holds LLVM-C too, with its headers. On Linux and macOS, LLVM's archives hold LLVM only as static libraries, so the script takes LLVM's shared library and its headers from [Julia's build of it](https://github.com/JuliaBinaryWrappers/libLLVM_jll.jl), of the same release.
+
+To build from the clone without installing, install all three before you build:
 
 | Platform | Install |
 | --- | --- |
@@ -176,9 +189,11 @@ SwiftPM caches what `Package.swift` found, so it doesn't look again when the LLV
 
 Homebrew's `libLLVM` names `opt/llvm` as the place it's loaded from, even when it was installed as `llvm@23`. So once `brew upgrade` takes Homebrew's `llvm` past release 23, a `rayoc` built against it stops loading. Install `llvm@23`, run `swift package purge-cache`, and build again. Where `Package.swift` finds only another release, it stops and says which.
 
+`rayoc` looks for LLVM's shared library first in a folder beside its own: on Linux and macOS in the `lib` beside the `bin` that holds it, and on Windows in the folder that holds `rayoc.exe`. So a toolchain's folder that carries its own copy of the library runs on a machine whose LLVM is elsewhere, or missing. Failing that, Linux and macOS look in the `lib` of the LLVM `rayoc` was built against, and Windows along the search path. On macOS the `lib` beside `rayoc` serves only a library that names `@rpath` as the place it's loaded from, as Julia's build does, so a `rayoc` built against Homebrew's loads it from Homebrew's prefix alone.
+
 On macOS the linker warns that `libLLVM` was built for a newer macOS than `rayoc` is. Homebrew builds its bottles per macOS release, and installs the one for the machine's own, so the warning is harmless on that machine.
 
-The release lives in two places: `llvmMajorVersion` in `Package.swift`, and `LLVM_MAJOR_VERSION` in `.github/workflows/ci.yml`. A move to a new release changes both, with any changes the C API and the program runtime's LLVM IR need.
+The major release lives in two places: `llvmMajorVersion` in `Package.swift`, and `LLVM_MAJOR_VERSION` in `.github/workflows/ci.yml`. The exact release, and each package the install script and CI's Windows jobs fetch for it with its SHA-256, live in `llvm-release.json`. A move to a new release changes all three, with any changes the C API and the program runtime's LLVM IR need.
 
 Optimisation follows the build mode: a debug build runs no LLVM passes and generates code at `-O0`, and a release build runs LLVM's `-O2` pipeline and generates code at `-O2`.
 

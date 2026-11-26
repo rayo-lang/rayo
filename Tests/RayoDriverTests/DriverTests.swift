@@ -34,22 +34,22 @@ struct DriverTests {
         ["check", "--warnings-as-errors", "a.rayo"], ["build", "--warnings-as-errors", "a.rayo"],
         ["run", "--warnings-as-errors", "a.rayo"],
     ])
-    func usage(arguments: [String]) {
-        let result = Driver.run(arguments, compiler: noCompiler)
+    func usage(arguments: [String]) async {
+        let result = await Driver.run(arguments, compiler: noCompiler)
         #expect(result.exitCode == 2)
         #expect(result.output == "")
         #expect(result.errors.hasPrefix("usage: rayo check <file>\n"))
     }
 
     @Test("a linker rayo doesn't know is rejected", arguments: ["gold", "", "LLD"])
-    func unknownLinker(name: String) {
-        #expect(Driver.run(["build", "--linker=\(name)", "a.rayo"], compiler: noCompiler) == CommandResult(
+    func unknownLinker(name: String) async {
+        #expect(await Driver.run(["build", "--linker=\(name)", "a.rayo"], compiler: noCompiler) == CommandResult(
             exitCode: 2, output: "", errors: "rayo: unknown linker '\(name)': use --linker=lld or --linker=platform\n"))
     }
 
     @Test("a command that has to compile fails without its rayoc", arguments: ["check", "build", "run"])
-    func compilerMissing(command: String) {
-        #expect(Driver.run([command, "a.rayo"], compiler: noCompiler) ==
+    func compilerMissing(command: String) async {
+        #expect(await Driver.run([command, "a.rayo"], compiler: noCompiler) ==
             CommandResult(exitCode: 1, output: "", errors: "rayo: can't find rayoc at '\(noCompiler.path)'\n"))
     }
 
@@ -70,11 +70,11 @@ struct DriverTests {
     @Test(arguments: [("check", ""), ("build", ""), ("run", "1\n")])
     func `what rayoc writes to its standard error comes first in what the command writes, when rayoc compiles the file`(
         command: String, output: String,
-    ) throws {
-        try withTemporaryDirectory { directory in
+    ) async throws {
+        try await withTemporaryDirectory { directory in
             let source = try save("func main() { print(1) }", as: "main.rayo", in: directory)
             let compiler = try notingCompiler(in: directory)
-            #expect(Driver.run([command, source], compiler: compiler) ==
+            #expect(await Driver.run([command, source], compiler: compiler) ==
                 CommandResult(exitCode: 0, output: output, errors: "rayoc: a note\n"))
         }
     }
@@ -82,13 +82,13 @@ struct DriverTests {
     @Test(arguments: ["build", "run"])
     func `what rayoc writes to its standard error comes before why the command stopped after it compiled`(
         command: String,
-    ) throws {
-        try withTemporaryDirectory { directory in
+    ) async throws {
+        try await withTemporaryDirectory { directory in
             let source = try save("func main() {}", as: "main.rayo", in: directory)
             let compiler = try notingCompiler(in: directory)
             let clang = directory.appendingPathComponent("nonexistent")
             let linkTools = LinkTools(clang: clang, lld: LinkTools.installed.lld)
-            #expect(Driver.run([command, source], compiler: compiler, linkTools: [linkTools]) == CommandResult(
+            #expect(await Driver.run([command, source], compiler: compiler, linkTools: [linkTools]) == CommandResult(
                 exitCode: 1, output: "", errors: "rayoc: a note\nrayo: can't find clang at '\(clang.path)'\n"))
         }
     }
@@ -98,15 +98,15 @@ struct DriverTests {
     @Test(arguments: ["check", "build", "run"])
     func `a rayoc that an exception ends fails the command with the exception's code, and says which it was`(
         command: String,
-    ) throws {
-        try withTemporaryDirectory { directory in
+    ) async throws {
+        try await withTemporaryDirectory { directory in
             let source = try save("func main() {}", as: "main.rayo", in: directory)
             // A stand-in can't raise an access violation, but exiting with its code, 0xC0000005, ends it the same
             // way as Windows reports it.
             let accessViolation = Int32(bitPattern: 0xC000_0005)
             let compiler = try install(ToolStandIn([.write("rayoc: started\n")], then: .exit(accessViolation)),
                                        as: "rayoc", in: directory)
-            #expect(Driver.run([command, source], compiler: compiler) == CommandResult(
+            #expect(await Driver.run([command, source], compiler: compiler) == CommandResult(
                 exitCode: accessViolation, output: "",
                 errors: "rayoc: started\nrayo: rayoc crashed with exception 0xC0000005\n"))
         }
@@ -115,12 +115,12 @@ struct DriverTests {
     @Test(arguments: ["check", "build", "run"])
     func `a rayoc that exits with a negative code fails the command with that code, as an exit and not a crash`(
         command: String,
-    ) throws {
-        try withTemporaryDirectory { directory in
+    ) async throws {
+        try await withTemporaryDirectory { directory in
             let source = try save("func main() {}", as: "main.rayo", in: directory)
             let compiler = try install(ToolStandIn([.write("rayoc: started\n")], then: .exit(-1)),
                                        as: "rayoc", in: directory)
-            #expect(Driver.run([command, source], compiler: compiler) ==
+            #expect(await Driver.run([command, source], compiler: compiler) ==
                 CommandResult(exitCode: -1, output: "", errors: "rayoc: started\n"))
         }
     }
@@ -128,14 +128,14 @@ struct DriverTests {
     @Test(arguments: ["check", "build", "run"])
     func `a rayoc that Ctrl-C ends fails the command with Ctrl-C's code, and says it was interrupted`(
         command: String,
-    ) throws {
-        try withTemporaryDirectory { directory in
+    ) async throws {
+        try await withTemporaryDirectory { directory in
             let source = try save("func main() {}", as: "main.rayo", in: directory)
             // Windows ends a process by Ctrl-C with the exit code 0xC000013A, which exiting with it gives as well.
             let interrupted = Int32(bitPattern: 0xC000_013A)
             let compiler = try install(ToolStandIn([.write("rayoc: started\n")], then: .exit(interrupted)),
                                        as: "rayoc", in: directory)
-            #expect(Driver.run([command, source], compiler: compiler) == CommandResult(
+            #expect(await Driver.run([command, source], compiler: compiler) == CommandResult(
                 exitCode: interrupted, output: "", errors: "rayoc: started\nrayo: rayoc was interrupted\n"))
         }
     }
@@ -160,16 +160,47 @@ struct DriverTests {
     @Test(arguments: ["check", "build", "run"])
     func `a rayoc that a signal ends fails the command, as a shell reports it, with how rayoc ended`(
         command: String,
-    ) throws {
-        try withTemporaryDirectory { directory in
+    ) async throws {
+        try await withTemporaryDirectory { directory in
             let source = try save("func main() {}", as: "main.rayo", in: directory)
             let compiler = try install(ToolStandIn([.write("rayoc: started\n")], then: .signal(9)),
                                        as: "rayoc", in: directory)
-            #expect(Driver.run([command, source], compiler: compiler) == CommandResult(
+            #expect(await Driver.run([command, source], compiler: compiler) == CommandResult(
                 exitCode: 128 + 9, output: "", errors: "rayoc: started\nrayo: rayoc was ended by signal 9\n"))
         }
     }
     #endif
+
+    @Test func `a rayoc whose output rayo captures reads its standard input from the null device`() async throws {
+        try await withTemporaryDirectory { directory in
+            let source = try save("func main() {}", as: "main.rayo", in: directory)
+            let compiler = try install(ToolStandIn([.requireEmptyStandardInput], then: .exit(0)),
+                                       as: "rayoc", in: directory)
+            #expect(await Driver.run(["check", source], compiler: compiler) ==
+                CommandResult(exitCode: 0, output: "", errors: ""))
+        }
+    }
+
+    @Test func `each tool that rayo runs reads the null device in place of a standard input rayo lacks`() throws {
+        try withTemporaryDirectory { directory in
+            // A copy of `rayo` builds with the `rayoc` and clang beside it, which each read their standard input to
+            // its end before they hand on to the real tool. A build runs `rayoc` first and clang after it.
+            let bin = directory.appendingPathComponent("toolchain", isDirectory: true)
+            try FileManager.default.createDirectory(at: bin, withIntermediateDirectories: true)
+            let copy = bin.appendingPathComponent(Executable.fileName("rayo"))
+            try FileManager.default.copyItem(at: builtProduct("rayo"), to: copy)
+            for (name, tool) in [("rayoc", builtProduct("rayoc")), ("clang", LinkTools.installed.clang)] {
+                let standIn = ToolStandIn([.requireEmptyStandardInput], then: .handOff(toToolAt: tool))
+                _ = try install(standIn, as: name, in: bin)
+            }
+            _ = try save("func main() {}", as: "main.rayo", in: directory)
+
+            // Without RAYOC, `rayo` compiles with the `rayoc` beside it.
+            let environment = ProcessInfo.processInfo.environment.filter { $0.key.uppercased() != "RAYOC" }
+            #expect(try rayoWithoutStandardInput(["build", "main.rayo"], in: directory, environment: environment,
+                                                 running: copy) == 0)
+        }
+    }
 
     @Test(arguments: ["-o", "--check", "--"])
     func `a file named like one of rayoc's options is the file the command compiles`(name: String) throws {

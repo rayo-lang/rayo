@@ -99,7 +99,7 @@ public enum Driver {
     public static func run(
         _ arguments: [String], compiler: URL, processOutput: ProcessOutput = .captured,
         environment: [String: String] = ProcessInfo.processInfo.environment, linkTools: [LinkTools] = [.installed],
-    ) -> CommandResult {
+    ) async -> CommandResult {
         // Read what the arguments ask for.
         let invocation: Invocation
         do {
@@ -114,7 +114,7 @@ public enum Driver {
                                   output: processOutput, environment: environment)
         let command = CommandRun(invocation: invocation, toolchain: toolchain)
         do {
-            return try command.result()
+            return try await command.result()
         } catch {
             // A command that stops is reported with why.
             return result(of: error)
@@ -140,36 +140,36 @@ public enum Driver {
         var invocation: Invocation
         var toolchain: Toolchain
 
-        func result() throws(CommandError) -> CommandResult {
+        func result() async throws(CommandError) -> CommandResult {
             switch invocation.command {
-            case .check: try check()
-            case .build: try build()
-            case .run: try runProgram()
+            case .check: try await check()
+            case .build: try await build()
+            case .run: try await runProgram()
             }
         }
 
         /// Checks the file, and writes nothing but what `rayoc` wrote.
-        private func check() throws(CommandError) -> CommandResult {
-            let errors = try toolchain.check(invocation.path)
+        private func check() async throws(CommandError) -> CommandResult {
+            let errors = try await toolchain.check(invocation.path)
 
             return CommandResult(exitCode: 0, output: "", errors: errors)
         }
 
         /// Compiles the file to an executable beside it, and writes nothing but what `rayoc` wrote.
-        private func build() throws(CommandError) -> CommandResult {
+        private func build() async throws(CommandError) -> CommandResult {
             let executable = try executable(building: invocation.path)
 
-            let compiled = try toolchain.compile(invocation.path, mode: invocation.mode) {
-                objectFile throws(CommandError) in try toolchain.link(objectFile, to: executable)
+            let compiled = try await toolchain.compile(invocation.path, mode: invocation.mode) {
+                objectFile throws(CommandError) in try await toolchain.link(objectFile, to: executable)
             }
 
             return CommandResult(exitCode: 0, output: "", errors: compiled.errors)
         }
 
         /// Compiles the file and runs it, and gives what the run gave, after what `rayoc` wrote.
-        private func runProgram() throws(CommandError) -> CommandResult {
-            let compiled = try toolchain.compile(invocation.path, mode: invocation.mode) {
-                objectFile throws(CommandError) in try toolchain.linkAndRun(objectFile)
+        private func runProgram() async throws(CommandError) -> CommandResult {
+            let compiled = try await toolchain.compile(invocation.path, mode: invocation.mode) {
+                objectFile throws(CommandError) in try await toolchain.linkAndRun(objectFile)
             }
 
             return CommandResult(exitCode: compiled.value.exitCode, output: compiled.value.output,

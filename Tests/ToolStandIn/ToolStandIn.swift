@@ -14,6 +14,8 @@ public struct ToolStandIn: Codable {
         case touch(URL)
         /// Fails, writing why, when one of the stand-in's arguments ends in one of the suffixes.
         case refuseArguments(endingIn: [String])
+        /// Fails, writing why, unless its standard input is open and holds nothing, as the null device does.
+        case requireEmptyStandardInput
     }
 
     /// How the stand-in ends, once its steps are done.
@@ -83,6 +85,12 @@ public struct ToolStandIn: Codable {
                     FileHandle.standardError.write(Data("\(path): given '\(refused)'\n".utf8))
                     Foundation.exit(1)
                 }
+            // A standard input that can't be read, or that holds something, fails the run, and says which.
+            case .requireEmptyStandardInput:
+                if let problem = Self.standardInputProblem() {
+                    FileHandle.standardError.write(Data("\(path): \(problem)\n".utf8))
+                    Foundation.exit(1)
+                }
             }
         }
 
@@ -136,6 +144,16 @@ public struct ToolStandIn: Codable {
     /// The first of `arguments` that ends in one of `suffixes`, or nil where none does.
     private static func firstArgument(of arguments: [String], endingIn suffixes: [String]) -> String? {
         arguments.first { argument in suffixes.contains { argument.hasSuffix($0) } }
+    }
+
+    /// What keeps the standard input from being open and empty, or nil where it is both.
+    private static func standardInputProblem() -> String? {
+        do {
+            let read = try FileHandle.standardInput.readToEnd() ?? Data()
+            return read.isEmpty ? nil : "standard input holds \(read.count) bytes"
+        } catch {
+            return "can't read standard input: \(error)"
+        }
     }
 
     /// The file that describes the stand-in installed at `path`.

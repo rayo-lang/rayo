@@ -74,6 +74,12 @@ func manifestPath(_ path: String) -> String {
     #endif
 }
 
+/// The linker flags that have an executable's loader look for its shared libraries in each of `directories`, in
+/// order.
+func runtimeSearchPathFlags(_ directories: String...) -> [String] {
+    directories.flatMap { ["-Xlinker", "-rpath", "-Xlinker", $0] }
+}
+
 /// The file name of the executable `name`: on Windows with `.exe`, and elsewhere `name` itself.
 func executableName(_ name: String) -> String {
     #if os(Windows)
@@ -124,6 +130,8 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "604.0.0"),
+        // The driver runs processes through swift-subprocess, and needs none of the Foundation extras its trait adds.
+        .package(url: "https://github.com/swiftlang/swift-subprocess.git", from: "1.0.2", traits: []),
     ],
     targets: [
         .macro(name: "RayoDiagnosticsMacros", dependencies: [
@@ -158,11 +166,23 @@ let package = Package(
         .target(
             name: "LLVM",
             dependencies: ["CLLVM"],
-            // MSVC can't build LLVM as one shared library, so Windows links the one that holds LLVM's C API.
             linkerSettings: [
                 .unsafeFlags(["-L\(llvmPrefix)/lib"]),
-                .linkedLibrary("LLVM-\(llvmMajorVersion)", .when(platforms: [.macOS, .linux])),
+                // LLVM's shared library is `libLLVM` in every install, whose other names differ from one to another.
+                // MSVC can't build LLVM as one shared library, so Windows links the one that holds LLVM's C API.
+                .linkedLibrary("LLVM", .when(platforms: [.macOS, .linux])),
                 .linkedLibrary("LLVM-C", .when(platforms: [.windows])),
+                // An executable looks for LLVM's library first in the lib beside its bin, so a toolchain's own copy
+                // wins, and then in the install it was built against. Windows' loader looks beside the executable
+                // first on its own.
+                .unsafeFlags(
+                    runtimeSearchPathFlags("$ORIGIN/../lib", "\(llvmPrefix)/lib"),
+                    .when(platforms: [.linux]),
+                ),
+                .unsafeFlags(
+                    runtimeSearchPathFlags("@loader_path/../lib", "\(llvmPrefix)/lib"),
+                    .when(platforms: [.macOS]),
+                ),
             ],
         ),
         .target(
@@ -174,7 +194,9 @@ let package = Package(
             "RayoSource",
         ]),
         .executableTarget(name: "rayoc", dependencies: ["RayoCompiler"]),
-        .target(name: "RayoDriver", dependencies: ["RayoLLVMInstall"]),
+        .target(name: "RayoDriver", dependencies: [
+            "RayoLLVMInstall", .product(name: "Subprocess", package: "swift-subprocess"),
+        ]),
         .executableTarget(name: "rayo", dependencies: ["RayoDriver"]),
         .testTarget(name: "RayoSourceTests", dependencies: ["RayoSource"]),
         .testTarget(name: "RayoDiagnosticsTests", dependencies: ["RayoDiagnostics"]),
