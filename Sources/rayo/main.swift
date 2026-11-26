@@ -5,9 +5,10 @@ import RayoDriver
 // that file.
 let executable = (Bundle.main.executableURL ?? URL(fileURLWithPath: CommandLine.arguments[0])).resolvingSymlinksInPath()
 let environment = ProcessInfo.processInfo.environment
-let result = Driver.run(Array(CommandLine.arguments.dropFirst()),
-                        compiler: Driver.compiler(in: environment, beside: executable), processOutput: .inherited,
-                        environment: environment, linkTools: Driver.linkTools(beside: executable))
+let result = await Driver.run(
+    Array(CommandLine.arguments.dropFirst()), compiler: Driver.compiler(in: environment, beside: executable),
+    processOutput: .inherited, environment: environment, linkTools: Driver.linkTools(beside: executable),
+)
 
 // What can't be written has nowhere else to go, so a failed write leaves only the exit code.
 try? FileHandle.standardOutput.write(contentsOf: Data(result.output.utf8))

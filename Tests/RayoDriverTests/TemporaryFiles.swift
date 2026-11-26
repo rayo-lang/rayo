@@ -8,6 +8,14 @@ func withTemporaryDirectory<T>(_ body: (URL) throws -> T) throws -> T {
     return try body(directory)
 }
 
+/// A new, empty directory, which `body` may fill as it awaits, and which is removed after it.
+func withTemporaryDirectory<T>(_ body: (URL) async throws -> T) async throws -> T {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent("rayo-\(UUID().uuidString)")
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    return try await body(directory)
+}
+
 /// Saves `source` as the file `name` in `directory`, and returns the file's path.
 func save(_ source: String, as name: String, in directory: URL) throws -> String {
     let file = directory.appendingPathComponent(name)

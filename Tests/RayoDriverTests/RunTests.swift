@@ -64,10 +64,10 @@ private func isNumeral(_ text: Substring) -> Bool {
 }
 
 /// Runs an empty `main`, linked with `linkTools` in the way `options` name.
-private func runEmptyMain(options: [String] = [], linkTools: LinkTools) throws -> CommandResult {
-    try withTemporaryDirectory { directory in
+private func runEmptyMain(options: [String] = [], linkTools: LinkTools) async throws -> CommandResult {
+    try await withTemporaryDirectory { directory in
         let source = try save("func main() {}", as: "main.rayo", in: directory)
-        return Driver.run(["run"] + options + [source], compiler: compiler, linkTools: [linkTools])
+        return await Driver.run(["run"] + options + [source], compiler: compiler, linkTools: [linkTools])
     }
 }
 
@@ -152,46 +152,46 @@ struct BuildTests {
         ("dir/..rayo", "'dir/..rayo' has no name before '.rayo'"),
         ("dir/...rayo", "'dir/...rayo' has no name before '.rayo'"),
     ])
-    func nameRequired(path: String, message: String) {
+    func nameRequired(path: String, message: String) async {
         // No file exists at the path, so a check that let the path through would fail without writing anything.
-        #expect(Driver.run(["build", path], compiler: compiler) ==
+        #expect(await Driver.run(["build", path], compiler: compiler) ==
             CommandResult(exitCode: 1, output: "", errors: "rayo: \(message)\n"))
     }
 
     @Test("build and run need the clang of the LLVM install, and a directory named clang isn't one")
-    func clangMissing() throws {
-        try withTemporaryDirectory { directory in
+    func clangMissing() async throws {
+        try await withTemporaryDirectory { directory in
             let decoy = directory.appendingPathComponent("clang")
             try FileManager.default.createDirectory(at: decoy, withIntermediateDirectories: true)
             for clang in [directory.appendingPathComponent("nonexistent"), decoy] {
                 let tools = LinkTools(clang: clang, lld: LinkTools.installed.lld)
-                #expect(try runEmptyMain(linkTools: tools) ==
+                #expect(try await runEmptyMain(linkTools: tools) ==
                     CommandResult(exitCode: 1, output: "", errors: "rayo: can't find clang at '\(clang.path)'\n"))
             }
         }
     }
 
     @Test("a clang that fails has its errors reported")
-    func clangFails() throws {
-        try withTemporaryDirectory { directory in
+    func clangFails() async throws {
+        try await withTemporaryDirectory { directory in
             let clang = try install(ToolStandIn([.write("clang: something broke\n")], then: .exit(1)),
                                     as: "clang", in: directory)
             let tools = LinkTools(clang: clang, lld: LinkTools.installed.lld)
-            #expect(try runEmptyMain(linkTools: tools) ==
+            #expect(try await runEmptyMain(linkTools: tools) ==
                 CommandResult(exitCode: 1, output: "", errors: "rayo: clang failed:\nclang: something broke\n"))
         }
     }
 
     @Test("rayoc compiles the program itself, and clang only links it")
-    func clangOnlyLinks() throws {
-        try withTemporaryDirectory { directory in
+    func clangOnlyLinks() async throws {
+        try await withTemporaryDirectory { directory in
             // Hands what it is given to the installed clang, unless it is source clang would compile.
             let standIn = ToolStandIn([.refuseArguments(endingIn: [".ll", ".bc", ".c", ".s"])],
                                       then: .handOff(toToolAt: LinkTools.installed.clang))
             let clang = try install(standIn, as: "clang", in: directory)
             let tools = LinkTools(clang: clang, lld: LinkTools.installed.lld)
             let source = try save("func main() { print(42) }", as: "main.rayo", in: directory)
-            let result = Driver.run(["run", source], compiler: compiler, linkTools: [tools])
+            let result = await Driver.run(["run", source], compiler: compiler, linkTools: [tools])
             #expect(result == CommandResult(exitCode: 0, output: "42\n", errors: ""))
         }
     }
@@ -201,8 +201,8 @@ struct BuildTests {
         linker is asked for
         """,
           arguments: [(["--linker=lld"], true), (["--linker=platform"], false), ([], true)])
-    func linkers(options: [String], linksWithLLD: Bool) throws {
-        try withTemporaryDirectory { directory in
+    func linkers(options: [String], linksWithLLD: Bool) async throws {
+        try await withTemporaryDirectory { directory in
             // Records that it ran, and hands what it is given to the installed LLD.
             let ran = directory.appendingPathComponent("lld-ran")
             let standIn = ToolStandIn([.touch(ran)], then: .handOff(toToolAt: LinkTools.installed.lld))
@@ -214,7 +214,7 @@ struct BuildTests {
             #endif
             let source = try save("func main() { print(42) }", as: "answer.rayo", in: directory)
             let tools = LinkTools(clang: LinkTools.installed.clang, lld: lld)
-            let result = Driver.run(["build"] + options + [source], compiler: compiler, linkTools: [tools])
+            let result = await Driver.run(["build"] + options + [source], compiler: compiler, linkTools: [tools])
             #expect(result == CommandResult(exitCode: 0, output: "", errors: ""))
             let executable = directory.appendingPathComponent(Executable.fileName("answer"))
             #expect(try values(of: "Arch", in: executable, listedBy: "--file-headers") == [hostArchitecture])
@@ -224,25 +224,25 @@ struct BuildTests {
     }
 
     @Test("linking with LLD needs the LLD of the LLVM install, and the platform's linker doesn't")
-    func lldMissing() throws {
-        // The closure throws only from inside `#expect`, which its type isn't inferred from.
-        try withTemporaryDirectory { directory throws in
+    func lldMissing() async throws {
+        // The closure throws and awaits only from inside `#expect`, which its type isn't inferred from.
+        try await withTemporaryDirectory { directory async throws in
             let lld = directory.appendingPathComponent("nonexistent", isDirectory: true)
                 .appendingPathComponent(Executable.fileName("lld"))
             let tools = LinkTools(clang: LinkTools.installed.clang, lld: lld)
-            #expect(try runEmptyMain(linkTools: tools) == CommandResult(exitCode: 1, output: "", errors: """
+            #expect(try await runEmptyMain(linkTools: tools) == CommandResult(exitCode: 1, output: "", errors: """
                 rayo: can't find LLD at '\(lld.path)': install LLD 23, run 'swift package purge-cache' and \
                 build rayo again, or link with --linker=platform
 
                 """))
-            #expect(try runEmptyMain(options: ["--linker=platform"], linkTools: tools) ==
+            #expect(try await runEmptyMain(options: ["--linker=platform"], linkTools: tools) ==
                 CommandResult(exitCode: 0, output: "", errors: ""))
         }
     }
 
     @Test("the platform's linker is the platform's, not a linker of its name first on the search path")
-    func platformLinkerIgnoresSearchPath() throws {
-        try withTemporaryDirectory { directory in
+    func platformLinkerIgnoresSearchPath() async throws {
+        try await withTemporaryDirectory { directory in
             #if os(Windows)
             let name = "link"
             #else
@@ -251,8 +251,8 @@ struct BuildTests {
             let ran = directory.appendingPathComponent("linker-ran")
             _ = try install(ToolStandIn([.touch(ran)], then: .exit(1)), as: name, in: directory)
             let source = try save("func main() { print(42) }", as: "main.rayo", in: directory)
-            let result = Driver.run(["run", "--linker=platform", source], compiler: compiler,
-                                    environment: environment(searchingFirst: directory))
+            let result = await Driver.run(["run", "--linker=platform", source], compiler: compiler,
+                                          environment: environment(searchingFirst: directory))
             #expect(result == CommandResult(exitCode: 0, output: "42\n", errors: ""))
             #expect(!FileManager.default.fileExists(atPath: ran.path))
         }
@@ -311,10 +311,10 @@ struct BuildTests {
     }
 
     @Test("a run whose output is the terminal's ends with the program's exit status")
-    func attached() throws {
-        try withTemporaryDirectory { directory in
+    func attached() async throws {
+        try await withTemporaryDirectory { directory in
             let source = try save("func main() { print(1 / 0) }", as: "main.rayo", in: directory)
-            let result = Driver.run(["run", source], compiler: compiler, processOutput: .inherited)
+            let result = await Driver.run(["run", source], compiler: compiler, processOutput: .inherited)
             #expect(result == CommandResult(exitCode: ProgramRuntime.panicExitCode, output: "", errors: ""))
         }
     }
@@ -322,21 +322,21 @@ struct BuildTests {
     // Windows ends a process by an exception, not a signal.
     #if os(Windows)
     @Test("a run that an exception ends ends with the exception's code")
-    func exception() throws {
-        try withTemporaryDirectory { directory in
+    func exception() async throws {
+        try await withTemporaryDirectory { directory in
             // A recursion with no end overflows the stack, which Windows reports as the exception 0xC00000FD.
             let source = try save("""
                 func main() { print(deeper(0)) }
                 func deeper(_ n: Int) -> Int { deeper(n + 1) + 1 }
                 """, as: "main.rayo", in: directory)
-            #expect(Driver.run(["run", "--debug", source], compiler: compiler) ==
+            #expect(await Driver.run(["run", "--debug", source], compiler: compiler) ==
                 CommandResult(exitCode: stackOverflowExitCode, output: "", errors: ""))
         }
     }
     #endif
 
     @Test(.timeLimit(.minutes(1)), arguments: [["--debug"], ["--release"]])
-    func `an array larger than the stack ends the run on the stack's guard page`(mode: [String]) throws {
+    func `an array larger than the stack ends the run on the stack's guard page`(mode: [String]) async throws {
         // The array takes 32 MB, more than the main thread's stack on any host, and `main` reads every element, so
         // optimising keeps the array in its frame. Unless each page of the frame is touched in turn from the top, the
         // frame can skip past the guard page below the stack, and the program write into whatever lies there.
@@ -352,9 +352,9 @@ struct BuildTests {
                 print(sum)
             }
             """
-        try withTemporaryDirectory { directory in
+        try await withTemporaryDirectory { directory in
             let path = try save(source, as: "main.rayo", in: directory)
-            #expect(Driver.run(["run"] + mode + [path], compiler: compiler) ==
+            #expect(await Driver.run(["run"] + mode + [path], compiler: compiler) ==
                 CommandResult(exitCode: stackOverflowExitCode, output: "", errors: ""))
         }
     }

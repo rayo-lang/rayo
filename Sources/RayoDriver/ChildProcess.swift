@@ -1,7 +1,15 @@
 #if os(Windows)
+import ucrt
 import WinSDK
+#elseif canImport(Glibc)
+import Glibc
+#elseif canImport(Musl)
+import Musl
+#elseif canImport(Darwin)
+import Darwin
 #endif
 import Foundation
+import Subprocess
 
 /// A process that `rayo` runs to its end: an executable, with its arguments and environment, on the files it reads
 /// and writes.
@@ -15,195 +23,127 @@ struct ChildProcess {
     var standardError: FileHandle? = nil
 
     /// Runs the process, waits for it to end, and returns how it ended.
-    func run() throws -> Termination {
+    func run() async throws -> Termination {
+        // Give the process copies of the descriptors for its standard streams, which are closed by the time it ends.
+        var descriptors: [Int32] = []
+        defer { descriptors.forEach(Self.closeCopy) }
+        let files = [(standardInput, StandardStream.input), (standardOutput, .output), (standardError, .error)]
+        for (file, stream) in files {
+            descriptors.append(try Self.descriptor(for: file, stream: stream))
+        }
+
+        // Run the process on them, in exactly its environment.
+        let status: TerminationStatus
+        do {
+            status = try await Subprocess.run(
+                .path(.init(executable.path)), arguments: .init(arguments),
+                environment: .custom(Self.variables(environment)),
+                input: .fileDescriptor(.init(rawValue: descriptors[0]), closeAfterSpawningProcess: false),
+                output: .fileDescriptor(.init(rawValue: descriptors[1]), closeAfterSpawningProcess: false),
+                error: .fileDescriptor(.init(rawValue: descriptors[2]), closeAfterSpawningProcess: false),
+            ) { _ in
+                // A started process has descriptors of its own. Windows lets another process inherit a copy while it
+                // is open, so the copies close as soon as this one starts, and not when it ends.
+                descriptors.forEach(Self.closeCopy)
+                descriptors = []
+            }.terminationStatus
+        } catch {
+            // swift-subprocess says what went wrong in its description, and not in its localized one.
+            throw NSError(domain: "Subprocess", code: 0, userInfo: [NSLocalizedDescriptionKey: "\(error)"])
+        }
+        return Self.termination(status)
+    }
+
+    /// A copy of the descriptor that the process gets for `stream` from `file`, which the caller closes.
+    private static func descriptor(for file: FileHandle?, stream: StandardStream) throws -> Int32 {
+        switch file {
+        // No file gives the process `rayo`'s own stream, or the null device where `rayo` lacks it.
+        case nil: try copyOfOwn(stream) ?? copyOfNullDevice()
+        // `FileHandle.nullDevice` holds no descriptor, so the null device is opened for the process.
+        case let file? where file === FileHandle.nullDevice: try copyOfNullDevice()
+        case let file?: try copy(of: file)
+        }
+    }
+
+    /// A copy of a descriptor for the null device, which the caller closes.
+    private static func copyOfNullDevice() throws -> Int32 {
         #if os(Windows)
-        try runOnWindows()
+        let path = "NUL"
         #else
-        try runWithFoundation()
+        let path = "/dev/null"
         #endif
+        return try copy(of: FileHandle(forUpdating: URL(fileURLWithPath: path, isDirectory: false)))
     }
 
-    #if !os(Windows)
-    /// Runs the process as a Foundation `Process`, and returns how it ended.
-    private func runWithFoundation() throws -> Termination {
-        // Have Foundation run the process on the files given, and on `rayo`'s own for the rest.
-        let process = Process()
-        process.executableURL = executable
-        process.arguments = arguments
-        process.environment = environment
-        if let standardInput { process.standardInput = standardInput }
-        if let standardOutput { process.standardOutput = standardOutput }
-        if let standardError { process.standardError = standardError }
-
-        // `run` returns once the process starts, so wait for it to end.
-        try process.run()
-        process.waitUntilExit()
-
-        // A process that a signal ended has the signal for its status.
-        let status = process.terminationStatus
-        return process.terminationReason == .uncaughtSignal ? .signaled(status) : .exited(status)
+    /// `environment` keyed as swift-subprocess takes it. Windows names a variable in any case, so of two names that
+    /// differ only in case, one is kept.
+    private static func variables(_ environment: [String: String]) -> [Environment.Key: String] {
+        let pairs = environment.map { (Environment.Key(stringLiteral: $0.key), $0.value) }
+        return Dictionary(pairs) { first, _ in first }
     }
-    #endif
+
+    /// How a process ended that swift-subprocess reports ended with `status`.
+    private static func termination(_ status: TerminationStatus) -> Termination {
+        switch status {
+        #if os(Windows)
+        // Windows ends a process with a code alone, which may be an exception's; it has no signals.
+        case .exited(let code), .signaled(let code): Termination(windowsExitCode: code)
+        #else
+        case .exited(let exitCode): .exited(exitCode)
+        case .signaled(let signal): .signaled(signal)
+        #endif
+        }
+    }
+}
+
+extension ChildProcess {
+    /// One of a process's standard streams, by the C library's number for it.
+    private enum StandardStream: Int32 {
+        case input, output, error
+    }
 }
 
 #if os(Windows)
 extension ChildProcess {
-    /// The attribute that names the handles a process inherits, which WinSDK defines with a macro Swift can't import.
-    private static let inheritedHandlesAttribute = DWORD_PTR(0x0002_0002)
-
-    /// Runs the process, started by Windows itself, and returns how it ended.
-    private func runOnWindows() throws -> Termination {
-        // Foundation closes the handle of a process it ran once the process ends, and reports an exception's code
-        // without its two highest bits, so `rayo` starts the process itself and holds its handle until it has the code.
-        let process = try start()
-        defer { CloseHandle(process) }
-
-        // Wait for the process to end, and read how it ended; a wait that fails would read a code the process
-        // hasn't ended with.
-        guard WaitForSingleObject(process, INFINITE) != WAIT_FAILED else { throw Self.windowsError(GetLastError()) }
-        var code: DWORD = 0
-        guard GetExitCodeProcess(process, &code) else { throw Self.windowsError(GetLastError()) }
-        return Termination(windowsExitCode: code)
-    }
-
-    /// Starts the process, and returns its handle.
-    private func start() throws -> HANDLE {
-        // Give the process copies of its standard handles that it can inherit, and close them once it has its own.
-        var nullDevice: FileHandle?
-        let standardHandles = try [
-            (standardInput, STD_INPUT_HANDLE), (standardOutput, STD_OUTPUT_HANDLE), (standardError, STD_ERROR_HANDLE),
-        ].map { file, own in
-            try Self.inheritableCopy(of: Self.handle(of: file, own: own, nullDevice: &nullDevice))
+    /// A copy of the descriptor for `rayo`'s own `stream`, which the caller closes, or nil where `rayo` lacks it.
+    private static func copyOfOwn(_ stream: StandardStream) throws -> Int32? {
+        // The C library gives a stream `rayo` lacks a descriptor that holds no handle, so Windows is asked for it.
+        let handle = switch stream {
+        case .input: GetStdHandle(STD_INPUT_HANDLE)
+        case .output: GetStdHandle(STD_OUTPUT_HANDLE)
+        case .error: GetStdHandle(STD_ERROR_HANDLE)
         }
-        defer { standardHandles.forEach { if let handle = $0 { CloseHandle(handle) } } }
-
-        // Start the process on those copies, with its command line and environment in the forms Windows takes them.
-        let path = executable.path.replacingOccurrences(of: "/", with: "\\")
-        var commandLine = Array(([path] + arguments).map(Self.quoted).joined(separator: " ").utf16) + [0]
-        let flags = DWORD(EXTENDED_STARTUPINFO_PRESENT | CREATE_UNICODE_ENVIRONMENT)
-        let inheritsHandles = standardHandles.contains { $0 != nil }
-        var started = PROCESS_INFORMATION()
-        // A start that fails gives Windows's error at once, before freeing the memory it was given changes it.
-        let failure = try Self.withStartupInfo(standardHandles: standardHandles) { startup in
-            path.withCString(encodedAs: UTF16.self) { path in
-                Self.environmentBlock(environment).withCString(encodedAs: UTF16.self) { environment in
-                    CreateProcessW(path, &commandLine, nil, nil, inheritsHandles, flags,
-                                   UnsafeMutableRawPointer(mutating: environment), nil, startup, &started)
-                        ? nil : GetLastError()
-                }
-            }
-        }
-        if let failure { throw Self.windowsError(failure) }
-        CloseHandle(started.hThread)
-        return started.hProcess
-    }
-
-    /// The Windows handle that a process gets from `file` for one of its standard streams, or from `rayo`'s own
-    /// standard handle `own` where `file` is nil. `nullDevice` holds the null device once a stream needs it.
-    private static func handle(of file: FileHandle?, own: DWORD, nullDevice: inout FileHandle?) throws -> HANDLE? {
-        switch file {
-        // No file gives the process `rayo`'s own handle.
-        case nil:
-            return GetStdHandle(own)
-        // `FileHandle.nullDevice` holds no handle, so the null device is opened, once for every stream that needs it.
-        case let file? where file === FileHandle.nullDevice:
-            let opened = try nullDevice ?? FileHandle(forUpdating: URL(fileURLWithPath: "NUL", isDirectory: false))
-            nullDevice = opened
-            return opened._handle
-        // Any other file gives its own handle.
-        case let file?:
-            return file._handle
-        }
-    }
-
-    /// A copy of `handle` that a process can inherit, or nil where `handle` is none, as for a standard handle that
-    /// `rayo` lacks.
-    private static func inheritableCopy(of handle: HANDLE?) throws -> HANDLE? {
         guard let handle, handle != INVALID_HANDLE_VALUE else { return nil }
+        return try copy(of: handle)
+    }
+
+    /// A copy of the descriptor for `file`, which the caller closes.
+    private static func copy(of file: FileHandle) throws -> Int32 {
+        try copy(of: file._handle)
+    }
+
+    /// A C library descriptor for a copy of `handle`, which the caller closes. The descriptor owns the handle it
+    /// holds, so it holds a copy, and `handle` stays open for whoever owns it.
+    private static func copy(of handle: HANDLE) throws -> Int32 {
+        // Copy the handle.
         var copy: HANDLE?
         let process = GetCurrentProcess()
-        guard DuplicateHandle(process, handle, process, &copy, 0, true, DWORD(DUPLICATE_SAME_ACCESS)) else {
+        guard DuplicateHandle(process, handle, process, &copy, 0, false, DWORD(DUPLICATE_SAME_ACCESS)), let copy else {
             throw windowsError(GetLastError())
         }
-        return copy
+
+        // Have the C library hold it, or close it where the library can't.
+        let descriptor = _open_osfhandle(Int(bitPattern: copy), 0)
+        guard descriptor != -1 else {
+            CloseHandle(copy)
+            throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EMFILE)
+        }
+        return descriptor
     }
 
-    /// Runs `body` on startup information that starts a process on `standardHandles`, and has it inherit no other
-    /// handle, even one that a process `rayo` starts meanwhile inherits.
-    private static func withStartupInfo<Value>(
-        standardHandles: [HANDLE?], _ body: (UnsafeMutablePointer<STARTUPINFOW>) throws -> Value,
-    ) throws -> Value {
-        // Name the process's standard handles.
-        var startup = STARTUPINFOEXW()
-        startup.StartupInfo.cb = DWORD(MemoryLayout<STARTUPINFOEXW>.size)
-        startup.StartupInfo.dwFlags = DWORD(STARTF_USESTDHANDLES)
-        startup.StartupInfo.hStdInput = standardHandles[0]
-        startup.StartupInfo.hStdOutput = standardHandles[1]
-        startup.StartupInfo.hStdError = standardHandles[2]
-        // Windows reads the whole of the extended startup information through a pointer to its first field.
-        func withStartup() throws -> Value {
-            try withUnsafeMutablePointer(to: &startup) { startup in
-                try startup.withMemoryRebound(to: STARTUPINFOW.self, capacity: 1, body)
-            }
-        }
-
-        // A process that inherits no handle needs no list of them.
-        var inherited = standardHandles.compactMap { $0 }
-        guard !inherited.isEmpty else { return try withStartup() }
-
-        // List the handles the process inherits, in memory of the size Windows asks for, which outlasts the list.
-        var size: SIZE_T = 0
-        _ = InitializeProcThreadAttributeList(nil, 1, 0, &size)
-        return try inherited.withUnsafeMutableBufferPointer { inherited in
-            try withUnsafeTemporaryAllocation(byteCount: Int(size), alignment: 16) { memory in
-                let list = LPPROC_THREAD_ATTRIBUTE_LIST(memory.baseAddress!)
-                guard InitializeProcThreadAttributeList(list, 1, 0, &size) else {
-                    throw windowsError(GetLastError())
-                }
-                defer { DeleteProcThreadAttributeList(list) }
-                let byteCount = SIZE_T(inherited.count * MemoryLayout<HANDLE>.stride)
-                guard UpdateProcThreadAttribute(list, 0, inheritedHandlesAttribute, inherited.baseAddress, byteCount,
-                                                nil, nil) else { throw windowsError(GetLastError()) }
-                startup.lpAttributeList = list
-                return try withStartup()
-            }
-        }
-    }
-
-    /// `argument` written so that the C runtime reads it back from a command line as it is.
-    private static func quoted(_ argument: String) -> String {
-        // An argument with no space, tab or quote in it reads back as it is, unless it's empty.
-        guard argument.isEmpty || argument.contains(where: { " \t\n\u{0B}\"".contains($0) }) else { return argument }
-
-        // In quotes, a backslash is read as it is, except in a run of them before a quote, where each pair is read
-        // as one, and an odd one escapes the quote.
-        var quoted = "\""
-        var backslashes = 0
-        for character in argument {
-            switch character {
-            // A run of backslashes is written once it's known whether a quote ends it.
-            case "\\":
-                backslashes += 1
-            // A quote is escaped, and so is each backslash before it.
-            case "\"":
-                quoted += String(repeating: "\\", count: 2 * backslashes + 1) + "\""
-                backslashes = 0
-            // Backslashes before anything else are written as they are.
-            default:
-                quoted += String(repeating: "\\", count: backslashes) + String(character)
-                backslashes = 0
-            }
-        }
-
-        // The backslashes before the closing quote are each escaped, so that the quote still closes the argument.
-        return quoted + String(repeating: "\\", count: 2 * backslashes) + "\""
-    }
-
-    /// `environment` as Windows takes it: a block of `name=value` strings, sorted by name in any case, each ended by a
-    /// 0, then a 0 that ends the block.
-    private static func environmentBlock(_ environment: [String: String]) -> String {
-        let sorted = environment.sorted { $0.key.uppercased() < $1.key.uppercased() }
-        return sorted.map { "\($0.key)=\($0.value)\0" }.joined() + "\0"
+    /// Closes `descriptor`, and the handle it holds.
+    private static func closeCopy(_ descriptor: Int32) {
+        _ = _close(descriptor)
     }
 
     /// The Windows error `code`, in Windows's words.
@@ -215,6 +155,38 @@ extension ChildProcess {
             .trimmingCharacters(in: .whitespacesAndNewlines)
         return NSError(domain: "Windows", code: Int(code),
                        userInfo: [NSLocalizedDescriptionKey: message.isEmpty ? "Windows error \(code)" : message])
+    }
+}
+#else
+extension ChildProcess {
+    /// A copy of the descriptor for `rayo`'s own `stream`, which the caller closes, or nil where `rayo` lacks it.
+    private static func copyOfOwn(_ stream: StandardStream) throws -> Int32? {
+        let descriptor = copy(of: stream.rawValue)
+        // A stream `rayo` lacks is a descriptor it hasn't open.
+        if descriptor == -1 && errno == EBADF { return nil }
+        return try checked(descriptor)
+    }
+
+    /// A copy of the descriptor for `file`, which the caller closes.
+    private static func copy(of file: FileHandle) throws -> Int32 {
+        try checked(copy(of: file.fileDescriptor))
+    }
+
+    /// A copy of `descriptor`, or -1 where it can't be copied. The copy closes on `exec`, so that no process
+    /// inherits it but the one whose standard stream it becomes.
+    private static func copy(of descriptor: Int32) -> Int32 {
+        fcntl(descriptor, F_DUPFD_CLOEXEC, 0)
+    }
+
+    /// `descriptor`, which a call gave, or the error that call set where it gave none.
+    private static func checked(_ descriptor: Int32) throws -> Int32 {
+        guard descriptor != -1 else { throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EBADF) }
+        return descriptor
+    }
+
+    /// Closes `descriptor`.
+    private static func closeCopy(_ descriptor: Int32) {
+        _ = close(descriptor)
     }
 }
 #endif
