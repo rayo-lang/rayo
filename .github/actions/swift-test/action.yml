@@ -25,6 +25,11 @@ inputs:
     required: false
     default: "false"
 
+outputs:
+  release-bin-path:
+    description: The directory that holds the release rayo and rayoc, where the proof programs ran with them.
+    value: ${{ steps.proof-programs.outputs.bin }}
+
 runs:
   using: composite
   steps:
@@ -143,6 +148,7 @@ runs:
     # checks of lowering's Rayo IR. So the release build users run is built and run here too, in its own scratch
     # path, which is saved with the build, so a pull request rebuilds only what it changed.
     - name: Run the proof programs with release rayo
+      id: proof-programs
       if: inputs.release-proof-programs == 'true'
       shell: bash
       env:
@@ -150,6 +156,7 @@ runs:
       run: |
         swift build -c release --scratch-path "$SCRATCH_PATH"
         bin=$(swift build -c release --scratch-path "$SCRATCH_PATH" --show-bin-path)
+        echo "bin=$bin" >> "$GITHUB_OUTPUT"
 
         # Each run passes when it prints the output beside the program, writes no error, and exits with 0. A run
         # that fails doesn't stop the rest, so one CI run reports every failure.

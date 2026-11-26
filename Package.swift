@@ -74,6 +74,12 @@ func manifestPath(_ path: String) -> String {
     #endif
 }
 
+/// The linker flags that have an executable's loader look for its shared libraries in each of `directories`, in
+/// order.
+func runtimeSearchPathFlags(_ directories: String...) -> [String] {
+    directories.flatMap { ["-Xlinker", "-rpath", "-Xlinker", $0] }
+}
+
 /// The file name of the executable `name`: on Windows with `.exe`, and elsewhere `name` itself.
 func executableName(_ name: String) -> String {
     #if os(Windows)
@@ -158,11 +164,22 @@ let package = Package(
         .target(
             name: "LLVM",
             dependencies: ["CLLVM"],
-            // MSVC can't build LLVM as one shared library, so Windows links the one that holds LLVM's C API.
             linkerSettings: [
                 .unsafeFlags(["-L\(llvmPrefix)/lib"]),
+                // MSVC can't build LLVM as one shared library, so Windows links the one that holds LLVM's C API.
                 .linkedLibrary("LLVM-\(llvmMajorVersion)", .when(platforms: [.macOS, .linux])),
                 .linkedLibrary("LLVM-C", .when(platforms: [.windows])),
+                // An executable looks for LLVM's library first in the lib beside its bin, so a toolchain's own copy
+                // wins, and then in the install it was built against. Windows' loader looks beside the executable
+                // first on its own.
+                .unsafeFlags(
+                    runtimeSearchPathFlags("$ORIGIN/../lib", "\(llvmPrefix)/lib"),
+                    .when(platforms: [.linux]),
+                ),
+                .unsafeFlags(
+                    runtimeSearchPathFlags("@loader_path/../lib", "\(llvmPrefix)/lib"),
+                    .when(platforms: [.macOS]),
+                ),
             ],
         ),
         .target(
