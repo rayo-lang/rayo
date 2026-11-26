@@ -16,10 +16,13 @@ init "Hit(damage: Int)"(damage: Int) -> Hit
 func "main()"() -> Void {
   let %0 h: Hit @2:5-2:6
   let %1 s: Shot @3:5-3:6
+  temp %2: Hit
 bb0:
   declare %0
   %0 @2:5-2:6 = call "Hit(damage: Int)"(7) @2:9-2:23
   declare %1
-  %1 @3:5-3:6 = call "Shot(range: Int, hit: Hit)"(4, move %0 @3:29-3:30) @3:9-3:31
+  declare %2
+  %2 @3:29-3:38 = operand move %0 @3:29-3:38 @3:29-3:38
+  %1 @3:5-3:6 = call "Shot(range: Int, hit: Hit)"(4, read %2 @3:29-3:38) @3:9-3:39
   return
 }

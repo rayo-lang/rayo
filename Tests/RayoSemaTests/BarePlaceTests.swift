@@ -68,7 +68,7 @@ private enum PositionCase: CaseIterable {
 
 @Suite struct `A place of an implicitly copyable type` {
     @Test(arguments: [
-        argument(.owned), argument(.owned, of: .field), argument(.owned, of: .repeatedElement),
+        argument(.owned), argument(.owned, of: .repeatedElement),
         .ownerDeclaration(keyword: "let"), .ownerDeclaration(keyword: "var"), .unnamedDeclaration, .assignment, .drop,
         .returned, .arrayElement, .statement, .operand,
     ] as [Position])
@@ -130,11 +130,6 @@ private enum PositionCase: CaseIterable {
     }
 
     @Test(arguments: [enemy, pair])
-    func `is moved into a struct's primary initializer`(_ type: RayoType) {
-        #expect(argument(.owned, of: .field).taking(boss(type)) == PlaceTaking(use: .move))
-    }
-
-    @Test(arguments: [enemy, pair])
     func `is lent to '.init(repeating:)', which copies it into each element`(_ type: RayoType) {
         #expect(argument(.owned, of: .repeatedElement).taking(boss(type)) == PlaceTaking(use: .lend))
     }
@@ -166,9 +161,32 @@ private enum PositionCase: CaseIterable {
     }
 
     @Test(arguments: [enemy, pair])
-    func `is moved by 'return' and by an array literal's element`(_ type: RayoType) {
-        #expect(Position.returned.taking(boss(type)) == PlaceTaking(use: .move))
-        #expect(Position.arrayElement.taking(boss(type)) == PlaceTaking(use: .move))
+    func `given to 'return' names 'consume' and 'copy' where code may move out of it`(_ type: RayoType) {
+        let marks = PlaceMarks("boss", mayMove: true, mayLend: false)
+        let error = PlaceError(.unmarkedReturnedPlace(type: .named("\(type)"), marks: marks))
+        #expect(Position.returned.taking(boss(type, in: .parameter(.owned))) == PlaceTaking(use: .move, error: error))
+    }
+
+    @Test func `given to 'return' names 'copy' alone where code can't move out of it`() {
+        let marks = PlaceMarks("boss", mayMove: false, mayLend: false)
+        let error = PlaceError(.unmarkedReturnedPlace(type: "Enemy", marks: marks))
+        let taking = PlaceTaking(use: .move, error: error)
+        #expect(Position.returned.taking(boss(enemy, in: .parameter(.borrowed))) == taking)
+    }
+
+    @Test(arguments: [enemy, pair])
+    func `given to an array literal's element names 'consume' and 'copy' where code may move out of it`(
+        _ type: RayoType,
+    ) {
+        let marks = PlaceMarks("boss", mayMove: true, mayLend: false)
+        let error = PlaceError(.unmarkedArrayElement(type: .named("\(type)"), marks: marks))
+        #expect(Position.arrayElement.taking(boss(type, in: .var)) == PlaceTaking(use: .move, error: error))
+    }
+
+    @Test func `given to an array literal's element names 'copy' alone where code can't move out of it`() {
+        let marks = PlaceMarks("boss", mayMove: false, mayLend: false)
+        let error = PlaceError(.unmarkedArrayElement(type: "Enemy", marks: marks))
+        #expect(Position.arrayElement.taking(boss(enemy, liesInElement: true)) == PlaceTaking(use: .move, error: error))
     }
 
     @Test(arguments: [enemy, pair])
@@ -183,15 +201,9 @@ private enum PositionCase: CaseIterable {
     }
 
     @Test(arguments: everyPosition)
-    func `moves unreported only where its position takes the value as its own`(_ position: Position) {
-        // A struct's primary initializer, `return` and an array literal's element take the value as their own.
-        let takesAsItsOwn = switch position {
-        case .argument(let parameter): parameter.convention == .owned && parameter.kind == .field
-        case .returned, .arrayElement: true
-        default: false
-        }
+    func `is never moved without a mark`(_ position: Position) {
         let taking = position.taking(boss(enemy))
-        #expect(taking.use != .move || taking.error != nil || takesAsItsOwn)
+        #expect(taking.use != .move || taking.error != nil)
     }
 }
 

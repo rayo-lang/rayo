@@ -98,6 +98,29 @@ struct OwningParameterTests {
         ])
     }
 
+    // A struct's primary initializer owns each field's value, as a function's owning parameter owns its argument.
+    @Test(arguments: [
+        "_ = Enemy(stats: consume e.stats, slots: copy a)", "_ = Enemy(stats: Stats(hp: 1), slots: [3, 4])",
+        "let n = 1\n    _ = Stats(hp: n)",
+    ])
+    func `an initializer's argument takes a moved place, a copy, an implicitly copyable place or a value`(
+        statement: String,
+    ) {
+        #expect(messages(of: statement) == [])
+    }
+
+    @Test func `a place given bare to an initializer's argument names 'consume' and 'copy'`() {
+        #expect(messages(of: "_ = Enemy(stats: Stats(hp: 1), slots: a)") == [
+            "43: error[E0292]: 'Enemy' takes a [2 of Int]; write 'consume a' or 'copy a'",
+        ])
+    }
+
+    @Test func `a place the code can't move out of, given bare to an initializer's argument, names 'copy' alone`() {
+        #expect(functionMessages(of: "func f(_ s: &Stats) -> Enemy { Enemy(stats: s, slots: [1, 2]) }") == [
+            "10:45: error[E0292]: 'Enemy' takes a Stats; write 'copy s'",
+        ])
+    }
+
     // The overload that owns its argument takes the place as written, so it is the one the call reaches.
     @Test(arguments: [("h(e)", 7, "'consume e', 'copy e' or '&e'"), ("h(g[0])", 7, "'copy g[0]' or '&g[0]'")])
     func `a place given bare where an overload borrows it names '&' too`(

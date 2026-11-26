@@ -65,12 +65,14 @@ package enum Position: Sendable {
             PlaceTaking(use: .borrow)
         case .assignment, .drop:
             place.owned { .assignmentBorrowsPlace(marks: $0) }
-        case .returned, .arrayElement:
-            place.copied(or: .move)
+        case .returned:
+            place.owned { .unmarkedReturnedPlace(type: place.typeName(), marks: $0) }
+        case .arrayElement:
+            place.owned { .unmarkedArrayElement(type: place.typeName(), marks: $0) }
         // These only read the value: a declaration of `_` is reported, and declares no local to take it, so it reports
         // nothing of the place.
         case .unnamedDeclaration, .statement, .operand:
-            place.copied(or: .lend)
+            place.copiedOrLent
         }
     }
 }
@@ -105,18 +107,15 @@ package struct ArgumentParameter: Sendable {
         // Every lend for change is written with `mutable`, so the parameter takes no place without it.
         case (.mutable, _):
             PlaceTaking(use: nil, error: PlaceError(unmarkedLendForChange(of: place)))
-        // An owning parameter of a function takes a place with `consume` or `copy`, which say what the call does
-        // with it, and `&` reaches another function of the name that borrows it.
+        // An owning parameter takes a place with `consume` or `copy`, which say what the call does with it, and `&`
+        // reaches another function of the name that borrows it.
         case (.owned, .function):
             place.owned(lendable: isBorrowedByOverload) {
                 .unmarkedOwnedArgument(name: callee, type: place.typeName(), marks: $0)
             }
-        // A struct's primary initializer takes the place's value as its field's.
-        case (.owned, .field):
-            place.copied(or: .move)
         // `.init(repeating:)` reads the value, and copies it into each element.
         case (.owned, .repeatedElement):
-            place.copied(or: .lend)
+            place.copiedOrLent
         }
     }
 
@@ -146,9 +145,9 @@ private extension GivenPlace {
         PlaceTaking(use: .borrow, error: PlaceError(.unreferencedPlace(place: spelling()), keepsMeaning: true))
     }
 
-    /// A copy of the place's value where its type is implicitly copyable, and `use` of the place where it isn't.
-    func copied(or use: PlaceUse) -> PlaceTaking {
-        PlaceTaking(use: type.isImplicitlyCopyable ? .copy : use)
+    /// A copy of the place's value where its type is implicitly copyable, and a lend of the place where it isn't.
+    var copiedOrLent: PlaceTaking {
+        PlaceTaking(use: type.isImplicitlyCopyable ? .copy : .lend)
     }
 
     /// The place as a position takes it that owns what it takes: a copy of its value where its type is implicitly

@@ -18,7 +18,7 @@ struct ArrayTests {
                 let returned = relayBools(&bools)
                 let hits = [Hit(damage: 3), Hit(damage: 4)]
                 let grid = [[1, 2, 3], [4, 5, 6]]
-                var board = Board(grid: grid, hits: hits, flags: copied)
+                var board = Board(grid: consume grid, hits: consume hits, flags: consume copied)
                 let moved = consume board.grid
                 board.grid = relayGrid(&moved)
                 let none: [0 of Int] = []
@@ -35,7 +35,7 @@ struct ArrayTests {
             func relayGrid(_ a: &[2 of [3 of Int]]) -> [2 of [3 of Int]] {
                 print(6)
                 let b = copy a
-                return b
+                return consume b
             }
             func relayNone(_ a: &[0 of Int]) -> [0 of Int] {
                 print(0)

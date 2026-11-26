@@ -13,10 +13,13 @@ bb0:
 
 func "made()"() -> Stats {
   let %0 s: Stats @3:9-3:10
+  temp %1: Stats
 bb0:
   declare %0
   %0 @3:9-3:10 = call "Stats(hp: Int)"(7) @3:13-3:25
-  return move %0 @4:12-4:13
+  declare %1
+  %1 @4:12-4:21 = operand move %0 @4:12-4:21 @4:12-4:21
+  return read %1 @4:12-4:21
 bb1:
   unreachable
 }

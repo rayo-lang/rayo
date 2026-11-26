@@ -113,7 +113,7 @@ struct InitializerChecker {
     ) -> [CheckedExpr]? {
         // Check every argument, so each one's errors are reported, before any failure fails the call.
         var values: [CheckedExpr] = []
-        let owner = ArgumentParameter(callee: id.name, convention: .owned, kind: .field, borrowsTemporaries: false,
+        let owner = ArgumentParameter(callee: id.name, convention: .owned, kind: .function, borrowsTemporaries: false,
                                       isBorrowedByOverload: false)
         for (argument, given) in zip(arguments, given) {
             // An argument that gives no field was reported, and its value is checked on its own for its own errors.

@@ -114,7 +114,7 @@ struct FunctionLoweringTests {
             func main() {}
             func made() -> Stats {
                 let s = Stats(hp: 7)
-                return s
+                return consume s
             }
             struct Stats(let hp: Int)
             """
@@ -124,10 +124,10 @@ struct FunctionLoweringTests {
     @Test func `a body's one expression, and a 'return' of a field, move their place out as the result`() throws {
         let source = """
             func main() {}
-            func given(_ s: &Stats) -> Stats { s }
+            func given(_ s: Stats) -> Stats { consume s }
             func stats(_ e: &Enemy) -> Stats {
                 let f = copy e
-                return f.stats
+                return consume f.stats
             }
             struct Stats(let hp: Int)
             struct Enemy(let stats: Stats)

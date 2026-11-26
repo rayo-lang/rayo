@@ -15,8 +15,10 @@ private func expectLowering(withShot body: String, toMatch name: String) throws 
 
 @Suite("Lowering structs")
 struct StructLoweringTests {
-    @Test func `a struct's value is a call of its primary initializer, which moves a local given bare`() throws {
-        try expectLowering(withShot: "let h = Hit(damage: 7)\nlet s = Shot(range: 4, hit: h)", toMatch: "struct-value")
+    @Test func `a struct's value is a call of its primary initializer, which takes a local moved with 'consume'`()
+        throws {
+        try expectLowering(withShot: "let h = Hit(damage: 7)\nlet s = Shot(range: 4, hit: consume h)",
+                           toMatch: "struct-value")
     }
 
     @Test func `a field used as an operand is read where it lies in its local`() throws {
@@ -39,9 +41,9 @@ struct StructLoweringTests {
     }
 
     @Test
-    func `an initializer moves a field given bare out of its local, and takes the temporary a 'copy' of one makes`()
+    func `an initializer takes a field moved out of its local with 'consume', and the temporary a 'copy' of one makes`()
         throws {
-        let body = "let s = Shot(range: 4, hit: Hit(damage: 7))\nlet t = Shot(range: copy s.range, hit: s.hit)"
+        let body = "let s = Shot(range: 4, hit: Hit(damage: 7))\nlet t = Shot(range: copy s.range, hit: consume s.hit)"
         try expectLowering(withShot: body, toMatch: "field-argument")
     }
 
@@ -60,9 +62,9 @@ struct StructLoweringTests {
         try expectLowering(withShot: body, toMatch: "nested-field-assignment")
     }
 
-    @Test func `an array literal makes an array of its elements, in order, each moved where a local is given bare`()
+    @Test func `an array literal makes an array of its elements, in order, moving a local written with 'consume'`()
         throws {
-        let body = "let e = Enemy(hp: 1, armor: 2)\nlet a = [e, Enemy(hp: 3, armor: 4)]\nlet b = [[1], [2]]"
+        let body = "let e = Enemy(hp: 1, armor: 2)\nlet a = [consume e, Enemy(hp: 3, armor: 4)]\nlet b = [[1], [2]]"
         try expectLowering(withEnemy: body, toMatch: "array-literal")
     }
 
