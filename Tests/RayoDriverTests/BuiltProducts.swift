@@ -62,19 +62,43 @@ func rayo(_ arguments: [String], in directory: URL, running executable: URL = bu
 /// so that a console event raised there reaches no process of these tests, and gives the code it exits with.
 /// `arguments` must need no quotes.
 func rayoOnConsoleOfItsOwn(_ arguments: [String], in directory: URL, environment: [String: String]) throws -> DWORD {
+    try runRayo(arguments, in: directory, environment: environment, running: builtProduct("rayo"),
+                creationFlags: DWORD(CREATE_NO_WINDOW), startupFlags: 0)
+}
+
+/// Runs the `rayo` at `executable` with `arguments` in `directory` and `environment`, with no standard input, and
+/// gives the code it exits with. A process without a console can't have only some standard handles, so it has no
+/// standard output or error either. `arguments` must need no quotes.
+func rayoWithoutStandardInput(
+    _ arguments: [String], in directory: URL, environment: [String: String], running executable: URL,
+) throws -> Int32 {
+    // Windows gives a process that has a console the console's handles in place of empty ones, so `rayo` has none,
+    // and its startup information names empty standard handles.
+    let code = try runRayo(arguments, in: directory, environment: environment, running: executable,
+                           creationFlags: DWORD(DETACHED_PROCESS), startupFlags: DWORD(STARTF_USESTDHANDLES))
+    return Int32(bitPattern: code)
+}
+
+/// Runs the `rayo` at `executable` with `arguments` in `directory` and `environment`, started with `creationFlags` and
+/// with startup information of `startupFlags`, and gives the code it exits with. `arguments` must need no quotes.
+private func runRayo(
+    _ arguments: [String], in directory: URL, environment: [String: String], running executable: URL,
+    creationFlags: DWORD, startupFlags: DWORD,
+) throws -> DWORD {
     // Windows takes the command line as one string, and the environment as one block of `name=value` strings, each
     // ended by a 0, then a 0 that ends the block, sorted by name in any case.
-    var commandLine = Array((["\"\(builtProduct("rayo").path)\""] + arguments).joined(separator: " ").utf16) + [0]
+    var commandLine = Array((["\"\(executable.path)\""] + arguments).joined(separator: " ").utf16) + [0]
     let block = environment.sorted { $0.key.uppercased() < $1.key.uppercased() }
         .map { "\($0.key)=\($0.value)\0" }.joined() + "\0"
 
-    // Start `rayo` on a new console, inheriting no handle of these tests.
+    // Start `rayo`, inheriting no handle of these tests.
     var startup = STARTUPINFOW()
     startup.cb = DWORD(MemoryLayout<STARTUPINFOW>.size)
+    startup.dwFlags = startupFlags
     var started = PROCESS_INFORMATION()
     let didStart = block.withCString(encodedAs: UTF16.self) { block in
         directory.path.withCString(encodedAs: UTF16.self) { directory in
-            CreateProcessW(nil, &commandLine, nil, nil, false, DWORD(CREATE_NO_WINDOW | CREATE_UNICODE_ENVIRONMENT),
+            CreateProcessW(nil, &commandLine, nil, nil, false, creationFlags | DWORD(CREATE_UNICODE_ENVIRONMENT),
                            UnsafeMutableRawPointer(mutating: block), directory, &startup, &started)
         }
     }
@@ -84,8 +108,12 @@ func rayoOnConsoleOfItsOwn(_ arguments: [String], in directory: URL, environment
         CloseHandle(started.hProcess)
     }
 
-    // Wait for `rayo` to end, and give its exit code.
-    WaitForSingleObject(started.hProcess, INFINITE)
+    // Wait for `rayo` to end, and give its exit code; a `rayo` that hasn't ended in five minutes is stopped, and
+    // fails the test, rather than leaving the tests to wait on it.
+    if WaitForSingleObject(started.hProcess, 300_000) == DWORD(WAIT_TIMEOUT) {
+        TerminateProcess(started.hProcess, 1)
+        Issue.record("rayo didn't end within five minutes")
+    }
     var code: DWORD = 0
     try #require(GetExitCodeProcess(started.hProcess, &code), "no exit code: Windows error \(GetLastError())")
     return code
@@ -98,5 +126,21 @@ extension [String: String] {
         environment[name] = value
         return environment
     }
+}
+#else
+/// Runs the `rayo` at `executable` with `arguments` in `directory` and `environment`, with its standard input closed,
+/// and gives the code it exits with.
+func rayoWithoutStandardInput(
+    _ arguments: [String], in directory: URL, environment: [String: String], running executable: URL,
+) throws -> Int32 {
+    // Foundation can't close a standard stream for a process it runs, so a shell closes it and becomes `rayo`.
+    let process = Process()
+    process.executableURL = URL(fileURLWithPath: "/bin/sh")
+    process.arguments = ["-c", "exec \"$0\" \"$@\" <&-", executable.path] + arguments
+    process.currentDirectoryURL = directory
+    process.environment = environment
+    try process.run()
+    process.waitUntilExit()
+    return process.terminationStatus
 }
 #endif

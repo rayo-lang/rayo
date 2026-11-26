@@ -75,13 +75,13 @@ struct ToolLookupTests {
     }
     #endif
 
-    @Test func `a link that finds clang in none of its places names each place once`() throws {
-        try withTemporaryDirectory { directory in
+    @Test func `a link that finds clang in none of its places names each place once`() async throws {
+        try await withTemporaryDirectory { directory in
             let source = try save("func main() {}", as: "main.rayo", in: directory)
             let first = directory.appendingPathComponent("first")
             let second = directory.appendingPathComponent("second")
             let linkTools = [first, second, first].map { LinkTools(clang: $0, lld: LinkTools.installed.lld) }
-            #expect(Driver.run(["build", source], compiler: builtProduct("rayoc"), linkTools: linkTools) ==
+            #expect(await Driver.run(["build", source], compiler: builtProduct("rayoc"), linkTools: linkTools) ==
                 CommandResult(exitCode: 1, output: "", errors: """
                     rayo: can't find clang at '\(first.path)' or '\(second.path)'
 
@@ -89,13 +89,13 @@ struct ToolLookupTests {
         }
     }
 
-    @Test func `a link that finds LLD in none of its places names each place once`() throws {
-        try withTemporaryDirectory { directory in
+    @Test func `a link that finds LLD in none of its places names each place once`() async throws {
+        try await withTemporaryDirectory { directory in
             let source = try save("func main() {}", as: "main.rayo", in: directory)
             let first = directory.appendingPathComponent("first")
             let second = directory.appendingPathComponent("second")
             let linkTools = [first, second, first].map { LinkTools(clang: LinkTools.installed.clang, lld: $0) }
-            #expect(Driver.run(["build", source], compiler: builtProduct("rayoc"), linkTools: linkTools) ==
+            #expect(await Driver.run(["build", source], compiler: builtProduct("rayoc"), linkTools: linkTools) ==
                 CommandResult(exitCode: 1, output: "", errors: """
                     rayo: can't find LLD at '\(first.path)' or '\(second.path)': install LLD 23, run \
                     'swift package purge-cache' and build rayo again, or link with --linker=platform

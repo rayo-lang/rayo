@@ -24,24 +24,24 @@ struct Toolchain {
 
     /// Has `rayoc` check the source file at `path`, and returns what `rayoc` wrote to its standard error, where
     /// `output` captures it.
-    func check(_ path: String) throws(CommandError) -> String {
-        try runCompiler(["--check", "--", path])
+    func check(_ path: String) async throws(CommandError) -> String {
+        try await runCompiler(["--check", "--", path])
     }
 
     /// Has `rayoc` compile the source file at `path` to object code in `mode`, and runs `body` on the object file,
     /// which is removed once `body` ends. Returns what `body` returns, and what `rayoc` wrote to its standard error,
     /// where `output` captures it.
     func compile<Value>(
-        _ path: String, mode: BuildMode, _ body: (URL) throws(CommandError) -> Value,
-    ) throws(CommandError) -> (value: Value, errors: String) {
-        try Self.withTemporaryDirectory { directory throws(CommandError) in
+        _ path: String, mode: BuildMode, _ body: (URL) async throws(CommandError) -> Value,
+    ) async throws(CommandError) -> (value: Value, errors: String) {
+        try await Self.withTemporaryDirectory { directory throws(CommandError) in
             // Have `rayoc` write the object file inside the directory, so it goes with the directory.
             let objectFile = directory.appendingPathComponent("program.o")
-            let errors = try runCompiler([mode.rawValue, "-o", objectFile.path, "--", path])
+            let errors = try await runCompiler([mode.rawValue, "-o", objectFile.path, "--", path])
 
             // Run the body on the object file; what `rayoc` wrote comes before why the body stopped, if it did.
             do throws(CommandError) {
-                return (try body(objectFile), errors)
+                return (try await body(objectFile), errors)
             } catch {
                 // A body that stops does so after what `rayoc` wrote.
                 throw error.after(errors)
@@ -50,18 +50,18 @@ struct Toolchain {
     }
 
     /// Links the object file at `objectFile` with the C library into an executable at `executable`.
-    func link(_ objectFile: URL, to executable: URL) throws(CommandError) {
+    func link(_ objectFile: URL, to executable: URL) async throws(CommandError) {
         // A link needs clang, which drives it, so a missing clang stops it; then the arguments that have clang run
         // the linker asked for.
         let clangs = linkTools.map(\.clang)
         guard let clang = clangs.first(where: Self.isExecutableFile) else {
             throw .failed("can't find clang at \(Self.listing(clangs))")
         }
-        let linkerArguments = try linkerArguments()
+        let linkerArguments = try await linkerArguments()
 
         // Have clang link the object file into the executable.
         let arguments = linkerArguments + Self.stackArguments + [objectFile.path, "-o", executable.path]
-        let run = try runCapturingOutput(clang, arguments: arguments)
+        let run = try await runCapturingOutput(clang, arguments: arguments)
         // A link that clang fails reports what clang wrote, without its last newline.
         if run.termination.exitCode != 0 {
             let errors = run.errors.hasSuffix("\n") ? String(run.errors.dropLast()) : run.errors
@@ -70,26 +70,26 @@ struct Toolchain {
     }
 
     /// Links the object file at `objectFile` into a temporary executable, runs it, and removes it.
-    func linkAndRun(_ objectFile: URL) throws(CommandError) -> CommandResult {
-        try Self.withTemporaryDirectory { directory throws(CommandError) in
+    func linkAndRun(_ objectFile: URL) async throws(CommandError) -> CommandResult {
+        try await Self.withTemporaryDirectory { directory throws(CommandError) in
             // Link the executable inside the directory, so it goes with the directory once the run ends.
             let executable = directory.appendingPathComponent(Executable.fileName("program"))
-            try link(objectFile, to: executable)
+            try await link(objectFile, to: executable)
 
             // Run it, and give how it ended and what of its output was captured.
-            let run = try runSendingOutput(executable)
+            let run = try await runSendingOutput(executable)
             return CommandResult(exitCode: run.termination.exitCode, output: run.output, errors: run.errors)
         }
     }
 
     /// Runs `rayoc` with `arguments`, and returns what it wrote to its standard error, where `output` captures it,
     /// or fails as `rayoc` ended when it doesn't compile the file.
-    private func runCompiler(_ arguments: [String]) throws(CommandError) -> String {
+    private func runCompiler(_ arguments: [String]) async throws(CommandError) -> String {
         // Without `rayoc` there is nothing to compile with.
         guard Self.isExecutableFile(compiler) else { throw .failed("can't find rayoc at '\(compiler.path)'") }
 
         // Run `rayoc`, and go on or stop as it ended.
-        let run = try runSendingOutput(compiler, arguments: arguments)
+        let run = try await runSendingOutput(compiler, arguments: arguments)
         switch run.termination {
         // A `rayoc` that compiled the file leaves the command to go on.
         case .exited(0):
@@ -105,7 +105,7 @@ struct Toolchain {
     }
 
     /// Finds `linker`, and returns the arguments that have clang link with it.
-    private func linkerArguments() throws(CommandError) -> [String] {
+    private func linkerArguments() async throws(CommandError) -> [String] {
         switch linker {
         // LLD runs from the first of the link tools that holds it.
         case .lld:
@@ -132,7 +132,7 @@ struct Toolchain {
             return ["-fuse-ld=link"]
             #else
             // clang runs the `ld` that --ld-path names, which is where the platform keeps its linker.
-            return ["-fuse-ld=ld", "--ld-path=\(try platformLinker().path)"]
+            return ["-fuse-ld=ld", "--ld-path=\(try await platformLinker().path)"]
             #endif
         }
     }
@@ -140,10 +140,10 @@ struct Toolchain {
     #if !os(Windows)
     /// Finds the platform's linker: on macOS, the `ld` of the developer tools `xcrun` selects, or `/usr/bin/ld`
     /// where it selects none; on Linux, `/usr/bin/ld`. Never an `ld` the search path happens to hold first.
-    private func platformLinker() throws(CommandError) -> URL {
+    private func platformLinker() async throws(CommandError) -> URL {
         // Find where the platform keeps its linker.
         #if canImport(Darwin)
-        let found = try? runCapturingOutput(URL(fileURLWithPath: "/usr/bin/xcrun"), arguments: ["--find", "ld"])
+        let found = try? await runCapturingOutput(URL(fileURLWithPath: "/usr/bin/xcrun"), arguments: ["--find", "ld"])
         let path = found.flatMap { found in
             found.termination == .exited(0) ? found.output.trimmingCharacters(in: .whitespacesAndNewlines) : nil
         }
@@ -185,41 +185,43 @@ struct Toolchain {
     }
 
     /// Runs `executable` to completion, with what it writes captured or sent on as `output` asks.
-    private func runSendingOutput(_ executable: URL, arguments: [String] = []) throws(CommandError) -> ProcessRun {
+    private func runSendingOutput(
+        _ executable: URL, arguments: [String] = [],
+    ) async throws(CommandError) -> ProcessRun {
         switch output {
-        case .captured: try runCapturingOutput(executable, arguments: arguments)
+        case .captured: try await runCapturingOutput(executable, arguments: arguments)
         case .inherited:
-            ProcessRun(termination: try runAttached(executable, arguments: arguments), output: "", errors: "")
+            ProcessRun(termination: try await runAttached(executable, arguments: arguments), output: "", errors: "")
         }
     }
 
     /// Runs `executable` to completion, and returns how it ended and what it wrote.
     private func runCapturingOutput(
         _ executable: URL, arguments: [String] = [],
-    ) throws(CommandError) -> ProcessRun {
-        try Self.withTemporaryDirectory { directory throws(CommandError) in
+    ) async throws(CommandError) -> ProcessRun {
+        try await Self.withTemporaryDirectory { directory throws(CommandError) in
             // Give each output stream a file, so that neither fills up and stalls the process while the other is read.
             let outputFile = directory.appendingPathComponent("stdout")
             let errorFile = directory.appendingPathComponent("stderr")
             // `FileManager.createFile` renames a temporary file into place, and returns false unreported where
             // Windows refuses the rename, so each file is written in place.
-            try runOnHost { try Data().write(to: outputFile) }
-            try runOnHost { try Data().write(to: errorFile) }
+            try await runOnHost { try Data().write(to: outputFile) }
+            try await runOnHost { try Data().write(to: errorFile) }
 
             // Run the process on those files, with nothing to read, and give what it wrote.
             var process = childProcess(executable, arguments: arguments)
             process.standardInput = FileHandle.nullDevice
-            process.standardOutput = try runOnHost { try FileHandle(forWritingTo: outputFile) }
-            process.standardError = try runOnHost { try FileHandle(forWritingTo: errorFile) }
-            let termination = try runOnHost { try process.run() }
+            process.standardOutput = try await runOnHost { try FileHandle(forWritingTo: outputFile) }
+            process.standardError = try await runOnHost { try FileHandle(forWritingTo: errorFile) }
+            let termination = try await runOnHost { try await process.run() }
             return ProcessRun(termination: termination,
-                              output: try runOnHost { try String(contentsOf: outputFile, encoding: .utf8) },
-                              errors: try runOnHost { try String(contentsOf: errorFile, encoding: .utf8) })
+                              output: try await runOnHost { try String(contentsOf: outputFile, encoding: .utf8) },
+                              errors: try await runOnHost { try String(contentsOf: errorFile, encoding: .utf8) })
         }
     }
 
     /// Runs `executable` to completion on `rayo`'s own standard input, output and error, and returns how it ended.
-    private func runAttached(_ executable: URL, arguments: [String]) throws(CommandError) -> Termination {
+    private func runAttached(_ executable: URL, arguments: [String]) async throws(CommandError) -> Termination {
         #if os(Windows)
         // Ctrl-C and Ctrl-Break reach every process of the console, `rayo` too. `rayo` outlives them, so that it
         // still removes its temporary files; the process inherits no handler, so it still ends by them.
@@ -236,7 +238,7 @@ struct Toolchain {
         }
         #endif
         let process = childProcess(executable, arguments: arguments)
-        return try runOnHost { try process.run() }
+        return try await runOnHost { try await process.run() }
     }
 
     /// The process that runs `executable` with `arguments` in the toolchain's environment, on `rayo`'s own standard
@@ -247,16 +249,18 @@ struct Toolchain {
 
     /// Runs `body` on a new, empty directory, and removes the directory once `body` ends.
     private static func withTemporaryDirectory<Value>(
-        _ body: (URL) throws(CommandError) -> Value,
-    ) throws(CommandError) -> Value {
+        _ body: (URL) async throws(CommandError) -> Value,
+    ) async throws(CommandError) -> Value {
         // Make the directory, under a name no other run of rayo takes.
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("rayo-\(UUID().uuidString)", isDirectory: true)
-        try runOnHost { try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true) }
+        try await runOnHost {
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        }
 
         // Run the body on it, and remove it whether the body returns or throws.
         defer { try? FileManager.default.removeItem(at: directory) }
-        return try body(directory)
+        return try await body(directory)
     }
 }
 
@@ -276,9 +280,9 @@ private let ignoringInterrupts: PHANDLER_ROUTINE = { event in
 
 /// Runs `operation`, a call into the host's files or processes, and gives what it gives, or fails with the
 /// description of the error it throws.
-private func runOnHost<Value>(_ operation: () throws -> Value) throws(CommandError) -> Value {
+private func runOnHost<Value>(_ operation: () async throws -> Value) async throws(CommandError) -> Value {
     do {
-        return try operation()
+        return try await operation()
     } catch {
         // The host's error stops the command, with the host's words for what went wrong.
         throw .failed(error.localizedDescription)

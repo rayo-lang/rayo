@@ -130,6 +130,8 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "604.0.0"),
+        // The driver runs processes through swift-subprocess, and needs none of the Foundation extras its trait adds.
+        .package(url: "https://github.com/swiftlang/swift-subprocess.git", from: "1.0.2", traits: []),
     ],
     targets: [
         .macro(name: "RayoDiagnosticsMacros", dependencies: [
@@ -192,7 +194,9 @@ let package = Package(
             "RayoSource",
         ]),
         .executableTarget(name: "rayoc", dependencies: ["RayoCompiler"]),
-        .target(name: "RayoDriver", dependencies: ["RayoLLVMInstall"]),
+        .target(name: "RayoDriver", dependencies: [
+            "RayoLLVMInstall", .product(name: "Subprocess", package: "swift-subprocess"),
+        ]),
         .executableTarget(name: "rayo", dependencies: ["RayoDriver"]),
         .testTarget(name: "RayoSourceTests", dependencies: ["RayoSource"]),
         .testTarget(name: "RayoDiagnosticsTests", dependencies: ["RayoDiagnostics"]),
