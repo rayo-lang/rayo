@@ -72,7 +72,7 @@ package enum Position: Sendable {
         // These only read the value: a declaration of `_` is reported, and declares no local to take it, so it reports
         // nothing of the place.
         case .unnamedDeclaration, .statement, .operand:
-            place.copied(or: .lend)
+            place.copiedOrLent
         }
     }
 }
@@ -115,7 +115,7 @@ package struct ArgumentParameter: Sendable {
             }
         // `.init(repeating:)` reads the value, and copies it into each element.
         case (.owned, .repeatedElement):
-            place.copied(or: .lend)
+            place.copiedOrLent
         }
     }
 
@@ -145,9 +145,9 @@ private extension GivenPlace {
         PlaceTaking(use: .borrow, error: PlaceError(.unreferencedPlace(place: spelling()), keepsMeaning: true))
     }
 
-    /// A copy of the place's value where its type is implicitly copyable, and `use` of the place where it isn't.
-    func copied(or use: PlaceUse) -> PlaceTaking {
-        PlaceTaking(use: type.isImplicitlyCopyable ? .copy : use)
+    /// A copy of the place's value where its type is implicitly copyable, and a lend of the place where it isn't.
+    var copiedOrLent: PlaceTaking {
+        PlaceTaking(use: type.isImplicitlyCopyable ? .copy : .lend)
     }
 
     /// The place as a position takes it that owns what it takes: a copy of its value where its type is implicitly
