@@ -8,7 +8,7 @@ import Darwin
 
 extension Driver {
     /// Opens the null device onto each of standard input, output and error that `rayo` started without, so that the
-    /// processes it runs get the null device for that stream. It runs before anything else opens a file.
+    /// processes it runs get the null device for that stream. Call it before anything else in `rayo` opens a file.
     public static func openMissingStandardStreams() {
         #if !os(Windows)
         // Each file opened takes the lowest free descriptor, so a file opened later would take a missing stream's,

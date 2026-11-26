@@ -195,14 +195,10 @@ struct DriverTests {
             }
             _ = try save("func main() {}", as: "main.rayo", in: directory)
 
-            #if os(Windows)
-            let exitCode = try rayoOnConsoleOfItsOwn(["build", "main.rayo"], in: directory,
-                                                     environment: ProcessInfo.processInfo.environment, running: copy,
-                                                     standardHandles: false)
-            #else
-            let exitCode = try rayoWithoutStandardInput(["build", "main.rayo"], in: directory, running: copy)
-            #endif
-            #expect(exitCode == 0)
+            // Without RAYOC, `rayo` compiles with the `rayoc` beside it.
+            let environment = ProcessInfo.processInfo.environment.filter { $0.key.uppercased() != "RAYOC" }
+            #expect(try rayoWithoutStandardInput(["build", "main.rayo"], in: directory, environment: environment,
+                                                 running: copy) == 0)
         }
     }
 
