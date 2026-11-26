@@ -29,7 +29,7 @@ The script fetches the LLVM that `llvm-release.json` pins, checks each download 
 
 - **The toolchain's `bin`** holds `rayo`, `rayoc`, LLVM's `clang` and the host's LLD. On macOS it also holds a `clang.cfg` that names the SDK `xcrun --show-sdk-path` names, since LLVM's clang links against an SDK only when it's told one.
 - **LLVM's library** is in the `lib` beside that `bin`, with its other names and the libraries it needs. On Windows, `LLVM-C.dll` is in the `bin`.
-- **The home's `bin`** runs that toolchain's `rayo` and `rayoc`: through symbolic links on Linux and macOS, and on Windows through batch files that pass their arguments on and end with the same exit code.
+- **The home's `bin`** runs that toolchain's `rayo` and `rayoc`: through symbolic links on Linux and macOS, and on Windows through batch files that pass their arguments on and end with the same exit code. The command interpreter that runs a batch file reads `&`, `|`, `<`, `>` and `^` in its arguments again, so quote an argument that holds one.
 
 The script builds in a scratch path of its own, `.build/install`, and keeps the LLVM it fetched in `.build/llvm` for the next install. To build from the clone without installing, as the tests do, install LLVM 23 as [LLVM](#llvm) says, and run `swift build`.
 

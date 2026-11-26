@@ -9,20 +9,7 @@ outputs:
 runs:
   using: composite
   steps:
-    - name: Select the Xcode that holds Swift ${{ env.SWIFT_RELEASE }}
-      shell: bash
-      run: |
-        for xcode in /Applications/Xcode*.app; do
-          developer="$xcode/Contents/Developer"
-          swift=$(DEVELOPER_DIR="$developer" xcrun swift --version 2>/dev/null)
-          release=$(grep -o -E 'Swift version [0-9]+\.[0-9]+' <<< "$swift" | head -n 1)
-          if [ "$release" = "Swift version $SWIFT_RELEASE" ]; then
-            echo "DEVELOPER_DIR=$developer" >> "$GITHUB_ENV"
-            exit 0
-          fi
-        done
-        echo "::error::no Xcode on this runner holds Swift $SWIFT_RELEASE"
-        exit 1
+    - uses: ./.github/actions/select-xcode
 
     # Homebrew keeps each bottle it downloads, so a cache keyed on every formula the install pours, LLVM's
     # dependencies among them, holds those bottles. A new version of any of them gets a cache of its own.

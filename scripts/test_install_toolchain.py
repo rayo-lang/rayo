@@ -8,9 +8,11 @@ import subprocess
 import tarfile
 import tempfile
 import unittest
+import urllib.parse
+import urllib.request
 
 from install_toolchain import (
-    InstallError, fetch_package, install_toolchain, make_default, pinned_packages, toolchain_home,
+    InstallError, fetch_llvm, install_toolchain, make_default, pinned_packages, toolchain_home,
 )
 
 # A pin with a package for each of three hosts.
@@ -56,44 +58,86 @@ class ToolchainHomeTests(unittest.TestCase):
         self.assertEqual(home, os.path.join('tmp', 'toolchain'))
 
 
-class FetchPackageTests(unittest.TestCase):
+class FetchLLVMTests(unittest.TestCase):
     def setUp(self):
         directory = tempfile.TemporaryDirectory()
         self.addCleanup(directory.cleanup)
         self.directory = directory.name
-        self.downloads = os.path.join(self.directory, 'downloads')
-        self.prefix = os.path.join(self.directory, 'prefix')
+        self.folder = os.path.join(self.directory, 'llvm')
 
-        # An archive whose install is in a folder of its own, as LLVM's release archives hold theirs.
-        self.archive = os.path.join(self.directory, 'llvm.tar.xz')
-        with tarfile.open(self.archive, 'w:xz') as archive:
-            add_file(archive, 'llvm/bin/clang-23', b'clang')
-            add_link(archive, 'llvm/bin/clang', 'clang-23')
-            add_file(archive, 'llvm/bin/opt', b'opt')
-            add_file(archive, 'llvm/include/llvm-c/Core.h', b'core')
-        with open(self.archive, 'rb') as f:
-            self.checksum = hashlib.sha256(f.read()).hexdigest()
+        # LLVM's tools from an archive whose install is in a folder of its own, as LLVM's release archives hold theirs,
+        # and its library from one whose install is the archive itself, as Julia's hold theirs.
+        self.tools = self.archive('tools.tar.xz', 'w:xz', [
+            ('llvm/bin/clang-23', b'clang'), ('llvm/bin/opt', b'opt'), ('llvm/include/llvm-c/Core.h', b'core'),
+        ])
+        self.library = self.archive('library.tar.gz', 'w:gz', [
+            ('lib/libLLVM.so', b'llvm'), ('lib/libLLVMCore.a', b'core'),
+        ])
 
-    def package(self, checksum):
-        return {
-            'url': pathlib.Path(self.archive).as_uri(), 'sha256': checksum, 'directory': 'llvm',
-            'members': ['bin/clang', 'bin/clang-23', 'include/llvm-c'],
-        }
+    def archive(self, name, mode, files):
+        """An archive of `files`, as a package that names it by its URL and SHA-256, with no members yet."""
+        path = os.path.join(self.directory, name)
+        with tarfile.open(path, mode) as archive:
+            for member, content in files:
+                add_file(archive, member, content)
+        with open(path, 'rb') as f:
+            checksum = hashlib.sha256(f.read()).hexdigest()
+        return {'url': pathlib.Path(path).as_uri(), 'sha256': checksum}
 
-    def test_a_package_unpacks_the_members_it_names_into_the_prefix(self):
+    def packages(self, tools_members=('bin/clang-23', 'include/llvm-c'), library_checksum=None):
+        return [
+            dict(self.tools, directory='llvm', members=list(tools_members)),
+            dict(self.library, members=['lib/libLLVM.so'], sha256=library_checksum or self.library['sha256']),
+        ]
+
+    def fetch(self, packages):
         with contextlib.redirect_stdout(io.StringIO()):
-            fetch_package(self.package(self.checksum), self.downloads, self.prefix)
+            return fetch_llvm(packages, self.folder)
 
-        self.assertEqual(sorted(files_under(self.prefix)), ['bin/clang', 'bin/clang-23', 'include/llvm-c/Core.h'])
-        self.assertEqual(os.readlink(os.path.join(self.prefix, 'bin', 'clang')), 'clang-23')
+    def test_the_packages_unpack_the_members_they_name_into_one_folder(self):
+        llvm = self.fetch(self.packages())
 
-    def test_a_package_whose_checksum_differs_stops_before_anything_is_unpacked(self):
-        with self.assertRaises(InstallError) as raised, contextlib.redirect_stdout(io.StringIO()):
-            fetch_package(self.package('0' * 64), self.downloads, self.prefix)
+        self.assertEqual(sorted(files_under(llvm)), ['bin/clang-23', 'include/llvm-c/Core.h', 'lib/libLLVM.so'])
+        self.assertEqual(os.listdir(os.path.join(self.folder, 'downloads')), [])
+
+    def test_a_checksum_that_differs_stops_the_fetch_before_any_package_is_unpacked(self):
+        with self.assertRaises(InstallError) as raised:
+            self.fetch(self.packages(library_checksum='0' * 64))
 
         self.assertEqual(str(raised.exception),
-                         f"{self.package('0' * 64)['url']} has SHA-256 {self.checksum}, not the pinned {'0' * 64}")
-        self.assertFalse(os.path.exists(self.prefix))
+                         f"{self.library['url']} has SHA-256 {self.library['sha256']}, not the pinned {'0' * 64}")
+        self.assertEqual(list(files_under(self.folder)), [])
+
+    def test_a_folder_fetched_before_is_used_again_without_a_download(self):
+        llvm = self.fetch(self.packages())
+        for package in [self.tools, self.library]:
+            os.remove(pathlib.Path(urllib.request.url2pathname(urllib.parse.urlparse(package['url']).path)))
+
+        self.assertEqual(self.fetch(self.packages()), llvm)
+
+    def test_packages_that_name_other_members_are_unpacked_again(self):
+        self.fetch(self.packages())
+
+        llvm = self.fetch(self.packages(tools_members=['bin/clang-23', 'bin/opt']))
+
+        self.assertEqual(sorted(files_under(llvm)), ['bin/clang-23', 'bin/opt', 'lib/libLLVM.so'])
+
+    @unittest.skipIf(os.name == 'nt', 'Windows makes symbolic links only for an administrator')
+    def test_links_are_unpacked_as_links_to_where_their_targets_are_unpacked(self):
+        path = os.path.join(self.directory, 'links.tar.xz')
+        with tarfile.open(path, 'w:xz') as archive:
+            add_file(archive, 'llvm/bin/clang-23', b'clang')
+            add_link(archive, 'llvm/bin/clang', 'clang-23')
+            add_file(archive, 'llvm/bin/lld', b'lld')
+            add_hard_link(archive, 'llvm/bin/ld.lld', 'llvm/bin/lld')
+        with open(path, 'rb') as f:
+            checksum = hashlib.sha256(f.read()).hexdigest()
+        package = {'url': pathlib.Path(path).as_uri(), 'sha256': checksum, 'directory': 'llvm', 'members': ['bin']}
+
+        llvm = self.fetch([package])
+
+        self.assertEqual(os.readlink(os.path.join(llvm, 'bin', 'clang')), 'clang-23')
+        self.assertTrue(os.path.samefile(os.path.join(llvm, 'bin', 'ld.lld'), os.path.join(llvm, 'bin', 'lld')))
 
 
 @unittest.skipIf(os.name == 'nt', "the LLVM installs stood in for hold symbolic links, which Windows makes only for "
@@ -245,6 +289,14 @@ def add_file(archive, name, content):
 def add_link(archive, name, target):
     member = tarfile.TarInfo(name)
     member.type = tarfile.SYMTYPE
+    member.linkname = target
+    archive.addfile(member)
+
+
+def add_hard_link(archive, name, target):
+    """Adds a hard link, which names its target by the target's path in the archive."""
+    member = tarfile.TarInfo(name)
+    member.type = tarfile.LNKTYPE
     member.linkname = target
     archive.addfile(member)
 

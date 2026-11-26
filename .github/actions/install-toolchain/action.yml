@@ -83,8 +83,7 @@ runs:
         $env:Path = "$env:RUNNER_TEMP\rayo\bin"
         & $env:ComSpec /c "rayo run $env:PROGRAM > $env:RUNNER_TEMP\output"
         if ($LASTEXITCODE -ne 0) { Write-Output "::error::rayo run exited with $LASTEXITCODE"; exit 1 }
-    # The C runtime ends each line the program writes to a file with a carriage return and a newline.
     - name: Compare the program's output with what it should print
       if: runner.os == 'Windows'
       shell: bash
-      run: diff -u --strip-trailing-cr examples/v0.1/combat.out "$RUNNER_TEMP/output"
+      run: diff -u examples/v0.1/combat.out "$RUNNER_TEMP/output"

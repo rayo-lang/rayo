@@ -18,6 +18,8 @@ env:
   # The Swift release every platform tests with. The Linux job's container is named from it, and each test job
   # checks that its Swift is this release.
   SWIFT_RELEASE: "6.4"
+  # The exact Swift build the Windows jobs install, of SWIFT_RELEASE; Swift's Windows installer names one.
+  SWIFT_BUILD: 6.4.2
   LLVM_MAJOR_VERSION: 23
 
 jobs:
@@ -83,10 +85,11 @@ jobs:
           benchmark_paths+='(workflows/ci\.yml$|actions/linux-toolchain/)'
           if grep -q -E "$benchmark_paths" <<< "$changed"; then benchmarks=true; else benchmarks=false; fi
           # The install builds the release rayo and rayoc from the sources and the manifest, against the LLVM the pin
-          # names, with the install script and the version it installs, in a job that the workflow and its own action
-          # set up, and runs a proof program with them.
-          install_paths='^(Sources|examples/v0\.1)/|^Package\.(swift|resolved)$|^scripts/install_toolchain\.py$'
-          install_paths+='|^(llvm-release\.json|VERSION)$|^\.github/(workflows/ci\.yml$|actions/install-toolchain/)'
+          # names, with the install script and the version it installs, in a job that the workflow and its own actions
+          # set up, and runs a proof program with them. It also runs the script's tests, some of them Windows' alone.
+          install_paths='^(Sources|examples/v0\.1)/|^Package\.(swift|resolved)$|^scripts/(test_)?install_toolchain\.py$'
+          install_paths+='|^(llvm-release\.json|VERSION)$'
+          install_paths+='|^\.github/(workflows/ci\.yml$|actions/(install-toolchain|select-xcode)/)'
           if grep -q -E "$install_paths" <<< "$changed"; then install=true; else install=false; fi
           echo "code=$code" >> "$GITHUB_OUTPUT"
           echo "docs=$docs" >> "$GITHUB_OUTPUT"
@@ -241,9 +244,6 @@ jobs:
             llvm-host: windows-aarch64
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 45
-    env:
-      # The exact Swift build to install, of SWIFT_RELEASE; Swift's Windows installer names one.
-      SWIFT_BUILD: 6.4.2
     defaults:
       run:
         shell: bash
@@ -360,19 +360,7 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
-      - name: Select the Xcode that holds Swift ${{ env.SWIFT_RELEASE }}
-        run: |
-          for xcode in /Applications/Xcode*.app; do
-            developer="$xcode/Contents/Developer"
-            swift=$(DEVELOPER_DIR="$developer" xcrun swift --version 2>/dev/null)
-            release=$(grep -o -E 'Swift version [0-9]+\.[0-9]+' <<< "$swift" | head -n 1)
-            if [ "$release" = "Swift version $SWIFT_RELEASE" ]; then
-              echo "DEVELOPER_DIR=$developer" >> "$GITHUB_ENV"
-              exit 0
-            fi
-          done
-          echo "::error::no Xcode on this runner holds Swift $SWIFT_RELEASE"
-          exit 1
+      - uses: ./.github/actions/select-xcode
       - uses: ./.github/actions/install-toolchain
 
   install-windows:
@@ -391,9 +379,6 @@ jobs:
             swift-arch: arm64
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 60
-    env:
-      # The Swift build the Windows test job installs.
-      SWIFT_BUILD: 6.4.2
     steps:
       - uses: actions/checkout@v7
       - uses: compnerd/gha-setup-swift@9ff1ee4c44888c5817fc14d1b257ac8cabb4935f # v0.5.1

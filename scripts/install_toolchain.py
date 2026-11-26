@@ -23,7 +23,7 @@ import urllib.request
 REPOSITORY = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # The LLD that `rayo` links each system's object files with.
-HOST_LLD = {'linux': 'ld.lld', 'macos': 'ld64.lld', 'windows': 'lld-link.exe'}
+SYSTEM_LLD = {'linux': 'ld.lld', 'macos': 'ld64.lld', 'windows': 'lld-link.exe'}
 
 # A shared library's file name on Linux, versioned or not, or on macOS.
 SHARED_LIBRARY = re.compile(r'\.so(\.|$)|\.dylib$')
@@ -44,7 +44,8 @@ def main(arguments):
     try:
         home = os.path.abspath(toolchain_home(options.prefix, os.environ, os.path.expanduser('~')))
         version, system = install(home)
-    except InstallError as error:
+    # A file the install can't read or write stops it as plainly as a step that fails does.
+    except (InstallError, OSError) as error:
         print(f'install_toolchain.py: {error}', file=sys.stderr)
         return 1
 
@@ -78,19 +79,29 @@ def host_triple():
 
 
 def fetch_llvm(packages, folder):
-    """The LLVM install that `packages` make up, in a folder of `folder` named for them, which is unpacked from
-    them unless an earlier install has unpacked it already."""
-    name = hashlib.sha256(' '.join(package['sha256'] for package in packages).encode()).hexdigest()[:16]
+    """Unpacks `packages` into one LLVM install inside `folder`, and returns its path. An install that an earlier
+    run unpacked from the same packages is used again."""
+    name = hashlib.sha256(json.dumps(packages, sort_keys=True).encode()).hexdigest()[:16]
     llvm = os.path.join(folder, name)
     if os.path.isdir(llvm):
         return llvm
 
-    # The folder is unpacked apart, and named for its packages only once each of them is in it.
-    staged = llvm + '.partial'
-    shutil.rmtree(staged, ignore_errors=True)
-    for package in packages:
-        fetch_package(package, os.path.join(folder, 'downloads'), staged)
-    os.rename(staged, llvm)
+    # Every package is downloaded and checked before any is unpacked, so a wrong one leaves nothing unpacked.
+    downloads = os.path.join(folder, 'downloads')
+    archives = []
+    try:
+        for package in packages:
+            archives.append(download_checked(package, downloads))
+
+        # The folder is unpacked apart, and named for its packages only once each of them is in it.
+        staged = llvm + '.partial'
+        shutil.rmtree(staged, ignore_errors=True)
+        for package, archive in zip(packages, archives):
+            unpack(archive, package.get('directory'), package['members'], staged)
+        os.rename(staged, llvm)
+    finally:
+        for archive in archives:
+            os.remove(archive)
     return llvm
 
 
@@ -138,7 +149,7 @@ def host_of(triple):
     """The pin's name for the host a target triple names, such as `macos-aarch64` for `arm64-apple-macosx27.0`."""
     # A triple is the architecture, then the vendor and the system, such as `x86_64-unknown-linux-gnu`.
     architecture, _, rest = triple.partition('-')
-    architecture = {'arm64': 'aarch64', 'amd64': 'x86_64'}.get(architecture, architecture)
+    architecture = 'aarch64' if architecture == 'arm64' else architecture
     if '-linux' in triple:
         system = 'linux'
     elif '-apple-' in triple:
@@ -161,16 +172,13 @@ def pinned_packages(pin, triple):
     return hosts[host]
 
 
-def fetch_package(package, downloads, prefix):
-    """Downloads `package` into `downloads`, checks it against its pinned SHA-256, and unpacks the members it names
-    into `prefix`. The download is removed either way."""
+def download_checked(package, downloads):
+    """Downloads `package` into `downloads`, and returns the file's path once its SHA-256 is the pinned one."""
     archive, checksum = download(package['url'], downloads)
-    try:
-        if checksum != package['sha256']:
-            raise InstallError(f"{package['url']} has SHA-256 {checksum}, not the pinned {package['sha256']}")
-        unpack(archive, package.get('directory'), package['members'], prefix)
-    finally:
+    if checksum != package['sha256']:
         os.remove(archive)
+        raise InstallError(f"{package['url']} has SHA-256 {checksum}, not the pinned {package['sha256']}")
+    return archive
 
 
 def download(url, downloads):
@@ -185,13 +193,15 @@ def download(url, downloads):
                 digest.update(chunk)
                 file.write(chunk)
     except (urllib.error.URLError, OSError) as error:
+        if os.path.exists(path):
+            os.remove(path)
         raise InstallError(f"can't download {url}: {getattr(error, 'reason', error)}")
     return path, digest.hexdigest()
 
 
 def unpack(archive, directory, members, prefix):
-    """Unpacks into `prefix` each file of `archive` that is one of `members` or inside one, at its path inside the
-    archive's `directory`, or inside the archive itself when the package names no directory."""
+    """Unpacks the `members` of `archive` into `prefix`. Each member is a path inside the archive's `directory`, or
+    inside the archive itself where it has none, and takes everything under it."""
     print(f'Unpacking {os.path.basename(archive)}', flush=True)
     root = directory + '/' if directory else ''
     # An archive is read once, as a stream, since an xz one would otherwise be decompressed again for each member.
@@ -210,23 +220,37 @@ def unpack(archive, directory, members, prefix):
 
 
 def install_toolchain(llvm, products, home, version, system, clang_config):
-    """Installs into `home` the toolchain of `version` for `system` (`linux`, `macos` or `windows`): `rayo` and
-    `rayoc` from the build's `products`, with the clang, LLD and library of the LLVM installed at `llvm`, and clang
-    reading `clang_config` where it's given. Then makes it the toolchain that `home`'s `bin` runs."""
+    """Installs the toolchain of `version` into `home`, and makes it the one `home`'s `bin` runs. `system` is
+    `linux`, `macos` or `windows`."""
     # The toolchain is laid out apart, and takes the place of one already installed only once it is whole.
     toolchains = os.path.join(home, 'toolchains')
     staged = os.path.join(toolchains, f'.{version}.partial')
     shutil.rmtree(staged, ignore_errors=True)
     lay_out_toolchain(llvm, products, staged, system, clang_config)
-    toolchain = os.path.join(toolchains, version)
-    shutil.rmtree(toolchain, ignore_errors=True)
-    os.rename(staged, toolchain)
+    replace_folder(os.path.join(toolchains, version), staged)
 
     make_default(home, version, system)
 
 
+def replace_folder(folder, replacement):
+    """Moves `replacement` to `folder`'s place, and removes the folder that was there."""
+    # The old folder is moved aside before anything is removed, so one that Windows holds open, as it does a running
+    # executable's, stops the install with the old folder whole.
+    old = os.path.join(os.path.dirname(folder), f'.{os.path.basename(folder)}.old')
+    shutil.rmtree(old, ignore_errors=True)
+    if os.path.exists(folder):
+        try:
+            os.rename(folder, old)
+        except OSError as error:
+            raise InstallError(f"can't replace {folder}, which may be in use: {error}")
+    os.rename(replacement, folder)
+    shutil.rmtree(old, ignore_errors=True)
+
+
 def lay_out_toolchain(llvm, products, toolchain, system, clang_config):
-    """Lays out a toolchain in the new folder `toolchain`, as `install_toolchain` says."""
+    """Lays out a toolchain in the new folder `toolchain`: `rayo` and `rayoc` from the build's `products`, with the
+    clang, LLD and library of the LLVM installed at `llvm`, and a `clang.cfg` holding `clang_config` where it's
+    given."""
     suffix = '.exe' if system == 'windows' else ''
     bin_folder = os.path.join(toolchain, 'bin')
     os.makedirs(bin_folder)
@@ -235,7 +259,7 @@ def lay_out_toolchain(llvm, products, toolchain, system, clang_config):
     # install links `clang` and the LLD of each object file format to other files.
     for name in ['rayo', 'rayoc']:
         shutil.copy2(os.path.join(products, name + suffix), bin_folder)
-    for name in ['clang' + suffix, HOST_LLD[system]]:
+    for name in ['clang' + suffix, SYSTEM_LLD[system]]:
         shutil.copy2(os.path.join(llvm, 'bin', name), bin_folder)
     if clang_config is not None:
         with open(os.path.join(bin_folder, 'clang.cfg'), 'w', encoding='utf-8') as f:

@@ -1,0 +1,20 @@
+name: Select the Xcode that holds the Swift release
+description: Has every later step of the job use the runner's Xcode that holds the Swift release CI tests with.
+
+runs:
+  using: composite
+  steps:
+    - name: Select the Xcode that holds Swift ${{ env.SWIFT_RELEASE }}
+      shell: bash
+      run: |
+        for xcode in /Applications/Xcode*.app; do
+          developer="$xcode/Contents/Developer"
+          swift=$(DEVELOPER_DIR="$developer" xcrun swift --version 2>/dev/null)
+          release=$(grep -o -E 'Swift version [0-9]+\.[0-9]+' <<< "$swift" | head -n 1)
+          if [ "$release" = "Swift version $SWIFT_RELEASE" ]; then
+            echo "DEVELOPER_DIR=$developer" >> "$GITHUB_ENV"
+            exit 0
+          fi
+        done
+        echo "::error::no Xcode on this runner holds Swift $SWIFT_RELEASE"
+        exit 1
